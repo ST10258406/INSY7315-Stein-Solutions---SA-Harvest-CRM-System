@@ -1,0 +1,10 @@
+services:
+  crm-api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    volumes:
+      - ./src/CRM.API:/src/src/CRM.API
+
+  postgres:
+    ports:
+      - "5432:5432"  # exposed to host for local DB tools (pgAdmin, DBeaver, etc.)
