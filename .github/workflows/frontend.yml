@@ -12,7 +12,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./src/crm-web
+        working-directory: ./src/CRM.Web
 
     steps:
       - name: Checkout code
@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '26'
           cache: 'npm'
-          cache-dependency-path: ./src/crm-web/package-lock.json
+          cache-dependency-path: ./src/CRM.Web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
