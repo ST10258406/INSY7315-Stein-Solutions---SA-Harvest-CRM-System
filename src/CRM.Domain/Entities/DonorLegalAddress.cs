@@ -9,6 +9,7 @@ public class DonorLegalAddress : BaseEntity
     public Donor Donor { get; set; } = null!;
 
     public string StreetAddress { get; set; } = string.Empty;
+    public string Suburb { get; set; } = string.Empty;
     public string City { get; set; } = string.Empty;
 
     public short ProvinceId { get; set; }

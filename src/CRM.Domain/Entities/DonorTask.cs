@@ -8,7 +8,7 @@ public class DonorTask : BaseEntity
     public Donor Donor { get; set; } = null!;
 
     public string Title { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     public DateTime DueDate { get; set; }
     public bool IsCompleted { get; set; }
@@ -18,4 +18,7 @@ public class DonorTask : BaseEntity
 
     public Guid CreatedByUserId { get; set; }
     public User CreatedByUser { get; set; } = null!;
+
+    public Guid? CompletedByUserId { get; set; }
+    public User? CompletedByUser { get; set; }
 }
