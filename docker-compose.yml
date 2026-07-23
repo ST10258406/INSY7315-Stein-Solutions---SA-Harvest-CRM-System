@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: crmdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  crm-api:
+    build:
+      context: .
+      dockerfile: src/CRM.API/Dockerfile
+    container_name: crm-api
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING}
+      AZURE_KEY_VAULT_URI: ${AZURE_KEY_VAULT_URI}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  crm-web:
+    image: node:20-alpine
+    container_name: crm-web
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/crm-web:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000
+
+volumes:
+  postgres-data:
