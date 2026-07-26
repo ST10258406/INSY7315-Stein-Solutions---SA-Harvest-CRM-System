@@ -1,4 +1,4 @@
-namespace CRM.API.Tests;
+namespace CRM.Infrastructure.Tests;
 
 using CRM.Domain.Common;
 using CRM.Domain.Entities;
@@ -11,7 +11,7 @@ using Xunit;
 
 public class UpdatedAtInterceptorTests
 {
-    private const string TestConnectionString = "Host=localhost;Database=crm_test;Username=postgres;Password=postgres";
+    private const string TestConnectionString = "Host=localhost;Database=crm_test;Username=postgres;Password=P@ss1234ID";
 
     [Fact]
     public async Task SavingChanges_SetsUpdatedAt_OnModifiedEntity()
@@ -24,8 +24,9 @@ public class UpdatedAtInterceptorTests
         using var context = new CrmDbContext(options);
 
         // Ensure database exists and seed data if not present,
-        // since there's no pre-existing Db pattern for tests.
-        // (This will connect to local postgres on 5432).
+        // since there's no pre-existing DB pattern for tests.
+        // (This connects to the same local Postgres container, but a
+        // separate crm_test database — never touches the real crmdb dev data.)
         await context.Database.EnsureCreatedAsync();
 
         if (!await context.Roles.AnyAsync())
