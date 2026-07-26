@@ -4,34 +4,49 @@ using CRM.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
+/// <summary>
+/// Automatically stamps CreatedAt/UpdatedAt on every entity implementing IHasUpdatedAt
+/// before SaveChanges runs. No handler should ever manually set UpdatedAt.
+///
+/// InteractionLog and AuditLog do not implement IHasUpdatedAt (append-only tables,
+/// no UpdatedAt column), so they are correctly skipped here automatically.
+/// </summary>
 public class UpdatedAtInterceptor : SaveChangesInterceptor
 {
-    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
     {
-        UpdateEntities(eventData.Context);
+        UpdateTimestamps(eventData.Context);
         return base.SavingChanges(eventData, result);
     }
 
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
     {
-        UpdateEntities(eventData.Context);
+        UpdateTimestamps(eventData.Context);
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private void UpdateEntities(DbContext? context)
+    private static void UpdateTimestamps(DbContext? context)
     {
-        if (context == null) return;
+        if (context is null) return;
 
-        foreach (var entry in context.ChangeTracker.Entries<BaseEntity>())
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in context.ChangeTracker.Entries<IHasUpdatedAt>())
         {
-            if (entry.State == EntityState.Added)
+            if (entry.State == EntityState.Modified)
             {
-                entry.Entity.CreatedAt = DateTime.UtcNow;
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                entry.Entity.UpdatedAt = now;
             }
-            else if (entry.State == EntityState.Modified)
+
+            if (entry.State == EntityState.Added && entry.Entity is BaseEntity baseEntity)
             {
-                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                baseEntity.CreatedAt = now;
+                baseEntity.UpdatedAt = now;
             }
         }
     }
