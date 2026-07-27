@@ -5,6 +5,7 @@ interface JwtDevModePanelProps {
     token: string;
     header: Record<string, unknown>;
     payload: Record<string, unknown>;
+    isRealApi?: boolean;
   } | null;
 }
 
@@ -15,13 +16,15 @@ const JwtDevModePanel: React.FC<JwtDevModePanelProps> = ({ jwtData }) => {
         <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
         </svg>
-        <p className="text-lg font-medium text-gray-300">JWT Dev Mode Active</p>
-        <p className="text-sm mt-2">Fill the form and click "Simulate Login" to generate a client-side mock JWT.</p>
+        <p className="text-lg font-medium text-gray-300">JWT Dev Mode Inspector</p>
+        <p className="text-sm mt-2">Sign in via API or click "Simulate Mock Login" to inspect real-time decoded JWT headers, claims, and raw tokens.</p>
       </div>
     );
   }
 
-  // Formatting JSON with syntax highlighting classes (simulated)
+  const isReal = jwtData.isRealApi ?? false;
+
+  // Formatting JSON with syntax highlighting
   const formatJson = (obj: Record<string, unknown>) => {
     return JSON.stringify(obj, null, 2);
   };
@@ -33,11 +36,18 @@ const JwtDevModePanel: React.FC<JwtDevModePanelProps> = ({ jwtData }) => {
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
-        <h3 className="text-xl font-semibold text-white tracking-tight flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          Decoded JWT (Mock)
-        </h3>
-        <span className="text-xs font-mono bg-[#1E1E1E] text-gray-400 px-2 py-1 rounded border border-gray-700">HS256</span>
+        <div>
+          <h3 className="text-xl font-semibold text-white tracking-tight flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${isReal ? 'bg-emerald-400' : 'bg-yellow-400'} animate-pulse`}></span>
+            Decoded JWT Inspector
+          </h3>
+          <span className={`text-xs font-medium inline-block mt-1 ${isReal ? 'text-emerald-400' : 'text-yellow-400'}`}>
+            {isReal ? '● Issued by CRM.API (Backend)' : '○ Client Simulated (Mock Dev Mode)'}
+          </span>
+        </div>
+        <span className="text-xs font-mono bg-[#1E1E1E] text-gray-400 px-2.5 py-1 rounded border border-gray-700">
+          {String(jwtData.header.alg || 'HS256')}
+        </span>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">

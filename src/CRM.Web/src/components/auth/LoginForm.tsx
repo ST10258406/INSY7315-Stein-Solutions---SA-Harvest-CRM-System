@@ -11,11 +11,18 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
+  onRealLogin: (email: string, password: string) => Promise<void>;
   onSimulateLogin: (role: string, email: string) => void;
   isDevMode: boolean;
+  apiError: string | null;
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ onSimulateLogin, isDevMode }) => {
+const LoginForm: React.FC<LoginFormProps> = ({
+  onRealLogin,
+  onSimulateLogin,
+  isDevMode,
+  apiError
+}) => {
   const [activeTab, setActiveTab] = useState<'Donor' | 'Admin' | 'Staff'>('Donor');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -23,18 +30,20 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSimulateLogin, isDevMode }) => 
     resolver: zodResolver(loginSchema)
   });
 
-  const onSubmit = (data: LoginFormData) => {
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
-    
-    // Simulate network request
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
       if (isDevMode) {
+        // Dev Mode Mock simulation
+        await new Promise(resolve => setTimeout(resolve, 500));
         onSimulateLogin(activeTab, data.email);
       } else {
-        alert(`Logged in as ${activeTab} with ${data.email}. (Enable Dev Mode to see JWT simulation)`);
+        // Real API Authentication against CRM.API (POST /api/auth/login)
+        await onRealLogin(data.email, data.password);
       }
-    }, 800);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const tabs = ['Donor', 'Admin', 'Staff'] as const;
@@ -46,11 +55,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSimulateLogin, isDevMode }) => 
       
       <div className="text-center mb-8">
         <h2 className="text-2xl font-semibold text-white tracking-tight">Sign In</h2>
-        <p className="text-gray-400 text-sm mt-2">Access your CRM portal</p>
+        <p className="text-gray-400 text-sm mt-2">
+          {isDevMode ? 'Dev Mode (Mock Auth & JWT Inspector)' : 'Access your CRM portal via REST API'}
+        </p>
       </div>
 
       {/* Custom Tabs */}
-      <div className="flex bg-[#1E1E1E] rounded-lg p-1 mb-8">
+      <div className="flex bg-[#1E1E1E] rounded-lg p-1 mb-6">
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -66,6 +77,19 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSimulateLogin, isDevMode }) => 
           </button>
         ))}
       </div>
+
+      {/* API Error Alert */}
+      {apiError && !isDevMode && (
+        <div className="mb-6 p-4 bg-red-950/50 border border-red-800/80 rounded-xl text-red-300 text-sm flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <span className="font-semibold block text-red-200">Authentication Failed</span>
+            {apiError}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <div className="space-y-2">
@@ -104,7 +128,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSimulateLogin, isDevMode }) => 
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           ) : (
-             isDevMode ? 'Simulate Login' : 'Sign In'
+             isDevMode ? 'Simulate Mock Login' : 'Sign In via CRM API'
           )}
         </button>
       </form>
