@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CRM.Application.Modules.Auth.Commands.Login;
+using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Persistence;
@@ -128,5 +129,82 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(401, result.GetProperty("status").GetInt32());
         Assert.Equal("UNAUTHORIZED", result.GetProperty("code").GetString());
         Assert.Equal("Invalid email or password.", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Refresh_WithValidToken_Returns200AndExpectedShape()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "refresh-api@example.com",
+            FirstName = "API",
+            LastName = "Test",
+            PasswordHash = "hash",
+            UserRoles = new List<UserRole>()
+        };
+        context.Users.Add(user);
+
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            User = user,
+            Token = "integration-valid-refresh-token",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            IsRevoked = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        context.RefreshTokens.Add(refreshToken);
+        await context.SaveChangesAsync();
+
+        var command = new RefreshTokenCommand("integration-valid-refresh-token");
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/refresh", command);
+
+        // Assert
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected OK, but got {response.StatusCode}. Content: {content}");
+
+        var result = JsonSerializer.Deserialize<RefreshTokenResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.AccessToken);
+        Assert.Equal(3600, result.ExpiresIn);
+    }
+
+    [Fact]
+    public async Task Refresh_WithBadToken_Returns401WithStandardEnvelope()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var command = new RefreshTokenCommand("invalid-or-expired-token");
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/refresh", command);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var responseString = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<JsonElement>(responseString);
+
+        Assert.Equal(401, result.GetProperty("status").GetInt32());
+        Assert.Equal("UNAUTHORIZED", result.GetProperty("code").GetString());
+        Assert.Equal("Refresh token is invalid or expired.", result.GetProperty("message").GetString());
     }
 }

@@ -1,4 +1,5 @@
 using CRM.Application.Modules.Auth.Commands.Login;
+using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -7,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CRM.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")] // or "auth", assuming standard naming
+[Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -22,6 +23,14 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<LoginResponseDto>> Login(LoginCommand command)
     {
         var result = await _mediator.Send(command);
-        return Ok(result); // Returning flat as per the login example in design doc
+        return Ok(result);
+    }
+
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<ActionResult<RefreshTokenResponseDto>> Refresh(RefreshTokenCommand command)
+    {
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 }
