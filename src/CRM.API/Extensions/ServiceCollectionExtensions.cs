@@ -2,7 +2,9 @@ namespace CRM.API.Extensions;
 
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Interfaces;
 using CRM.Domain.Entities;
+using CRM.Infrastructure.Auth;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Services;
@@ -47,9 +49,12 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<CrmDbContext>((sp, options) =>
             options.UseNpgsql(configuration.GetConnectionString("Default"))
                    .AddInterceptors(new UpdatedAtInterceptor()));
+                   
+        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<CrmDbContext>());
 
-        // Auth — PasswordHasher only, NO AddIdentity()
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
         var jwtSecret = configuration["JWT_SECRET"]
             ?? throw new InvalidOperationException(

@@ -3,8 +3,8 @@ import React from 'react';
 interface JwtDevModePanelProps {
   jwtData: {
     token: string;
-    header: any;
-    payload: any;
+    header: Record<string, unknown>;
+    payload: Record<string, unknown>;
   } | null;
 }
 
@@ -22,7 +22,7 @@ const JwtDevModePanel: React.FC<JwtDevModePanelProps> = ({ jwtData }) => {
   }
 
   // Formatting JSON with syntax highlighting classes (simulated)
-  const formatJson = (obj: any) => {
+  const formatJson = (obj: Record<string, unknown>) => {
     return JSON.stringify(obj, null, 2);
   };
 

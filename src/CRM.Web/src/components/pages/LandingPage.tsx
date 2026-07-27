@@ -4,7 +4,7 @@ import JwtDevModePanel from '../auth/JwtDevModePanel';
 
 const LandingPage: React.FC = () => {
   const [devModeEnabled, setDevModeEnabled] = useState(false);
-  const [jwtData, setJwtData] = useState<{ token: string; header: any; payload: any } | null>(null);
+  const [jwtData, setJwtData] = useState<{ token: string; header: Record<string, unknown>; payload: Record<string, unknown> } | null>(null);
 
   const handleSimulatedLogin = (role: string, email: string) => {
     // Client-side mock JWT generation mimicking JwtTokenService
@@ -14,7 +14,7 @@ const LandingPage: React.FC = () => {
     };
 
     const payload = {
-      sub: crypto.randomUUID(),
+      sub: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000000',
       email: email,
       given_name: "Demo",
       family_name: "User",
@@ -25,7 +25,7 @@ const LandingPage: React.FC = () => {
       role: role
     };
 
-    const base64UrlEncode = (obj: any) => {
+    const base64UrlEncode = (obj: Record<string, unknown>) => {
       return btoa(JSON.stringify(obj))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -37,7 +37,7 @@ const LandingPage: React.FC = () => {
     const mockSignature = "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"; // Mock signature
 
     const token = `${encodedHeader}.${encodedPayload}.${mockSignature}`;
-    
+
     setJwtData({ token, header, payload });
   };
 
@@ -52,14 +52,14 @@ const LandingPage: React.FC = () => {
           <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-primary-foreground">SA</div>
           <span className="text-xl font-semibold text-white tracking-tight">SA Harvest CRM</span>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <label className="flex items-center cursor-pointer gap-2">
             <span className="text-sm text-gray-400 font-medium">JWT Dev Mode</span>
             <div className="relative">
-              <input 
-                type="checkbox" 
-                className="sr-only" 
+              <input
+                type="checkbox"
+                className="sr-only"
                 checked={devModeEnabled}
                 onChange={(e) => setDevModeEnabled(e.target.checked)}
               />
@@ -72,7 +72,7 @@ const LandingPage: React.FC = () => {
 
       {/* Main Content */}
       <main className="relative z-10 flex flex-col lg:flex-row items-center justify-center min-h-[calc(100vh-100px)] px-4 gap-12 max-w-7xl mx-auto pb-20">
-        
+
         {/* Left Side: Hero Text */}
         <div className="flex-1 text-center lg:text-left">
           <h1 className="text-5xl lg:text-7xl font-bold text-white tracking-tighter mb-6 leading-tight">
@@ -88,7 +88,7 @@ const LandingPage: React.FC = () => {
 
         {/* Right Side: Interactive Panel (Form + Dev Mode) */}
         <div className={`flex gap-6 w-full max-w-md lg:max-w-none transition-all duration-500 ease-out ${devModeEnabled ? 'lg:w-[800px]' : 'lg:w-[450px]'}`}>
-          
+
           <div className="flex-1 w-full max-w-[450px]">
             <LoginForm onSimulateLogin={handleSimulatedLogin} isDevMode={devModeEnabled} />
           </div>

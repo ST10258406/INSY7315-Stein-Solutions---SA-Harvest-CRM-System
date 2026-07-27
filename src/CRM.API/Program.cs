@@ -18,13 +18,16 @@ builder.Services.AddApiServices(builder.Configuration);
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+if (app.Environment.EnvironmentName != "Testing")
 {
-    var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
-    await context.Database.MigrateAsync();
-}
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await context.Database.MigrateAsync();
+    }
 
-await DatabaseSeeder.SeedAsync(app.Services);
+    await DatabaseSeeder.SeedAsync(app.Services);
+}
 
 app.UseApiMiddleware();
 app.MapControllers();

@@ -1,4 +1,4 @@
-1namespace CRM.Domain.Entities;
+namespace CRM.Domain.Entities;
 
 public class RefreshToken
 {

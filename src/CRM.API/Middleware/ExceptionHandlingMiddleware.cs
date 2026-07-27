@@ -76,6 +76,12 @@ public class ExceptionHandlingMiddleware
                 ex.Message,
                 null),
 
+            UnauthorizedException ex => (
+                StatusCodes.Status401Unauthorized,
+                "UNAUTHORIZED",
+                ex.Message,
+                null),
+
             AppValidationException ex => (
                 StatusCodes.Status400BadRequest,
                 "VALIDATION_ERROR",
