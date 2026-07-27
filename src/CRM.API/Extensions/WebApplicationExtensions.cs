@@ -11,9 +11,9 @@ public static class WebApplicationExtensions
 {
     public static WebApplication UseApiMiddleware(this WebApplication app)
     {
-        app.UseSerilogRequestLogging();
-
         app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+        app.UseSerilogRequestLogging();
 
         app.UseHttpsRedirection();
 
