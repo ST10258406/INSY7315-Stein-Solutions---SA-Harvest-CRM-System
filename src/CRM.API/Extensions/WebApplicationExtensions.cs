@@ -26,7 +26,9 @@ public static class WebApplicationExtensions
 
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
         {
-            Authorization = new[] { new HangfireDashboardNoAuthFilter() }
+            Authorization = app.Environment.IsDevelopment()
+                ? new IDashboardAuthorizationFilter[] { new HangfireDashboardNoAuthFilter() }
+                : new IDashboardAuthorizationFilter[] { new HangfireDashboardAuthorizedOnlyFilter() }
         });
 
         app.MapHealthChecks("/health");
