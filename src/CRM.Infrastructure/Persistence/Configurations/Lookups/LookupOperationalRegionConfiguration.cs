@@ -38,14 +38,6 @@ public class LookupOperationalRegionConfiguration : IEntityTypeConfiguration<Loo
             .HasColumnName("sort_order")
             .HasDefaultValue(0);
 
-        builder.HasData(
-            new LookupOperationalRegion { Id = 1, Code = "JHB", Name = "Johannesburg", IsActive = true, SortOrder = 1 },
-            new LookupOperationalRegion { Id = 2, Code = "CPT", Name = "Cape Town", IsActive = true, SortOrder = 2 },
-            new LookupOperationalRegion { Id = 3, Code = "KZN", Name = "KwaZulu-Natal", IsActive = true, SortOrder = 3 },
-            new LookupOperationalRegion { Id = 4, Code = "EC", Name = "Eastern Cape", IsActive = true, SortOrder = 4 },
-            new LookupOperationalRegion { Id = 5, Code = "BFN", Name = "Bloemfontein", IsActive = true, SortOrder = 5 },
-            new LookupOperationalRegion { Id = 6, Code = "MPU", Name = "Mpumalanga", IsActive = true, SortOrder = 6 },
-            new LookupOperationalRegion { Id = 7, Code = "LIM", Name = "Limpopo", IsActive = true, SortOrder = 7 }
-        );
+
     }
 }
