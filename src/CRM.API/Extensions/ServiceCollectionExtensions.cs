@@ -31,7 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddValidatorsFromAssembly(
             typeof(CRM.Application.AssemblyReference).Assembly);
 
-        services.AddAutoMapper(typeof(CRM.Application.AssemblyReference).Assembly);
+        services.AddAutoMapper(cfg => { }, typeof(CRM.Application.AssemblyReference).Assembly);
 
         // Pipeline behaviours — order matters: validation → logging → audit
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehaviour<,>));
@@ -79,7 +79,8 @@ public static class ServiceCollectionExtensions
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(configuration.GetConnectionString("Default")));
+            .UsePostgreSqlStorage(options =>
+        options.UseNpgsqlConnection(configuration.GetConnectionString("Default"))));
         services.AddHangfireServer();
 
         // Service implementations

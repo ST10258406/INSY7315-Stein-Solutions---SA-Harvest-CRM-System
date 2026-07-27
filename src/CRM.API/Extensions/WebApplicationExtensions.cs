@@ -2,6 +2,7 @@ namespace CRM.API.Extensions;
 
 using CRM.API.Middleware;
 using Hangfire;
+using Hangfire.Dashboard;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -23,7 +24,10 @@ public static class WebApplicationExtensions
 
         app.UseRateLimiter();
 
-        app.UseHangfireDashboard("/hangfire");
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = new[] { new HangfireDashboardNoAuthFilter() }
+        });
 
         app.MapHealthChecks("/health");
 
