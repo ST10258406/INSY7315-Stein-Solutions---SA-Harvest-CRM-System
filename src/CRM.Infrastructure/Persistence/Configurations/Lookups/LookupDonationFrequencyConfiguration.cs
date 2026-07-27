@@ -31,12 +31,6 @@ public class LookupDonationFrequencyConfiguration : IEntityTypeConfiguration<Loo
             .HasColumnName("sort_order")
             .HasDefaultValue(0);
 
-        builder.HasData(
-            new LookupDonationFrequency { Id = 1, Name = "Ad Hoc", IsActive = true, SortOrder = 1 },
-            new LookupDonationFrequency { Id = 2, Name = "Once-off", IsActive = true, SortOrder = 2 },
-            new LookupDonationFrequency { Id = 3, Name = "Weekly", IsActive = true, SortOrder = 3 },
-            new LookupDonationFrequency { Id = 4, Name = "Monthly", IsActive = true, SortOrder = 4 },
-            new LookupDonationFrequency { Id = 5, Name = "Seasonal", IsActive = true, SortOrder = 5 }
-        );
+
     }
 }

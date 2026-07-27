@@ -8,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/CRM.API.Tests/CRM.API.Tests.csproj" />
     <Project Path="tests/CRM.Application.Tests/CRM.Application.Tests.csproj" />
+    <Project Path="tests/CRM.Infrastructure.Tests/CRM.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

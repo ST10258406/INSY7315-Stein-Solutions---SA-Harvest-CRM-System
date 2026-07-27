@@ -1,6 +1,6 @@
 namespace CRM.Domain.Common;
 
-public abstract class BaseEntity
+public abstract class BaseEntity : IHasUpdatedAt
 {
     public Guid Id { get; set; }
     public DateTime CreatedAt { get; set; }

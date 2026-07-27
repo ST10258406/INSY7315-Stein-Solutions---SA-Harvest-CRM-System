@@ -31,13 +31,6 @@ public class LookupEntityTypeConfiguration : IEntityTypeConfiguration<LookupEnti
             .HasColumnName("sort_order")
             .HasDefaultValue(0);
 
-        builder.HasData(
-            new LookupEntityType { Id = 1, Name = "Private Company", IsActive = true, SortOrder = 1 },
-            new LookupEntityType { Id = 2, Name = "Public Company", IsActive = true, SortOrder = 2 },
-            new LookupEntityType { Id = 3, Name = "Close Corporation", IsActive = true, SortOrder = 3 },
-            new LookupEntityType { Id = 4, Name = "Trust", IsActive = true, SortOrder = 4 },
-            new LookupEntityType { Id = 5, Name = "Non Profit", IsActive = true, SortOrder = 5 },
-            new LookupEntityType { Id = 6, Name = "Association", IsActive = true, SortOrder = 6 }
-        );
+
     }
 }
