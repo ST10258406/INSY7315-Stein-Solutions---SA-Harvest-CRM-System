@@ -6,7 +6,7 @@ namespace CRM.Infrastructure.Tests.Persistence;
 
 public class RefreshTokenConfigurationTests
 {
-    private const string TestConnectionString = "Host=localhost;Database=crm_test;Username=postgres;Password=P@ss1234ID";
+    private const string TestConnectionString = "Host=localhost;Database=crm_test_refreshtoken;Username=postgres;Password=P@ss1234ID";
     private readonly DbContextOptions<CrmDbContext> _options;
 
     public RefreshTokenConfigurationTests()

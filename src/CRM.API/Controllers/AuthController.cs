@@ -1,9 +1,11 @@
+using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CRM.API.Controllers;
 
@@ -29,6 +31,15 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<ActionResult<RefreshTokenResponseDto>> Refresh(RefreshTokenCommand command)
+    {
+        var result = await _mediator.Send(command);
+        return Ok(result);
+    }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicFormPolicy")]
+    public async Task<ActionResult<ForgotPasswordResponseDto>> ForgotPassword(ForgotPasswordCommand command)
     {
         var result = await _mediator.Send(command);
         return Ok(result);

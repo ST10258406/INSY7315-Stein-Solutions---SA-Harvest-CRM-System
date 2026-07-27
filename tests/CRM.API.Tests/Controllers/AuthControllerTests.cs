@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
@@ -206,5 +207,66 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(401, result.GetProperty("status").GetInt32());
         Assert.Equal("UNAUTHORIZED", result.GetProperty("code").GetString());
         Assert.Equal("Refresh token is invalid or expired.", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ForgotPassword_ExistingUser_Returns200WithGenericMessage()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "forgot-pass@example.com",
+            FirstName = "Forgot",
+            LastName = "Password",
+            PasswordHash = "hash"
+        };
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var command = new ForgotPasswordCommand("forgot-pass@example.com");
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+
+        // Assert
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected OK, got {response.StatusCode}. Content: {content}");
+
+        var result = JsonSerializer.Deserialize<ForgotPasswordResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(result);
+        Assert.Equal("If this email address exists, a reset link has been sent.", result.Message);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_NonExistentUser_ReturnsIdentical200WithGenericMessage()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var command = new ForgotPasswordCommand("doesnotexist@example.com");
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+
+        // Assert
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected OK, got {response.StatusCode}. Content: {content}");
+
+        var result = JsonSerializer.Deserialize<ForgotPasswordResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(result);
+        Assert.Equal("If this email address exists, a reset link has been sent.", result.Message);
     }
 }
