@@ -34,6 +34,8 @@ public class UpdatedAtInterceptor : SaveChangesInterceptor
     {
         if (context is null) return;
 
+        context.ChangeTracker.DetectChanges(); // <-- add this
+
         var now = DateTime.UtcNow;
 
         foreach (var entry in context.ChangeTracker.Entries<IHasUpdatedAt>())

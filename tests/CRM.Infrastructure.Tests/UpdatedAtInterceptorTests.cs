@@ -38,7 +38,7 @@ public class UpdatedAtInterceptorTests
         var role = await context.Roles.FirstAsync();
         var originalUpdatedAt = role.UpdatedAt;
 
-        role.Description = "Changed for test";
+        role.Description = $"Changed for test {Guid.NewGuid()}";
         await Task.Delay(10); // ensure the clock actually advances between reads
         await context.SaveChangesAsync();
 
