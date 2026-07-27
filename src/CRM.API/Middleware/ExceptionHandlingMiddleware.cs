@@ -80,7 +80,9 @@ public class ExceptionHandlingMiddleware
                 StatusCodes.Status400BadRequest,
                 "VALIDATION_ERROR",
                 "One or more validation errors occurred.",
-                ex.Errors.SelectMany(kvp => kvp.Value.Select(msg => new { field = kvp.Key, message = msg }))),
+                 ex.Errors is null
+                    ? null
+                    : (object?)ex.Errors.SelectMany(kvp => kvp.Value.Select(msg => new { field = kvp.Key, message = msg })).ToArray()),
 
             ForbiddenException ex => (
                 StatusCodes.Status403Forbidden,
