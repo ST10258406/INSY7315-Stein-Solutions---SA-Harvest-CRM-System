@@ -13,6 +13,7 @@ public class CrmDbContext : DbContext, IApplicationDbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     // Lookups
     public DbSet<LookupCompanyType> LookupCompanyTypes => Set<LookupCompanyType>();

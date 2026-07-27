@@ -1,0 +1,31 @@
+using CRM.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace CRM.Infrastructure.Persistence.Configurations;
+
+public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> builder)
+    {
+        builder.ToTable("refresh_tokens");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Token)
+            .IsRequired()
+            .HasMaxLength(512);
+
+        builder.HasIndex(x => x.Token)
+            .IsUnique();
+
+        builder.Property(x => x.ExpiresAt).IsRequired();
+        builder.Property(x => x.CreatedAt).IsRequired();
+        builder.Property(x => x.IsRevoked).HasDefaultValue(false);
+
+        builder.HasOne(x => x.User)
+            .WithMany() // add a Tokens collection on User only if you actually need to navigate that way
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade); // if the user is gone, their sessions are meaningless
+    }
+}
