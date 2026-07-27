@@ -9,7 +9,7 @@ public class DonorConfiguration : IEntityTypeConfiguration<Donor>
     public void Configure(EntityTypeBuilder<Donor> builder)
     {
         builder.ToTable("donors");
-        builder.HasCheckConstraint("chk_donors_tax_number", "income_tax_number NOT LIKE '4%'");
+        builder.ToTable(t => t.HasCheckConstraint("chk_donors_tax_number", "income_tax_number NOT LIKE '4%'"));
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id");
