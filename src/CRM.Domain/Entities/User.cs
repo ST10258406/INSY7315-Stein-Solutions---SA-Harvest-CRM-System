@@ -10,5 +10,8 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 
+    public string? PasswordResetToken { get; set; }
+    public DateTimeOffset? PasswordResetTokenExpiresAt { get; set; }
+
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

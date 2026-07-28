@@ -911,6 +911,41 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("notifications", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRevoked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("refresh_tokens", (string)null);
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -984,6 +1019,15 @@ namespace CRM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
+
+                    b.Property<string>("PasswordResetToken")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("password_reset_token");
+
+                    b.Property<DateTimeOffset?>("PasswordResetTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("password_reset_token_expires_at");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1254,6 +1298,17 @@ namespace CRM.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
