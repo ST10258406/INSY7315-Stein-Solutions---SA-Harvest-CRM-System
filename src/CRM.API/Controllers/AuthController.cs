@@ -1,3 +1,4 @@
+using CRM.Application.Modules.Auth.Commands.ChangePassword;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Logout;
@@ -61,5 +62,13 @@ public class AuthController : ControllerBase
     {
         var result = await _mediator.Send(command);
         return Ok(result);
+    }
+
+    [HttpPatch("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword(ChangePasswordCommand command)
+    {
+        await _mediator.Send(command);
+        return NoContent();
     }
 }

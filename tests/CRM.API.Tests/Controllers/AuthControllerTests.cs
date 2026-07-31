@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CRM.Application.Modules.Auth.Commands.ChangePassword;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Logout;
@@ -417,5 +418,67 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithValidAccessToken_Returns204AndUpdatesPassword()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var hasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "change-password@example.com",
+            FirstName = "Change",
+            LastName = "Password",
+            PasswordHash = hasher.HashPassword(null!, "CurrentPassword123!"),
+            UserRoles = new List<UserRole>()
+        };
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var loginCommand = new LoginCommand(user.Email, "CurrentPassword123!");
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", loginCommand);
+        var loginContent = await loginResponse.Content.ReadAsStringAsync();
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(loginContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        var changeCommand = new ChangePasswordCommand("CurrentPassword123!", "NewPassword123!", "NewPassword123!");
+
+        // Act
+        var response = await client.PatchAsJsonAsync("/api/auth/change-password", changeCommand);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var userInDb = await assertContext.Users.FindAsync(user.Id);
+
+        var verifyResult = hasher.VerifyHashedPassword(userInDb!, userInDb!.PasswordHash, "NewPassword123!");
+        Assert.Equal(PasswordVerificationResult.Success, verifyResult);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithoutAccessToken_Returns401()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var command = new ChangePasswordCommand("OldPassword123!", "NewPassword123!", "NewPassword123!");
+
+        // Act
+        var response = await client.PatchAsJsonAsync("/api/auth/change-password", command);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
