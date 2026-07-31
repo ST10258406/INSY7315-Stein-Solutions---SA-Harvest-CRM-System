@@ -1,5 +1,6 @@
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
+using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
@@ -43,5 +44,13 @@ public class AuthController : ControllerBase
     {
         var result = await _mediator.Send(command);
         return Ok(result);
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(LogoutCommand command)
+    {
+        await _mediator.Send(command);
+        return NoContent();
     }
 }

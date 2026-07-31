@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
+using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
@@ -268,5 +269,66 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         var result = JsonSerializer.Deserialize<ForgotPasswordResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(result);
         Assert.Equal("If this email address exists, a reset link has been sent.", result.Message);
+    }
+
+    [Fact]
+    public async Task Logout_WithValidAccessToken_Returns204()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var password = "TestPassword123";
+        var hasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "logout-integration@example.com",
+            FirstName = "Logout",
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
+        };
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var loginCommand = new LoginCommand(user.Email, password);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", loginCommand);
+        var loginContent = await loginResponse.Content.ReadAsStringAsync();
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(loginContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        var logoutCommand = new LogoutCommand(loginResult.RefreshToken);
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/logout", logoutCommand);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Verify the token was revoked in the DB
+        var tokenInDb = await context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == loginResult.RefreshToken);
+        Assert.NotNull(tokenInDb);
+        Assert.True(tokenInDb.IsRevoked);
+    }
+
+    [Fact]
+    public async Task Logout_WithoutAccessToken_Returns401()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var command = new LogoutCommand("some-refresh-token");
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/logout", command);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
