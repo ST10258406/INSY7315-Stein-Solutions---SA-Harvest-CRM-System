@@ -2,6 +2,7 @@ using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
+using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -52,5 +53,13 @@ public class AuthController : ControllerBase
     {
         await _mediator.Send(command);
         return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ResetPasswordResponseDto>> ResetPassword(ResetPasswordCommand command)
+    {
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 }

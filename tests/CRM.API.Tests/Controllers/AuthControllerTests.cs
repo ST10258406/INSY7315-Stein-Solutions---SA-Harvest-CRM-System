@@ -5,6 +5,7 @@ using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
+using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Persistence;
@@ -328,7 +329,93 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // Act
         var response = await client.PostAsJsonAsync("/api/auth/logout", command);
 
-        // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_ValidCommand_Returns200AndUpdatesPassword()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var hasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "reset-integration@example.com",
+            FirstName = "Reset",
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, "OldPassword123!"),
+            PasswordResetToken = "integration-reset-token",
+            PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+            UserRoles = new List<UserRole>()
+        };
+
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Token = "active-refresh",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            IsRevoked = false
+        };
+
+        context.Users.Add(user);
+        context.RefreshTokens.Add(refreshToken);
+        await context.SaveChangesAsync();
+
+        var command = new ResetPasswordCommand(
+            "integration-reset-token",
+            "reset-integration@example.com",
+            "NewPassword123!",
+            "NewPassword123!"
+        );
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/reset-password", command);
+
+        // Assert
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected OK, got {response.StatusCode}. Content: {content}");
+
+        var result = JsonSerializer.Deserialize<ResetPasswordResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal("Password has been reset successfully.", result!.Message);
+
+        using var assertScope = _factory.Services.CreateScope();
+        var assertContext = assertScope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        var userInDb = await assertContext.Users.FindAsync(user.Id);
+        Assert.Null(userInDb!.PasswordResetToken);
+        Assert.Null(userInDb.PasswordResetTokenExpiresAt);
+
+        var verifyResult = hasher.VerifyHashedPassword(userInDb, userInDb.PasswordHash, "NewPassword123!");
+        Assert.Equal(PasswordVerificationResult.Success, verifyResult);
+
+        var tokenInDb = await assertContext.RefreshTokens.FindAsync(refreshToken.Id);
+        Assert.True(tokenInDb!.IsRevoked);
+    }
+
+    [Fact]
+    public async Task ResetPassword_InvalidToken_Returns400()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var command = new ResetPasswordCommand(
+            "wrong-token",
+            "doesnotexist@example.com",
+            "NewPassword123!",
+            "NewPassword123!"
+        );
+
+        // Act
+        var response = await client.PostAsJsonAsync("/api/auth/reset-password", command);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }
