@@ -24,10 +24,10 @@ public class PolicyTestControllerTests : IClassFixture<WebApplicationFactory<Pro
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
         
-        Environment.SetEnvironmentVariable("JwtSettings__SigningKey", "12345678901234567890123456789012");
-        Environment.SetEnvironmentVariable("JwtSettings__AccessTokenExpiryMinutes", "60");
-        Environment.SetEnvironmentVariable("JwtSettings__Issuer", "TestIssuer");
-        Environment.SetEnvironmentVariable("JwtSettings__Audience", "TestAudience");
+        Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("Jwt__AccessTokenExpiryMinutes", "60");
+        Environment.SetEnvironmentVariable("Jwt__Issuer", "TestIssuer");
+        Environment.SetEnvironmentVariable("Jwt__Audience", "TestAudience");
         
         _factory = factory.WithWebHostBuilder(builder =>
         {
