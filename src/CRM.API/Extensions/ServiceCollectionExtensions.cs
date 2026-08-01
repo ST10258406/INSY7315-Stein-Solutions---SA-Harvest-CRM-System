@@ -20,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -54,11 +55,16 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
-        services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
 
         var jwtSecret = configuration["JWT_SECRET"]
             ?? throw new InvalidOperationException(
                 "JWT_SECRET is not set. Add it to .env (local) or Azure Key Vault (production).");
+
+        // Unify the signing key so JwtTokenService (which reads Jwt:SigningKey) 
+        // uses the exact same key from .env
+        configuration["Jwt:SigningKey"] = jwtSecret;
+        
+        services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -69,15 +75,17 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = configuration["JwtSettings:Issuer"],
-                    ValidAudience = configuration["JwtSettings:Audience"],
+                    ValidIssuer = configuration["Jwt:Issuer"],
+                    ValidAudience = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtSecret)),
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero,
+                    RoleClaimType = ClaimTypes.Role
                 };
             });
 
-        services.AddAuthorization();
+        services.AddCrmAuthorizationPolicies();
+
 
         // Hangfire — same Postgres connection string, own schema
         services.AddHangfire(config => config
