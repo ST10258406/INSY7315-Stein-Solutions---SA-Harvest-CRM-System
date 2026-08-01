@@ -48,7 +48,7 @@ export function decodeJwtToken(token: string): DecodedJwt {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Authenticates user credentials directly against the CRM API backend (POST /api/auth/login).
