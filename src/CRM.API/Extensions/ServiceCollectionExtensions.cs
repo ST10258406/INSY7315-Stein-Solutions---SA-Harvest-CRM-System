@@ -60,11 +60,13 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException(
                 "JWT_SECRET is not set. Add it to .env (local) or Azure Key Vault (production).");
 
-        // Unify the signing key so JwtTokenService (which reads Jwt:SigningKey) 
-        // uses the exact same key from .env
-        configuration["Jwt:SigningKey"] = jwtSecret;
-        
-        services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
+        // Bind from "Jwt" section and securely apply the signing key from .env 
+        // without mutating the global IConfiguration object
+        services.Configure<JwtSettings>(opts => 
+        {
+            configuration.GetSection("Jwt").Bind(opts);
+            opts.SigningKey = jwtSecret;
+        });
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
