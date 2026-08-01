@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import LoginForm from '../auth/LoginForm';
-import JwtDevModePanel from '../auth/JwtDevModePanel';
-import { loginApi, decodeJwtToken, type LoginResponseDto } from '../../services/authService';
-import { useAuthStore } from '../../store/authStore';
+import LoginForm from '@/components/auth/LoginForm';
+import JwtDevModePanel from '@/components/auth/JwtDevModePanel';
+import { loginApi, decodeJwtToken, type LoginResponseDto } from '@/services/authService';
+import { useAuthStore } from '@/store/authStore';
 
 const LandingPage: React.FC = () => {
   const [devModeEnabled, setDevModeEnabled] = useState(false);

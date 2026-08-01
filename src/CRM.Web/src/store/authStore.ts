@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface AuthState {
   accessToken: string | null;
@@ -8,10 +9,17 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  accessToken: null,
-  refreshToken: null,
-  setAccessToken: (token) => set({ accessToken: token }),
-  setRefreshToken: (token) => set({ refreshToken: token }),
-  logout: () => set({ accessToken: null, refreshToken: null }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      accessToken: null,
+      refreshToken: null,
+      setAccessToken: (token) => set({ accessToken: token }),
+      setRefreshToken: (token) => set({ refreshToken: token }),
+      logout: () => set({ accessToken: null, refreshToken: null }),
+    }),
+    {
+      name: 'crm-auth-storage', // Unique name in localStorage
+    }
+  )
+);

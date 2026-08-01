@@ -20,13 +20,13 @@ api.interceptors.request.use((config) => {
 });
 
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<(token: string | null) => void> = [];
 
-function subscribeTokenRefresh(callback: (token: string) => void) {
+function subscribeTokenRefresh(callback: (token: string | null) => void) {
   refreshSubscribers.push(callback);
 }
 
-function onRefreshed(token: string) {
+function onRefreshed(token: string | null) {
   refreshSubscribers.forEach((callback) => callback(token));
   refreshSubscribers = [];
 }
@@ -57,10 +57,14 @@ api.interceptors.response.use(
     if (isRefreshing) {
       // A refresh is already in flight (e.g. two requests 401'd at once) —
       // queue this request instead of firing a second refresh call.
-      return new Promise((resolve) => {
-        subscribeTokenRefresh((newToken: string) => {
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          resolve(api(originalRequest));
+      return new Promise((resolve, reject) => {
+        subscribeTokenRefresh((newToken: string | null) => {
+          if (newToken) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(originalRequest));
+          } else {
+            reject(new Error('Token refresh failed'));
+          }
         });
       });
     }
@@ -80,6 +84,7 @@ api.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
       return api(originalRequest);
     } catch (refreshError) {
+      onRefreshed(null); // Reject any queued requests
       useAuthStore.getState().logout();
       window.location.href = paths.login;
       return Promise.reject(refreshError);

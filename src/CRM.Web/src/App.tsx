@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './components/pages/LandingPage';
 import './App.css'; // Might need to keep or replace
-import './lib/axios'; // Ensure axios instance runs and attaches to window
+import './lib/axios'; // Ensure axios interceptors are registered
 
 function App() {
   return (
