@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import LoginForm from '../auth/LoginForm';
-import JwtDevModePanel from '../auth/JwtDevModePanel';
-import { loginApi, decodeJwtToken, type LoginResponseDto } from '../../services/authService';
+import LoginForm from '@/components/auth/LoginForm';
+import JwtDevModePanel from '@/components/auth/JwtDevModePanel';
+import { loginApi, decodeJwtToken, type LoginResponseDto } from '@/services/authService';
+import { useAuthStore } from '@/store/authStore';
 
 const LandingPage: React.FC = () => {
   const [devModeEnabled, setDevModeEnabled] = useState(false);
@@ -30,8 +31,11 @@ const LandingPage: React.FC = () => {
       });
 
       // Save session in localStorage for client state persistence
-      localStorage.setItem('crm_access_token', response.accessToken);
       localStorage.setItem('crm_user', JSON.stringify(response.user));
+
+      // Sync with global authStore for the Axios interceptor
+      useAuthStore.getState().setAccessToken(response.accessToken);
+      useAuthStore.getState().setRefreshToken(response.refreshToken);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials or API connection.';
       setApiError(msg);
@@ -71,13 +75,19 @@ const LandingPage: React.FC = () => {
     const token = `${encodedHeader}.${encodedPayload}.${mockSignature}`;
 
     setJwtData({ token, header, payload, isRealApi: false });
+
+    // Sync with global authStore (no refresh token for simulated logins)
+    useAuthStore.getState().setAccessToken(token);
+    useAuthStore.getState().setRefreshToken(null);
   };
 
   const handleLogout = () => {
     setUserSession(null);
     setJwtData(null);
-    localStorage.removeItem('crm_access_token');
     localStorage.removeItem('crm_user');
+
+    // Clear global authStore
+    useAuthStore.getState().logout();
   };
 
   return (
