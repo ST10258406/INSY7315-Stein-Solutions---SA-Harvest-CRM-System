@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore';
 import { paths } from '@/routes/paths';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL, // e.g. http://localhost:5000/api/v1
+  baseURL: import.meta.env.VITE_API_BASE_URL, // e.g. http://localhost:5000
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,10 +38,10 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as RetryableRequestConfig;
+    const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     // Only try to recover from 401s, and only once per request.
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (!originalRequest || error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
 
@@ -93,4 +93,3 @@ api.interceptors.response.use(
     }
   }
 );
-

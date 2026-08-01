@@ -20,6 +20,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'crm-auth-storage', // Unique name in localStorage
+      partialize: (state) => ({ accessToken: state.accessToken }),
     }
   )
 );

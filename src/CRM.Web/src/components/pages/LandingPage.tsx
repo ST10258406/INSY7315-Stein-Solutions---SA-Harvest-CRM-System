@@ -31,7 +31,6 @@ const LandingPage: React.FC = () => {
       });
 
       // Save session in localStorage for client state persistence
-      localStorage.setItem('crm_access_token', response.accessToken);
       localStorage.setItem('crm_user', JSON.stringify(response.user));
 
       // Sync with global authStore for the Axios interceptor
@@ -85,7 +84,6 @@ const LandingPage: React.FC = () => {
   const handleLogout = () => {
     setUserSession(null);
     setJwtData(null);
-    localStorage.removeItem('crm_access_token');
     localStorage.removeItem('crm_user');
 
     // Clear global authStore
