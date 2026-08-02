@@ -1,26 +1,51 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import type { AuthUser, LoginResult } from '@/features/auth/types/auth.types';
+
+// Token Storage Strategy Decision: Memory-only (No persistence)
+// Decision: Access tokens and refresh tokens are stored in memory only.
+// Rationale: This prevents XSS attacks from easily extracting tokens from localStorage/sessionStorage.
+// Hydration relies on a `/users/me` check on application load if an active session exists.
 
 interface AuthState {
+  user: AuthUser | null;
   accessToken: string | null;
   refreshToken: string | null;
-  setAccessToken: (token: string | null) => void;
-  setRefreshToken: (token: string | null) => void;
+  isAuthenticated: boolean;
+  isHydrating: boolean;
+
+  login: (result: LoginResult) => void;
   logout: () => void;
+  setAccessToken: (token: string) => void;
+  setUser: (user: AuthUser) => void;
+  setHydrating: (value: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  accessToken: null,
+  refreshToken: null,
+  isAuthenticated: false,
+  isHydrating: true, // starts true — see hydration section below
+
+  login: (result) =>
+    set({
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      isAuthenticated: true,
+    }),
+
+  logout: () =>
+    set({
+      user: null,
       accessToken: null,
       refreshToken: null,
-      setAccessToken: (token) => set({ accessToken: token }),
-      setRefreshToken: (token) => set({ refreshToken: token }),
-      logout: () => set({ accessToken: null, refreshToken: null }),
+      isAuthenticated: false,
     }),
-    {
-      name: 'crm-auth-storage', // Unique name in localStorage
-      partialize: (state) => ({ accessToken: state.accessToken }),
-    }
-  )
-);
+
+  setAccessToken: (token) => set({ accessToken: token }),
+
+  setUser: (user) => set({ user, isAuthenticated: true }),
+
+  setHydrating: (value) => set({ isHydrating: value }),
+}));

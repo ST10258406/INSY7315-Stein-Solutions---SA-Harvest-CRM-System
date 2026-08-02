@@ -30,12 +30,9 @@ const LandingPage: React.FC = () => {
         isRealApi: true
       });
 
-      // Save session in localStorage for client state persistence
-      localStorage.setItem('crm_user', JSON.stringify(response.user));
 
       // Sync with global authStore for the Axios interceptor
-      useAuthStore.getState().setAccessToken(response.accessToken);
-      useAuthStore.getState().setRefreshToken(response.refreshToken);
+      useAuthStore.getState().login(response);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials or API connection.';
       setApiError(msg);
@@ -78,13 +75,18 @@ const LandingPage: React.FC = () => {
 
     // Sync with global authStore (no refresh token for simulated logins)
     useAuthStore.getState().setAccessToken(token);
-    useAuthStore.getState().setRefreshToken(null);
-  };
+    useAuthStore.getState().setUser({
+      id: payload.sub as string,
+      firstName: payload.given_name as string,
+      lastName: payload.family_name as string,
+      email: payload.email as string,
+      roles: Array.isArray(payload.role) ? payload.role : [payload.role as string],
+    });  };
 
   const handleLogout = () => {
     setUserSession(null);
     setJwtData(null);
-    localStorage.removeItem('crm_user');
+
 
     // Clear global authStore
     useAuthStore.getState().logout();
