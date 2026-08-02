@@ -1,14 +1,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-
-const loginSchema = z.object({
-  email: z.string().email('Enter a valid work email address.'),
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
+import { loginSchema, type LoginFormValues } from '@/features/auth/schemas/loginSchema';
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -20,11 +13,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, apiError }) => {
   const [remember, setRemember] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
       await onLogin(data.email, data.password);

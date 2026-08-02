@@ -94,6 +94,6 @@ export async function loginApi(email: string, password: string): Promise<LoginRe
     if (err instanceof Error && err.message) {
       throw err;
     }
-    throw new Error('Unable to connect to CRM API. Please ensure the backend server is running on http://localhost:5278.');
+    throw new Error('Unable to connect to CRM API. Please ensure the backend server is running on http://localhost:5278.', { cause: err });
   }
 }

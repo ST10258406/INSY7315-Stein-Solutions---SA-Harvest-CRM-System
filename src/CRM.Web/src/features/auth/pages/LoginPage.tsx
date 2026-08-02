@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LoginForm from '@/components/auth/LoginForm';
-import { loginApi, type LoginResponseDto } from '@/services/authService';
-import { useAuthStore } from '@/store/authStore';
+import { useLogin } from '@/features/auth/hooks/useLogin';
+import { paths } from '@/routes/paths';
 
 const TONNES_RESCUED_THIS_MONTH = 124;
 
@@ -16,28 +17,21 @@ function getTallyMarks(tonnes: number) {
   };
 }
 
-const LandingPage: React.FC = () => {
-  const [userSession, setUserSession] = useState<LoginResponseDto | null>(null);
+const LoginPage: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const { bundles, remainder, note } = getTallyMarks(TONNES_RESCUED_THIS_MONTH);
+  const { mutateAsync: loginMutation } = useLogin();
+  const navigate = useNavigate();
 
   const handleLogin = async (email: string, password: string) => {
     setApiError(null);
     try {
-      const response = await loginApi(email, password);
-      setUserSession(response);
-      useAuthStore.getState().login(response);
+      await loginMutation({ email, password });
+      navigate(paths.dashboard);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials or API connection.';
-      setApiError(msg);
+      setApiError('Login failed. Please check your credentials or API connection.');
       throw err;
     }
-  };
-
-  const handleLogout = () => {
-    setUserSession(null);
-    setApiError(null);
-    useAuthStore.getState().logout();
   };
 
   return (
@@ -96,54 +90,20 @@ const LandingPage: React.FC = () => {
       {/* Form panel */}
       <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
         <div className="w-full max-w-[396px]">
-          {userSession ? (
-            <>
-              <div className="text-[23px] font-bold mb-1">Signed in</div>
-              <div className="text-[13px] text-[#8A8374] mb-[22px]">
-                You're in. The full CRM workspace lands here once it's connected.
-              </div>
+          <div className="text-[23px] font-bold mb-1">Sign in</div>
+          <div className="text-[13px] text-[#8A8374] mb-[22px]">Use your SA Harvest staff account.</div>
 
-              <div className="bg-white border border-[#E4DECE] rounded-xl p-[22px]">
-                <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#EDE7D9]">
-                  <div className="w-11 h-11 rounded-full bg-[#F2B705]/20 border border-[#F2B705]/50 text-[#8A5A00] flex items-center justify-center font-bold flex-none">
-                    {userSession.user.firstName?.[0] || 'U'}{userSession.user.lastName?.[0] || ''}
-                  </div>
-                  <div>
-                    <div className="text-[15px] font-semibold text-[#17140F]">
-                      {userSession.user.firstName} {userSession.user.lastName}
-                    </div>
-                    <div className="text-xs text-[#8A8374]">{userSession.user.email}</div>
-                  </div>
-                </div>
-                <div className="text-sm text-[#3F3A2E] mb-5">
-                  Roles: <span className="font-medium">{userSession.user.roles.join(', ') || 'User'}</span>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full bg-[#F4F2EC] hover:bg-[#EDE7D9] text-[#3F3A2E] font-semibold rounded-lg py-2.5 transition-colors"
-                >
-                  Sign out
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-[23px] font-bold mb-1">Sign in</div>
-              <div className="text-[13px] text-[#8A8374] mb-[22px]">Use your SA Harvest staff account.</div>
+          <LoginForm onLogin={handleLogin} apiError={apiError} />
 
-              <LoginForm onLogin={handleLogin} apiError={apiError} />
-
-              <div className="flex items-start gap-[9px] mt-3.5 bg-[#EFECFA] border border-[#DCD6F3] rounded-[9px] px-[13px] py-2.5">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4E4483" strokeWidth={2} className="flex-none mt-px">
-                  <rect x="4" y="10" width="16" height="10" rx="2" />
-                  <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
-                </svg>
-                <div className="text-[11.5px] text-[#3B3560] leading-relaxed">
-                  Accounts are provisioned by an admin — your role (Marketing, Procurement or Admin) decides what you can see and edit. Need access? <a href="#" className="text-[#4E4483] font-semibold">Request an account</a>.
-                </div>
-              </div>
-            </>
-          )}
+          <div className="flex items-start gap-[9px] mt-3.5 bg-[#EFECFA] border border-[#DCD6F3] rounded-[9px] px-[13px] py-2.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4E4483" strokeWidth={2} className="flex-none mt-px">
+              <rect x="4" y="10" width="16" height="10" rx="2" />
+              <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
+            </svg>
+            <div className="text-[11.5px] text-[#3B3560] leading-relaxed">
+              Accounts are provisioned by an admin — your role (Marketing, Procurement or Admin) decides what you can see and edit. Need access? <a href="#" className="text-[#4E4483] font-semibold">Request an account</a>.
+            </div>
+          </div>
 
           <div className="text-[11px] text-[#A69E8B] mt-3.5 text-center">Donor data is confidential. Sign-ins are logged.</div>
         </div>
@@ -152,4 +112,4 @@ const LandingPage: React.FC = () => {
   );
 };
 
-export default LandingPage;
+export default LoginPage;
