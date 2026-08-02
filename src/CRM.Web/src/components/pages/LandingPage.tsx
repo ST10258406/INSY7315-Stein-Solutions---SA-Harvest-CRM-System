@@ -73,6 +73,9 @@ const LandingPage: React.FC = () => {
 
     setJwtData({ token, header, payload, isRealApi: false });
 
+    // Clear any previous real session state to prevent refresh token mixing
+    useAuthStore.getState().logout();
+    
     // Sync with global authStore (no refresh token for simulated logins)
     useAuthStore.getState().setAccessToken(token);
     useAuthStore.getState().setUser({

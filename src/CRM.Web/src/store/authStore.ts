@@ -1,22 +1,22 @@
 import { create } from 'zustand';
-import type { AuthUser, LoginResult } from '@/features/auth/types/auth.types';
+import type { UserSummaryDto, LoginResponseDto } from '@/services/authService';
 
 // Token Storage Strategy Decision: Memory-only (No persistence)
 // Decision: Access tokens and refresh tokens are stored in memory only.
 // Rationale: This prevents XSS attacks from easily extracting tokens from localStorage/sessionStorage.
-// Hydration relies on a `/users/me` check on application load if an active session exists.
+// Hydration relies on a `/api/users/me` check on application load if an active session exists.
 
 interface AuthState {
-  user: AuthUser | null;
+  user: UserSummaryDto | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
 
-  login: (result: LoginResult) => void;
+  login: (result: LoginResponseDto) => void;
   logout: () => void;
   setAccessToken: (token: string) => void;
-  setUser: (user: AuthUser) => void;
+  setUser: (user: UserSummaryDto) => void;
   setHydrating: (value: boolean) => void;
 }
 

@@ -15,8 +15,8 @@ export function useHydrateAuth() {
       }
 
       try {
-        const { data } = await api.get('/users/me');
-        setUser(data.data); // adjust to match the actual envelope shape
+        const { data } = await api.get('/api/users/me');
+        setUser(data); // Assuming a flat response like the login DTO
       } catch {
         // Token's no good — the axios interceptor will already have
         // attempted a refresh and logged out if that failed too.

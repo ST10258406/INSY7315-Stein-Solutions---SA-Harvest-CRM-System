@@ -7,7 +7,7 @@ describe('authStore', () => {
     firstName: 'John',
     lastName: 'Doe',
     email: 'john@example.com',
-    roles: ['admin'],
+    roles: ['Admin'],
   };
 
   const mockLoginResult = {
