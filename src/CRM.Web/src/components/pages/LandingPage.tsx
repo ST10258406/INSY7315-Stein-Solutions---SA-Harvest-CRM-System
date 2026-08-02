@@ -1,37 +1,31 @@
 import React, { useState } from 'react';
 import LoginForm from '@/components/auth/LoginForm';
-import JwtDevModePanel from '@/components/auth/JwtDevModePanel';
-import { loginApi, decodeJwtToken, type LoginResponseDto } from '@/services/authService';
+import { loginApi, type LoginResponseDto } from '@/services/authService';
 import { useAuthStore } from '@/store/authStore';
 
+const TONNES_RESCUED_THIS_MONTH = 124;
+
+function getTallyMarks(tonnes: number) {
+  const scale = Math.max(1, Math.round(tonnes / 22));
+  const strokes = Math.round(tonnes / scale);
+  const note = scale === 1 ? 'Each mark is a tonne.' : `Each mark is ${scale} tonnes.`;
+  return {
+    bundles: Array.from({ length: Math.floor(strokes / 5) }),
+    remainder: Array.from({ length: strokes % 5 }),
+    note,
+  };
+}
+
 const LandingPage: React.FC = () => {
-  const [devModeEnabled, setDevModeEnabled] = useState(false);
-  const [jwtData, setJwtData] = useState<{
-    token: string;
-    header: Record<string, unknown>;
-    payload: Record<string, unknown>;
-    isRealApi?: boolean;
-  } | null>(null);
   const [userSession, setUserSession] = useState<LoginResponseDto | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const { bundles, remainder, note } = getTallyMarks(TONNES_RESCUED_THIS_MONTH);
 
-  const handleRealLogin = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string) => {
     setApiError(null);
     try {
       const response = await loginApi(email, password);
       setUserSession(response);
-
-      // Decode the real JWT issued by CRM.API for inspector display
-      const decoded = decodeJwtToken(response.accessToken);
-      setJwtData({
-        token: response.accessToken,
-        header: decoded.header,
-        payload: decoded.payload,
-        isRealApi: true
-      });
-
-
-      // Sync with global authStore for the Axios interceptor
       useAuthStore.getState().login(response);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials or API connection.';
@@ -40,169 +34,120 @@ const LandingPage: React.FC = () => {
     }
   };
 
-  const handleSimulatedLogin = (role: string, email: string) => {
-    setApiError(null);
-    const header = {
-      alg: "HS256",
-      typ: "JWT"
-    };
-
-    const payload = {
-      sub: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-0000-0000-000000000000',
-      email: email,
-      given_name: "Demo",
-      family_name: "User",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (60 * 60), // 60 minutes
-      iss: "SAHarvestCRM",
-      aud: "SAHarvestCRM.Client",
-      role: role
-    };
-
-    const base64UrlEncode = (obj: Record<string, unknown>) => {
-      return btoa(JSON.stringify(obj))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
-    };
-
-    const encodedHeader = base64UrlEncode(header);
-    const encodedPayload = base64UrlEncode(payload);
-    const mockSignature = "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-    const token = `${encodedHeader}.${encodedPayload}.${mockSignature}`;
-
-    setJwtData({ token, header, payload, isRealApi: false });
-
-    // Clear any previous real session state to prevent refresh token mixing
-    useAuthStore.getState().logout();
-    
-    // Sync with global authStore (no refresh token for simulated logins)
-    useAuthStore.getState().setAccessToken(token);
-    useAuthStore.getState().setUser({
-      id: payload.sub as string,
-      firstName: payload.given_name as string,
-      lastName: payload.family_name as string,
-      email: payload.email as string,
-      roles: Array.isArray(payload.role) ? payload.role : [payload.role as string],
-    });  };
-
   const handleLogout = () => {
     setUserSession(null);
-    setJwtData(null);
-
-
-    // Clear global authStore
+    setApiError(null);
     useAuthStore.getState().logout();
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0A0A0A] font-sans selection:bg-primary/30">
-      {/* Background glow */}
-      <div className="absolute top-0 -translate-y-12 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none"></div>
+    <div
+      className="flex h-screen w-full overflow-hidden bg-[#F4F2EC] text-[#17140F]"
+      style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
+    >
+      {/* Brand panel */}
+      <div className="hidden lg:flex w-[44%] min-w-[420px] flex-none flex-col justify-between bg-[#17140F] p-11 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-[#F2B705]" />
 
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-primary-foreground">SA</div>
-          <span className="text-xl font-semibold text-white tracking-tight">SA Harvest CRM</span>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <div className="text-xs text-emerald-400 font-mono bg-emerald-950/40 border border-emerald-800/50 px-3 py-1.5 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Strict REST API Mode (No DB Access)
+        <div className="flex items-center gap-[11px]">
+          <div className="w-9 h-9 rounded-[10px] bg-[#F2B705] flex items-center justify-center flex-none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C12 8 8 9 8 14C8 17.3 9.8 20 12 22C14.2 20 16 17.3 16 14C16 9 12 8 12 2Z" fill="#17140F" />
+              <path d="M12 12V22" stroke="#F2B705" strokeWidth={1.4} />
+            </svg>
           </div>
-
-          <label className="flex items-center cursor-pointer gap-2">
-            <span className="text-sm text-gray-400 font-medium">JWT Dev Mode</span>
-            <div className="relative">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={devModeEnabled}
-                onChange={(e) => setDevModeEnabled(e.target.checked)}
-              />
-              <div className={`block w-10 h-6 rounded-full transition-colors ${devModeEnabled ? 'bg-primary' : 'bg-gray-800 border border-gray-700'}`}></div>
-              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${devModeEnabled ? 'translate-x-4' : ''}`}></div>
-            </div>
-          </label>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 flex flex-col lg:flex-row items-center justify-center min-h-[calc(100vh-100px)] px-4 gap-12 max-w-7xl mx-auto pb-20">
-
-        {/* Left Side: Hero Text */}
-        <div className="flex-1 text-center lg:text-left">
-          <h1 className="text-5xl lg:text-7xl font-bold text-white tracking-tighter mb-6 leading-tight">
-            Nourishing our <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-yellow-200">
-              communities.
-            </span>
-          </h1>
-          <p className="text-lg text-gray-400 mb-8 max-w-xl mx-auto lg:mx-0">
-            Welcome to the SA Harvest Centralized Resource Management System. Empowering donors and staff to streamline logistics and fight hunger effectively.
-          </p>
+          <div className="leading-tight">
+            <div className="font-bold text-[15px] text-[#FBF7EE]">SA Harvest</div>
+            <div className="text-[11px] text-[#8C8578] font-medium">Donor CRM</div>
+          </div>
         </div>
 
-        {/* Right Side: Interactive Auth Panel */}
-        <div className={`flex gap-6 w-full max-w-md lg:max-w-none transition-all duration-500 ease-out ${devModeEnabled ? 'lg:w-[800px]' : 'lg:w-[450px]'}`}>
+        <div>
+          <div className="text-[10px] font-bold tracking-wide text-[#F2B705] uppercase mb-3.5">Rescued this month</div>
+          <div className="flex items-end gap-[9px] min-h-[38px] mb-3.5">
+            {bundles.map((_, i) => (
+              <div key={`bundle-${i}`} className="relative w-[22px] h-[38px] flex-none">
+                <div className="absolute left-px top-0 w-[2.5px] h-[38px] bg-[#F4F2EC] rounded-[1px]" />
+                <div className="absolute left-[7px] top-0 w-[2.5px] h-[38px] bg-[#F4F2EC] rounded-[1px]" />
+                <div className="absolute left-[13px] top-0 w-[2.5px] h-[38px] bg-[#F4F2EC] rounded-[1px]" />
+                <div className="absolute left-[19px] top-0 w-[2.5px] h-[38px] bg-[#F4F2EC] rounded-[1px]" />
+                <div className="absolute -left-0.5 top-4 w-[26px] h-[2.5px] bg-[#F2B705] rounded-[1px] -rotate-[30deg]" />
+              </div>
+            ))}
+            {remainder.map((_, i) => (
+              <div key={`remainder-${i}`} className="w-[2.5px] h-[38px] bg-[#F4F2EC] flex-none rounded-[1px]" />
+            ))}
+          </div>
+          <div className="text-[31px] font-bold text-[#FBF7EE] leading-tight max-w-[400px]">
+            {TONNES_RESCUED_THIS_MONTH} tonnes of surplus food moved to communities that needed it.
+          </div>
+          <div className="text-[13px] text-[#8C8578] mt-3 max-w-[380px]">
+            {note} Every donor relationship you keep warm in here is part of that number.
+          </div>
+        </div>
 
-          <div className="flex-1 w-full max-w-[450px]">
-            {userSession ? (
-              /* Logged In Active Session Card */
-              <div className="bg-[#121212]/80 backdrop-blur-xl border border-emerald-800/50 rounded-2xl shadow-2xl p-8 w-full">
-                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-800">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold text-lg">
+        <div className="flex items-center gap-[18px] text-[11.5px] text-[#6E6857]">
+          <span>© 2026 SA Harvest NPC</span>
+          <a href="#" className="text-[#8C8578] hover:text-[#B65C36]">Privacy</a>
+          <a href="#" className="text-[#8C8578] hover:text-[#B65C36]">Support</a>
+        </div>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+        <div className="w-full max-w-[396px]">
+          {userSession ? (
+            <>
+              <div className="text-[23px] font-bold mb-1">Signed in</div>
+              <div className="text-[13px] text-[#8A8374] mb-[22px]">
+                You're in. The full CRM workspace lands here once it's connected.
+              </div>
+
+              <div className="bg-white border border-[#E4DECE] rounded-xl p-[22px]">
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#EDE7D9]">
+                  <div className="w-11 h-11 rounded-full bg-[#F2B705]/20 border border-[#F2B705]/50 text-[#8A5A00] flex items-center justify-center font-bold flex-none">
                     {userSession.user.firstName?.[0] || 'U'}{userSession.user.lastName?.[0] || ''}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
+                    <div className="text-[15px] font-semibold text-[#17140F]">
                       {userSession.user.firstName} {userSession.user.lastName}
-                    </h3>
-                    <p className="text-xs text-gray-400">{userSession.user.email}</p>
+                    </div>
+                    <div className="text-xs text-[#8A8374]">{userSession.user.email}</div>
                   </div>
                 </div>
-
-                <div className="space-y-3 mb-6 text-sm">
-                  <div className="flex justify-between py-1.5 border-b border-gray-800/50">
-                    <span className="text-gray-400">Assigned Roles</span>
-                    <span className="text-emerald-400 font-medium">{userSession.user.roles.join(', ') || 'User'}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5 border-b border-gray-800/50">
-                    <span className="text-gray-400">JWT Token Status</span>
-                    <span className="text-xs font-mono bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800">Valid</span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-gray-400">Expires In</span>
-                    <span className="text-gray-300 font-mono">{userSession.expiresIn}s</span>
-                  </div>
+                <div className="text-sm text-[#3F3A2E] mb-5">
+                  Roles: <span className="font-medium">{userSession.user.roles.join(', ') || 'User'}</span>
                 </div>
-
                 <button
                   onClick={handleLogout}
-                  className="w-full py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium rounded-lg transition-colors"
+                  className="w-full bg-[#F4F2EC] hover:bg-[#EDE7D9] text-[#3F3A2E] font-semibold rounded-lg py-2.5 transition-colors"
                 >
-                  Sign Out Session
+                  Sign out
                 </button>
               </div>
-            ) : (
-              <LoginForm
-                onRealLogin={handleRealLogin}
-                onSimulateLogin={handleSimulatedLogin}
-                isDevMode={devModeEnabled}
-                apiError={apiError}
-              />
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[23px] font-bold mb-1">Sign in</div>
+              <div className="text-[13px] text-[#8A8374] mb-[22px]">Use your SA Harvest staff account.</div>
 
-          {devModeEnabled && (
-            <div className="hidden lg:block flex-1 animate-in fade-in slide-in-from-right-8 duration-500">
-              <JwtDevModePanel jwtData={jwtData} />
-            </div>
+              <LoginForm onLogin={handleLogin} apiError={apiError} />
+
+              <div className="flex items-start gap-[9px] mt-3.5 bg-[#EFECFA] border border-[#DCD6F3] rounded-[9px] px-[13px] py-2.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4E4483" strokeWidth={2} className="flex-none mt-px">
+                  <rect x="4" y="10" width="16" height="10" rx="2" />
+                  <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
+                </svg>
+                <div className="text-[11.5px] text-[#3B3560] leading-relaxed">
+                  Accounts are provisioned by an admin — your role (Marketing, Procurement or Admin) decides what you can see and edit. Need access? <a href="#" className="text-[#4E4483] font-semibold">Request an account</a>.
+                </div>
+              </div>
+            </>
           )}
+
+          <div className="text-[11px] text-[#A69E8B] mt-3.5 text-center">Donor data is confidential. Sign-ins are logged.</div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };
