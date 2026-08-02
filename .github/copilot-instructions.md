@@ -75,10 +75,10 @@ explicitly — do not let them pass because the code otherwise looks clean.
 ### Authentication & Security Rules
 
 - **Never confirm or deny account existence.** This applies to both:
-  - `POST /auth/login` — must return the identical error message and
+  - `POST /api/auth/login` — must return the identical error message and
     status code (401) for "email not found" and "password incorrect."
     Never let these two failure paths diverge in wording.
-  - `POST /auth/forgot-password` — must always return 200 with the
+  - `POST /api/auth/forgot-password` — must always return 200 with the
     same generic message, regardless of whether the email exists in
     the system.
   If a PR adds a distinct error message for "user not found" vs.
@@ -187,7 +187,7 @@ explicitly — do not let them pass because the code otherwise looks clean.
 
 ## 🟡 API Contract Rules — Flag These
 
-- List endpoints (GET /donors, GET /tasks etc.) must return the
+- List endpoints (GET /api/donors, GET /api/tasks etc.) must return the
   lightweight DTO only, never the full entity or full detail DTO.
   `DonorListItemDto` for donors — not `DonorDetailDto`.
   If a list handler returns the full detail shape, flag it.
@@ -372,3 +372,14 @@ A PR is ready to merge when:
 - [ ] All tests pass (`dotnet test`)
 - [ ] No items from the Non-Negotiables section above are violated
 - [ ] CI pipeline passes on the PR branch
+
+---
+
+## 📊 Review Output Format
+
+At the start of every review, before individual line comments, include a
+short "Risk Assessment" summary with one of: LOW / MEDIUM / HIGH, plus a
+one-line reason. Base this on:
+- HIGH: any Non-Negotiable rule violated, or auth/security rule touched
+- MEDIUM: naming/convention violations, or missing tests on new handlers
+- LOW: purely stylistic or documentation-only changes
