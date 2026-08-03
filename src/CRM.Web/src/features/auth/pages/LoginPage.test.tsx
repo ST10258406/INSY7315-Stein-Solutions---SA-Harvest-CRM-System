@@ -95,7 +95,7 @@ describe('LoginPage', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(api.post).toHaveBeenCalledWith('/auth/login', {
+      expect(api.post).toHaveBeenCalledWith('/api/auth/login', {
         email: 'test@saharvest.org',
         password: 'password123'
       });

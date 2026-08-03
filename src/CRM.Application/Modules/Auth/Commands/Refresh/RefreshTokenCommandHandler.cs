@@ -37,7 +37,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         return new RefreshTokenResponseDto
         {
             AccessToken = newAccessToken,
-            ExpiresIn = 3600
+            ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds
         };
     }
 }
