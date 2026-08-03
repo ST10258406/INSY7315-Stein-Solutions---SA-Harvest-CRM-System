@@ -50,6 +50,7 @@ public class RefreshTokenCommandHandlerTests
         _contextMock.RefreshTokens.Returns(mockDbSet);
 
         _jwtTokenServiceMock.GenerateAccessToken(user).Returns("new-access-token");
+        _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
 
         var command = new RefreshTokenCommand("valid-refresh-token");
 

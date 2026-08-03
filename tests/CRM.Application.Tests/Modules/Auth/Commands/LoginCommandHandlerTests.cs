@@ -46,6 +46,7 @@ public class LoginCommandHandlerTests
 
         _jwtTokenServiceMock.GenerateAccessToken(user).Returns("access-token");
         _jwtTokenServiceMock.GenerateRefreshToken().Returns("refresh-token");
+        _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
 
         var command = new LoginCommand("test@example.com", "CorrectPassword");
 
@@ -56,6 +57,7 @@ public class LoginCommandHandlerTests
         Assert.NotNull(result);
         Assert.Equal("access-token", result.AccessToken);
         Assert.Equal("refresh-token", result.RefreshToken);
+        Assert.Equal(3600, result.ExpiresIn);
         Assert.Equal(user.Id, result.User.Id);
 
         // Verify that a refresh token was added to the DbSet

@@ -56,4 +56,6 @@ public class JwtTokenService : IJwtTokenService
         var bytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(bytes);
     }
+
+    public int AccessTokenExpirySeconds => _settings.AccessTokenExpiryMinutes * 60;
 }

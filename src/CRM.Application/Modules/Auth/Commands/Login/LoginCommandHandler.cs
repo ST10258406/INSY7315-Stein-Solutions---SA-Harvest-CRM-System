@@ -60,7 +60,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         {
             AccessToken = accessToken,
             RefreshToken = refreshTokenValue,
-            ExpiresIn = 3600,
+            ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds,
             User = new UserSummaryDto
             {
                 Id = user.Id,
