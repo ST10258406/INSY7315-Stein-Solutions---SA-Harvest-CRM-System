@@ -49,6 +49,7 @@ const fillAndSubmit = (newPassword: string, confirmPassword: string) => {
 describe('ResetPasswordPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
   afterEach(() => {

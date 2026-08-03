@@ -45,6 +45,7 @@ const renderLoginPage = () => {
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
     useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false });
   });
 

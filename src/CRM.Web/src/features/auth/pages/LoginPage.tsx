@@ -15,9 +15,8 @@ const LoginPage: React.FC = () => {
     try {
       await loginMutation({ email, password });
       navigate(paths.dashboard);
-    } catch (err: unknown) {
+    } catch {
       setApiError('Login failed. Please check your credentials or API connection.');
-      throw err;
     }
   };
 

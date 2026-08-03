@@ -20,8 +20,9 @@ export default defineConfig({
     watch: {
       // Docker Desktop on Windows doesn't reliably forward native fs change
       // events through the bind mount, so Vite's default watcher misses
-      // edits made on the host. Polling works regardless of the backend.
-      usePolling: true,
+      // edits made on the host. Set VITE_USE_POLLING=true in that setup only —
+      // polling raises CPU usage and isn't needed on native filesystems.
+      usePolling: process.env.VITE_USE_POLLING === 'true',
     },
     proxy: {
       '/api': {

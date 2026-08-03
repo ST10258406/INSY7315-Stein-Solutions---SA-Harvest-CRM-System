@@ -51,7 +51,6 @@ const ResetPasswordPage: React.FC = () => {
     } catch (err: unknown) {
       const tokenError = getFieldError(err, 'Token');
       setApiError(tokenError ? INVALID_LINK_MESSAGE : GENERIC_ERROR_MESSAGE);
-      throw err;
     }
   };
 

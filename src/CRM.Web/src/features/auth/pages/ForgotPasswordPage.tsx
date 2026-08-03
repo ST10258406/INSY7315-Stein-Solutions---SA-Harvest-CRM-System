@@ -19,9 +19,8 @@ const ForgotPasswordPage: React.FC = () => {
     try {
       await forgotPasswordMutation({ email });
       setSubmitted(true);
-    } catch (err: unknown) {
+    } catch {
       setApiError(GENERIC_ERROR_MESSAGE);
-      throw err;
     }
   };
 
