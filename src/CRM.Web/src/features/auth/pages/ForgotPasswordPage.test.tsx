@@ -31,12 +31,8 @@ const renderPage = () => {
 
 describe('ForgotPasswordPage', () => {
   beforeEach(() => {
-<<<<<<< HEAD
     vi.clearAllMocks();
     queryClient.clear();
-=======
-    vi.clearAllMocks(); queryClient.clear();
->>>>>>> fd70c6e0805224014739eb11e05d7833302f0853
   });
 
   afterEach(() => {
