@@ -42,7 +42,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, apiError }) => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3.5">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3.5">
         <div>
           <div className="text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">Work email</div>
           <input
