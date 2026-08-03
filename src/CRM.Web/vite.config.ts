@@ -17,6 +17,12 @@ export default defineConfig({
   server: {
     port: 3000, // Ensure it runs on port 3000
     host: true,
+    watch: {
+      // Docker Desktop on Windows doesn't reliably forward native fs change
+      // events through the bind mount, so Vite's default watcher misses
+      // edits made on the host. Polling works regardless of the backend.
+      usePolling: true,
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5278',

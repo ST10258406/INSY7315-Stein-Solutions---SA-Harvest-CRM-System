@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginFormValues } from '@/features/auth/schemas/loginSchema';
+import { paths } from '@/routes/paths';
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -59,7 +61,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, apiError }) => {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <div className="text-[11.5px] font-semibold text-[#3F3A2E]">Password</div>
-            <a href="#" className="text-[11.5px] font-semibold text-[#8A5A00] hover:text-[#B65C36]">Forgot?</a>
+            <Link to={paths.forgotPassword} className="text-[11.5px] font-semibold text-[#8A5A00] hover:text-[#B65C36]">Forgot?</Link>
           </div>
           <div className={`flex items-center border rounded-lg bg-[#FFFDF8] pr-2.5 ${
             hasError || errors.password ? 'border-[#E8B7A6]' : 'border-[#E4DECE]'

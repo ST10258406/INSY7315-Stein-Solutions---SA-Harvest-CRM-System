@@ -13,6 +13,14 @@ export interface LoginResponseDto {
   user: UserSummaryDto;
 }
 
+export interface ForgotPasswordResponseDto {
+  message: string;
+}
+
+export interface ResetPasswordResponseDto {
+  message: string;
+}
+
 export interface DecodedJwt {
   header: Record<string, unknown>;
   payload: Record<string, unknown>;
