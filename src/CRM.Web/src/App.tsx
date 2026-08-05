@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardPage from './components/pages/DashboardPage';
 import ApprovalsPage from './components/pages/ApprovalsPage';
@@ -28,6 +28,7 @@ function App() {
       <Router>
         <div className="dark bg-background text-foreground min-h-screen">
           <Routes>
+            <Route path="/" element={<Navigate to={paths.login} replace />} />
             <Route path={paths.login} element={<LoginPage />} />
             <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
