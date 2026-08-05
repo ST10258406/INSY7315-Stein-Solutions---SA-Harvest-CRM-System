@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import LandingPage from './components/pages/LandingPage';
 import DashboardPage from './components/pages/DashboardPage';
 import ApprovalsPage from './components/pages/ApprovalsPage';
 import LoginPage from './features/auth/pages/LoginPage';
@@ -25,45 +24,44 @@ function App() {
   }
 
   return (
-<QueryClientProvider client={queryClient}>
-  <Router>
-    <div className="dark bg-background text-foreground min-h-screen">
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path={paths.login} element={<LoginPage />} />
-        <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
-        <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <div className="dark bg-background text-foreground min-h-screen">
+          <Routes>
+            <Route path={paths.login} element={<LoginPage />} />
+            <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
+            <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
 
-        <Route 
-          path={paths.notAuthorized} 
-          element={
-            <ProtectedRoute>
-              <NotAuthorizedPage />
-            </ProtectedRoute>
-          } 
-        />
+            <Route
+              path={paths.notAuthorized}
+              element={
+                <ProtectedRoute>
+                  <NotAuthorizedPage />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path={paths.dashboard}
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path={paths.dashboard}
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path={paths.approvals}
-          element={
-            <ProtectedRoute allowedRoles={["Admin", "SuperAdmin"]}>
-              <ApprovalsPage />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </div>
-  </Router>
-</QueryClientProvider>
+            <Route
+              path={paths.approvals}
+              element={
+                <ProtectedRoute allowedRoles={["Admin", "SuperAdmin"]}>
+                  <ApprovalsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </div>
+      </Router>
+    </QueryClientProvider>
   );
 }
 
