@@ -117,6 +117,12 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
+    public void AccessTokenExpirySeconds_ReturnsConfiguredMinutesAsSeconds()
+    {
+        Assert.Equal(_settings.AccessTokenExpiryMinutes * 60, _sut.AccessTokenExpirySeconds);
+    }
+
+    [Fact]
     public void GenerateRefreshToken_ReturnsUniqueValueEachCall()
     {
         // Act
