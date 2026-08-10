@@ -1,122 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import DashboardPage from './components/pages/DashboardPage';
+import ApprovalsPage from './components/pages/ApprovalsPage';
+import LoginPage from './features/auth/pages/LoginPage';
+import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage';
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
+import { NotAuthorizedPage } from '@/features/auth/pages/NotAuthorizedPage';
+import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
+import { useHydrateAuth } from '@/features/auth/hooks/useHydrateAuth';
+import { useAuthStore } from '@/store/authStore';
+import { paths } from '@/routes/paths';
+import './App.css';
+import './lib/axios';
+
+const queryClient = new QueryClient();
 
 function App() {
-  const [count, setCount] = useState(0)
+  useHydrateAuth();
+  const isHydrating = useAuthStore((s) => s.isHydrating);
+
+  if (isHydrating) {
+    return <div className="flex min-h-screen items-center justify-center dark bg-background text-foreground">Loading...</div>;
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <div className="dark bg-background text-foreground min-h-screen">
+          <Routes>
+            <Route path="/" element={<Navigate to={paths.login} replace />} />
+            <Route path={paths.login} element={<LoginPage />} />
+            <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
+            <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
 
-      <div className="ticks"></div>
+            <Route
+              path={paths.notAuthorized}
+              element={
+                <ProtectedRoute>
+                  <NotAuthorizedPage />
+                </ProtectedRoute>
+              }
+            />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            <Route
+              path={paths.dashboard}
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            <Route
+              path={paths.approvals}
+              element={
+                <ProtectedRoute allowedRoles={["Admin", "SuperAdmin"]}>
+                  <ApprovalsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </div>
+      </Router>
+    </QueryClientProvider>
+  );
 }
 
-export default App
+export default App;

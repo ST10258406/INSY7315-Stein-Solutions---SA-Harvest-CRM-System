@@ -2,7 +2,9 @@ namespace CRM.API.Extensions;
 
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Interfaces;
 using CRM.Domain.Entities;
+using CRM.Infrastructure.Auth;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Services;
@@ -18,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -47,13 +50,23 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<CrmDbContext>((sp, options) =>
             options.UseNpgsql(configuration.GetConnectionString("Default"))
                    .AddInterceptors(new UpdatedAtInterceptor()));
+                   
+        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<CrmDbContext>());
 
-        // Auth — PasswordHasher only, NO AddIdentity()
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         var jwtSecret = configuration["JWT_SECRET"]
             ?? throw new InvalidOperationException(
                 "JWT_SECRET is not set. Add it to .env (local) or Azure Key Vault (production).");
+
+        // Bind from "Jwt" section and securely apply the signing key from .env 
+        // without mutating the global IConfiguration object
+        services.Configure<JwtSettings>(opts => 
+        {
+            configuration.GetSection("Jwt").Bind(opts);
+            opts.SigningKey = jwtSecret;
+        });
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -64,15 +77,17 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = configuration["JwtSettings:Issuer"],
-                    ValidAudience = configuration["JwtSettings:Audience"],
+                    ValidIssuer = configuration["Jwt:Issuer"],
+                    ValidAudience = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtSecret)),
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero,
+                    RoleClaimType = ClaimTypes.Role
                 };
             });
 
-        services.AddAuthorization();
+        services.AddCrmAuthorizationPolicies();
+
 
         // Hangfire — same Postgres connection string, own schema
         services.AddHangfire(config => config

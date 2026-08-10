@@ -11,7 +11,7 @@ using Xunit;
 
 public class UpdatedAtInterceptorTests
 {
-    private const string TestConnectionString = "Host=localhost;Database=crm_test;Username=postgres;Password=P@ss1234ID";
+    private const string TestConnectionString = "Host=localhost;Database=crm_test_interceptor;Username=postgres;Password=P@ss1234ID";
 
     [Fact]
     public async Task SavingChanges_SetsUpdatedAt_OnModifiedEntity()

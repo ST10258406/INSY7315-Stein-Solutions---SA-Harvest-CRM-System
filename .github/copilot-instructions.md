@@ -1,4 +1,4 @@
-# Copilot Instructions — NPO Donor CRM
+# Copilot Instructions — SA Harvest CRM
 
 ## Project Overview
 
@@ -12,8 +12,11 @@ It replaces Monday.com. Built as a final year project.
 - **State:** TanStack Query (server state) + Zustand (client state)
 - **Forms:** React Hook Form + Zod validation
 - **Components:** shadcn/ui + Tailwind CSS v4
-- **Auth:** Standalone PasswordHasher<User> + JWT Bearer
-  (NOT IdentityDbContext — this decision is final and must not be reversed)
+- **Auth:** Standalone `PasswordHasher<User>` + JWT Bearer
+  (NOT `IdentityDbContext`, NOT `UserManager<T>` — this decision is final
+  and must not be reversed. Note: the System Design Document Section 5.7
+  is being updated separately to reflect this; treat this file as the
+  authoritative source on auth architecture in the meantime.)
 - **File Storage:** Azure Blob Storage (SAS URLs only — never raw blob URLs)
 - **Background Jobs:** Hangfire + Hangfire.PostgreSql
 - **CQRS:** MediatR with three pipeline behaviours:
@@ -69,7 +72,40 @@ explicitly — do not let them pass because the code otherwise looks clean.
 - Neither table should have an `UpdatedAt` property on its entity.
   If either appears, flag it.
 
-### Security Rules
+### Authentication & Security Rules
+
+- **Never confirm or deny account existence.** This applies to both:
+  - `POST /api/auth/login` — must return the identical error message and
+    status code (401) for "email not found" and "password incorrect."
+    Never let these two failure paths diverge in wording.
+  - `POST /api/auth/forgot-password` — must always return 200 with the
+    same generic message, regardless of whether the email exists in
+    the system.
+  If a PR adds a distinct error message for "user not found" vs.
+  "wrong password" (or similar), fail the PR — this is a user
+  enumeration vulnerability, not a UX nitpick.
+
+- JWT token configuration must match these values. Flag any PR that
+  changes them without an explicit, discussed reason:
+  - Algorithm: HS256
+  - Access token expiry: 60 minutes
+  - Refresh token expiry: 7 days
+  - Refresh tokens are stored in the database and MUST be invalidated
+    (revoked) on logout — check that the logout handler actually
+    marks the refresh token row as revoked/expired, not just that the
+    client discards it.
+  - Signing key must be read from configuration/Key Vault, never
+    hardcoded or committed.
+
+- Password policy must be enforced via FluentValidation on the
+  registration/password-set commands (since Identity's built-in
+  policy enforcement is not available without `UserManager<T>`):
+  - Minimum 8 characters
+  - At least one digit
+  - At least one uppercase letter
+  - At least one special character
+  If a command that creates or resets a password is missing any of
+  these checks, flag it.
 
 - Raw Azure Blob Storage URLs must NEVER appear in any API response.
   Every document URL returned to a client must come from
@@ -81,6 +117,7 @@ explicitly — do not let them pass because the code otherwise looks clean.
   via `[Authorize(Roles = "...")]`.
   It must NOT be inside a handler, service, or validator.
   If role checking appears in Application layer code, fail the PR.
+  Valid roles are: `SuperAdmin`, `Admin`, `Procurement`, `Marketing`.
 
 - The public form endpoint (`/api/v1/public/donors/submit`) and any
   other unauthenticated endpoint must have rate limiting applied.
@@ -150,7 +187,7 @@ explicitly — do not let them pass because the code otherwise looks clean.
 
 ## 🟡 API Contract Rules — Flag These
 
-- List endpoints (GET /donors, GET /tasks etc.) must return the
+- List endpoints (GET /api/donors, GET /api/tasks etc.) must return the
   lightweight DTO only, never the full entity or full detail DTO.
   `DonorListItemDto` for donors — not `DonorDetailDto`.
   If a list handler returns the full detail shape, flag it.
@@ -168,7 +205,9 @@ explicitly — do not let them pass because the code otherwise looks clean.
 ```
 
   If a controller returns a plain string error or a non-standard
-  shape, flag it.
+  shape, flag it. `traceId` must be populated from
+  `HttpContext.TraceIdentifier` via the global exception middleware —
+  never left null or hardcoded.
 
 - The public donor form submission response must return a
   reference number string (DON-YYYY-NNNNN format), never the donor UUID.
@@ -211,6 +250,9 @@ explicitly — do not let them pass because the code otherwise looks clean.
   `AuditBehaviour` does this automatically for any command
   implementing `IAuditableCommand`.
   If a handler contains `context.AuditLogs.Add(...)`, flag it.
+  The one deliberate exception is the public donor form submission
+  handler, which writes its own audit entry manually since there is
+  no authenticated `user_id` to attach via the normal pipeline.
 
 - Handlers must NOT call `INotificationService` for follow-up reminders
   unless the handler is `LogInteractionCommandHandler` — that is the
@@ -258,8 +300,11 @@ any of these, note that the decision was made deliberately:
 
 - **No IdentityDbContext** — `CrmDbContext : DbContext` only.
   `PasswordHasher<User>` is used standalone. `UserManager<T>` and
-  `SignInManager<T>` are not used. This is intentional to keepF
+  `SignInManager<T>` are not used. This is intentional to keep
   `User` and `Role` as plain domain entities with no framework coupling.
+  Password policy and reset-token generation are hand-rolled in the
+  Application layer instead of relying on Identity's built-ins — see
+  the Authentication & Security Rules section above.
 
 - **No microservices** — Modular Monolith only.
   The module boundaries in `CRM.Application/Modules/` are the
@@ -282,26 +327,37 @@ any of these, note that the decision was made deliberately:
 - **DonorTask, not Task** — the entity name is DonorTask.
   This is permanent.
 
+- **Four seeded roles** — `SuperAdmin`, `Admin`, `Procurement`,
+  `Marketing`. Seeded by `RoleSeeder`. No other roles exist.
+
 ---
 
 ## 📁 Project Structure Reference
 
-npo-crm/
+SA-Harvest-CRM/
 ├── src/
 │ ├── CRM.Domain/ ← Entities, Enums. Zero dependencies.
 │ ├── CRM.Application/ ← CQRS Handlers, Validators, Interfaces.
 │ │ No EF Core. No Azure. No ASP.NET.
 │ ├── CRM.Infrastructure/ ← EF Core, Azure, SendGrid, Hangfire.
-│ └── CRM.API/ ← Controllers, Middleware, DI wiring.
-└── src/crm-web/ ← React + TypeScript frontend
-└── src/
-├── features/ ← Feature-first. Each feature owns its
-│ pages, components, hooks, schemas.
-├── components/ui/ ← shadcn/ui generated. NEVER edit these.
-├── lib/axios.ts ← Configured Axios instance. Always import
-│ this, never raw axios.
-├── store/authStore.ts ← Zustand auth state.
-└── routes/paths.ts ← All route strings. Never hardcode routes.
+│ ├── CRM.API/ ← Controllers, Middleware, DI wiring.
+│ └── CRM.Web/ ← React + TypeScript frontend
+│ └── src/
+│ ├── features/ ← Feature-first. Each feature owns its
+│ │ pages, components, hooks, schemas.
+│ ├── components/ui/ ← shadcn/ui generated. NEVER edit these.
+│ ├── lib/axios.ts ← Configured Axios instance. Always import
+│ │ this, never raw axios.
+│ ├── store/authStore.ts ← Zustand auth state.
+│ └── routes/paths.ts ← All route strings. Never hardcode routes.
+└── tests/
+├── CRM.Application.Tests/ ← business logic unit tests
+└── CRM.API.Tests/ ← controller/integration tests
+
+
+Note: the frontend project folder is `CRM.Web` (PascalCase) — it was
+renamed from `crm-web` early on. Watch for stale references to the old
+lowercase name in scripts, Docker Compose, or CI cache paths.
 
 ---
 
@@ -316,3 +372,14 @@ A PR is ready to merge when:
 - [ ] All tests pass (`dotnet test`)
 - [ ] No items from the Non-Negotiables section above are violated
 - [ ] CI pipeline passes on the PR branch
+
+---
+
+## 📊 Review Output Format
+
+At the start of every review, before individual line comments, include a
+short "Risk Assessment" summary with one of: LOW / MEDIUM / HIGH, plus a
+one-line reason. Base this on:
+- HIGH: any Non-Negotiable rule violated, or auth/security rule touched
+- MEDIUM: naming/convention violations, or missing tests on new handlers
+- LOW: purely stylistic or documentation-only changes
