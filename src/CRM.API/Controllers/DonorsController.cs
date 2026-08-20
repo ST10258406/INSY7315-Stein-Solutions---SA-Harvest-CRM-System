@@ -1,6 +1,7 @@
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
+using CRM.Application.Modules.Donors.Commands.UploadDonorDocument;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Donors.Queries.GetDonorById;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
@@ -51,5 +52,23 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(new UpdateDonorCommand { Id = id, Request = request });
         return Ok(new { data = result });
+    }
+
+    [HttpPost("{id:guid}/documents")]
+    [Authorize(Policy = "AdminOrAbove")]
+    [RequestSizeLimit(5 * 1024 * 1024 + 1024)] // 5MB + a small buffer for multipart form overhead
+    public async Task<IActionResult> UploadDocument(Guid id, [FromForm] string documentType, IFormFile file)
+    {
+        await using var stream = file.OpenReadStream();
+        var result = await _mediator.Send(new UploadDonorDocumentCommand
+        {
+            DonorId = id,
+            DocumentType = documentType,
+            FileStream = stream,
+            OriginalFileName = file.FileName,
+            ContentType = file.ContentType,
+            FileSizeBytes = file.Length
+        });
+        return StatusCode(201, new { data = result });
     }
 }

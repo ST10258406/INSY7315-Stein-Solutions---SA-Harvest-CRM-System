@@ -10,6 +10,7 @@ public interface IApplicationDbContext
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<Donor> Donors { get; }
+    DbSet<DonorDocument> DonorDocuments { get; }
     DbSet<InteractionLog> InteractionLogs { get; }
     DbSet<DonorApproval> DonorApprovals { get; }
     DbSet<LookupCompanyType> LookupCompanyTypes { get; }
