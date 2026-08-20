@@ -3,6 +3,7 @@ using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Commands.UploadDonorDocument;
 using CRM.Application.Modules.Donors.Dtos;
+using CRM.Application.Modules.Donors.Queries.GetDocumentDownloadUrl;
 using CRM.Application.Modules.Donors.Queries.GetDonorById;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
 using MediatR;
@@ -70,5 +71,13 @@ public class DonorsController : ControllerBase
             FileSizeBytes = file.Length
         });
         return StatusCode(201, new { data = result });
+    }
+
+    [HttpGet("{id:guid}/documents/{docId:guid}/download")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> GetDocumentDownloadUrl(Guid id, Guid docId)
+    {
+        var result = await _mediator.Send(new GetDocumentDownloadUrlQuery { DonorId = id, DocumentId = docId });
+        return Ok(new { data = result });
     }
 }
