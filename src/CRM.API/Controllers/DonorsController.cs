@@ -1,5 +1,6 @@
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Dtos;
+using CRM.Application.Modules.Donors.Queries.GetDonorById;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -24,5 +25,13 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(query);
         return Ok(result);
+    }
+
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> GetDonorById(Guid id)
+    {
+        var result = await _mediator.Send(new GetDonorByIdQuery(id));
+        return Ok(new { data = result });
     }
 }
