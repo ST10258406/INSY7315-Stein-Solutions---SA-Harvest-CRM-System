@@ -1,5 +1,6 @@
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
+using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Donors.Queries.GetDonorById;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
@@ -42,5 +43,13 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(new CreateDonorCommand { Request = request });
         return CreatedAtAction(nameof(GetDonorById), new { id = result.Id }, new { data = result });
+    }
+
+    [HttpPatch("{id:guid}")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> UpdateDonor(Guid id, [FromBody] UpdateDonorRequest request)
+    {
+        var result = await _mediator.Send(new UpdateDonorCommand { Id = id, Request = request });
+        return Ok(new { data = result });
     }
 }
