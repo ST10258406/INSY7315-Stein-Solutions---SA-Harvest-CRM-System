@@ -11,6 +11,9 @@ public class DonorDocument : BaseEntity
     public DocumentType DocumentType { get; set; }
     public string FileName { get; set; } = string.Empty;
     public string BlobStoragePath { get; set; } = string.Empty;
+    public long FileSizeBytes { get; set; }
+    public string MimeType { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
 
     public Guid? UploadedByUserId { get; set; }
     public User? UploadedByUser { get; set; }
