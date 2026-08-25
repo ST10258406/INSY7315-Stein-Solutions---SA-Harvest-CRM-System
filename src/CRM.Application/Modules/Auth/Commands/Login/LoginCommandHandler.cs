@@ -5,29 +5,33 @@ using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.Login;
 
 public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDto>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
-    public LoginCommandHandler(IApplicationDbContext context, IJwtTokenService jwtTokenService)
+    public LoginCommandHandler(
+        IUserRepository users,
+        IRefreshTokenRepository refreshTokens,
+        IUnitOfWork unitOfWork,
+        IJwtTokenService jwtTokenService)
     {
-        _context = context;
+        _users = users;
+        _refreshTokens = refreshTokens;
+        _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
     }
 
     public async Task<LoginResponseDto> Handle(LoginCommand request, CancellationToken ct)
     {
-        var user = await _context.Users
-            .Include(u => u.UserRoles!)
-            .ThenInclude(ur => ur.Role)
-            .AsNoTracking() // we're only reading the user (not modifying it — the refresh token is a separate entity being added)
-            .FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        // Read-only lookup (the refresh token below is a separate entity being added).
+        var user = await _users.GetByEmailWithRolesAsync(request.Email, ct);
 
         // Same generic failure for "no user" and "wrong password" — do not
         // let these two branches produce different error messages or timings.
@@ -53,8 +57,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        _context.RefreshTokens.Add(refreshToken);
-        await _context.SaveChangesAsync(ct);
+        await _refreshTokens.AddAsync(refreshToken, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
 
         return new LoginResponseDto
         {

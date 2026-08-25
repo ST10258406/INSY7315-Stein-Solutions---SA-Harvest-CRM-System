@@ -3,29 +3,23 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.Refresh;
 
 public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, RefreshTokenResponseDto>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IJwtTokenService _jwtTokenService;
 
-    public RefreshTokenCommandHandler(IApplicationDbContext context, IJwtTokenService jwtTokenService)
+    public RefreshTokenCommandHandler(IRefreshTokenRepository refreshTokens, IJwtTokenService jwtTokenService)
     {
-        _context = context;
+        _refreshTokens = refreshTokens;
         _jwtTokenService = jwtTokenService;
     }
 
     public async Task<RefreshTokenResponseDto> Handle(RefreshTokenCommand request, CancellationToken ct)
     {
-        var storedToken = await _context.RefreshTokens
-            .Include(rt => rt.User)
-                .ThenInclude(u => u.UserRoles!)
-                    .ThenInclude(ur => ur.Role)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(rt => rt.Token == request.RefreshToken, ct);
+        var storedToken = await _refreshTokens.GetByTokenWithUserAndRolesAsync(request.RefreshToken, ct);
 
         // Same generic 401 for "doesn't exist", "revoked", and "expired" —
         // don't tell the caller which case it was.

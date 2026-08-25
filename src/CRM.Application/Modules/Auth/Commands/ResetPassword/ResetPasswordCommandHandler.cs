@@ -3,25 +3,30 @@ using CRM.Application.Common.Interfaces;
 using CRM.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.ResetPassword;
 
 public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand, ResetPasswordResponseDto>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
-    public ResetPasswordCommandHandler(IApplicationDbContext context)
+    public ResetPasswordCommandHandler(
+        IUserRepository users,
+        IRefreshTokenRepository refreshTokens,
+        IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _users = users;
+        _refreshTokens = refreshTokens;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<ResetPasswordResponseDto> Handle(ResetPasswordCommand request, CancellationToken ct)
     {
-        // Tracked (not AsNoTracking) — we're updating this entity.
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        // Tracked (not read-only) — we're updating this entity.
+        var user = await _users.GetByEmailAsync(request.Email, ct);
 
         if (user is null
             || user.PasswordResetToken != request.Token
@@ -39,16 +44,16 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
         user.PasswordResetTokenExpiresAt = null;
 
         // Force re-login everywhere — kill every existing session.
-        var activeTokens = await _context.RefreshTokens
-            .Where(rt => rt.UserId == user.Id && !rt.IsRevoked)
-            .ToListAsync(ct);
+        var activeTokens = await _refreshTokens.GetActiveByUserIdAsync(user.Id, ct);
 
         foreach (var rt in activeTokens)
         {
             rt.IsRevoked = true;
         }
 
-        await _context.SaveChangesAsync(ct);
+        // The user mutation and the token revocations are tracked by the same scoped
+        // persistence context, so this single call commits both in one transaction.
+        await _unitOfWork.SaveChangesAsync(ct);
 
         return new ResetPasswordResponseDto
         {

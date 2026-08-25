@@ -8,29 +8,25 @@ using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using Microsoft.Extensions.Logging.Abstractions;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Commands;
 
 public class UploadDonorDocumentCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IBlobStorageService _blobStorageMock;
-    private readonly ICurrentUserService _currentUserServiceMock;
+    private readonly IDonorRepository _donorsMock = Substitute.For<IDonorRepository>();
+    private readonly IDonorDocumentRepository _documentsMock = Substitute.For<IDonorDocumentRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
+    private readonly IBlobStorageService _blobStorageMock = Substitute.For<IBlobStorageService>();
+    private readonly ICurrentUserService _currentUserServiceMock = Substitute.For<ICurrentUserService>();
     private readonly IMapper _mapper;
     private readonly UploadDonorDocumentCommandHandler _handler;
 
-    private readonly List<Donor> _donors = [];
-    private readonly List<DonorDocument> _documents = [];
+    private readonly List<DonorDocument> _added = [];
     private readonly Guid _currentUserId = Guid.NewGuid();
 
     public UploadDonorDocumentCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _blobStorageMock = Substitute.For<IBlobStorageService>();
-        _currentUserServiceMock = Substitute.For<ICurrentUserService>();
-
         var config = new MapperConfiguration(cfg =>
         {
             cfg.AddProfile<DonorMappingProfile>();
@@ -44,21 +40,23 @@ public class UploadDonorDocumentCommandHandlerTests
             .UploadAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>())
             .Returns(ci => Task.FromResult(new BlobUploadResult(ci.ArgAt<string>(1), "https://blob.test/" + ci.ArgAt<string>(1))));
 
-        var donorsDbSet = _donors.BuildMockDbSet();
-        _contextMock.Donors.Returns(donorsDbSet);
+        _documentsMock
+            .AddAsync(Arg.Do<DonorDocument>(d => _added.Add(d)), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
 
-        var documentsDbSet = _documents.BuildMockDbSet();
-        _contextMock.DonorDocuments.Returns(documentsDbSet);
-        _contextMock.DonorDocuments.Add(Arg.Do<DonorDocument>(d => _documents.Add(d)));
+        _documentsMock
+            .GetActiveByDonorAndTypeAsync(Arg.Any<Guid>(), Arg.Any<DocumentType>(), Arg.Any<CancellationToken>())
+            .Returns([]);
 
-        _handler = new UploadDonorDocumentCommandHandler(_contextMock, _blobStorageMock, _currentUserServiceMock, _mapper);
+        _handler = new UploadDonorDocumentCommandHandler(
+            _donorsMock, _documentsMock, _unitOfWorkMock, _blobStorageMock, _currentUserServiceMock, _mapper);
     }
 
-    private Donor AddDonor()
+    private Guid SetupExistingDonor()
     {
-        var donor = new Donor { Id = Guid.NewGuid(), CompanyName = "Test Co" };
-        _donors.Add(donor);
-        return donor;
+        var donorId = Guid.NewGuid();
+        _donorsMock.ExistsAsync(donorId, Arg.Any<CancellationToken>()).Returns(true);
+        return donorId;
     }
 
     private static UploadDonorDocumentCommand MakeCommand(Guid donorId) => new()
@@ -74,84 +72,85 @@ public class UploadDonorDocumentCommandHandlerTests
     [Fact]
     public async Task Handle_NoExistingActiveDocument_CreatesNewActiveDocument()
     {
-        var donor = AddDonor();
-        var command = MakeCommand(donor.Id);
+        var donorId = SetupExistingDonor();
 
-        var result = await _handler.Handle(command, CancellationToken.None);
+        var result = await _handler.Handle(MakeCommand(donorId), CancellationToken.None);
 
-        var created = Assert.Single(_documents);
+        var created = Assert.Single(_added);
         Assert.True(created.IsActive);
         Assert.Equal(DocumentType.BBBEECertificate, created.DocumentType);
+        Assert.Equal(_currentUserId, created.UploadedByUserId);
         Assert.True(result.IsActive);
         Assert.Equal("BBBEECertificate", result.DocumentType);
         Assert.Equal("cert.pdf", result.OriginalFileName);
     }
 
     [Fact]
-    public async Task Handle_ExistingActiveDocumentOfSameType_SoftDeletesOldAndKeepsBothRows()
+    public async Task Handle_ExistingActiveDocumentOfSameType_SoftDeletesOldAndSavesOnce()
     {
-        var donor = AddDonor();
+        var donorId = SetupExistingDonor();
+
         var existing = new DonorDocument
         {
             Id = Guid.NewGuid(),
-            DonorId = donor.Id,
+            DonorId = donorId,
             DocumentType = DocumentType.BBBEECertificate,
             FileName = "old_cert.pdf",
             BlobStoragePath = "donors/old/path",
             IsActive = true
         };
-        _documents.Add(existing);
 
-        var command = MakeCommand(donor.Id);
-        await _handler.Handle(command, CancellationToken.None);
+        _documentsMock
+            .GetActiveByDonorAndTypeAsync(donorId, DocumentType.BBBEECertificate, Arg.Any<CancellationToken>())
+            .Returns([existing]);
 
-        Assert.Equal(2, _documents.Count);
+        await _handler.Handle(MakeCommand(donorId), CancellationToken.None);
+
         Assert.False(existing.IsActive);
-        Assert.Single(_documents, d => d.IsActive);
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        Assert.Single(_added);
+        Assert.True(_added[0].IsActive);
+
+        // Supersede + insert must land in one transaction, so exactly one save.
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_ExistingActiveDocumentOfDifferentType_IsNotAffected()
+    public async Task Handle_OnlyQueriesActiveDocumentsOfTheSameType()
     {
-        var donor = AddDonor();
-        var signature = new DonorDocument
-        {
-            Id = Guid.NewGuid(),
-            DonorId = donor.Id,
-            DocumentType = DocumentType.Signature,
-            FileName = "signature.png",
-            BlobStoragePath = "donors/sig/path",
-            IsActive = true
-        };
-        _documents.Add(signature);
+        // Documents of other types are never fetched, so they can't be superseded.
+        var donorId = SetupExistingDonor();
 
-        var command = MakeCommand(donor.Id); // BBBEECertificate
-        await _handler.Handle(command, CancellationToken.None);
+        await _handler.Handle(MakeCommand(donorId), CancellationToken.None); // BBBEECertificate
 
-        Assert.True(signature.IsActive);
-        Assert.Equal(2, _documents.Count);
+        await _documentsMock.Received(1).GetActiveByDonorAndTypeAsync(
+            donorId, DocumentType.BBBEECertificate, Arg.Any<CancellationToken>());
+        await _documentsMock.DidNotReceive().GetActiveByDonorAndTypeAsync(
+            Arg.Any<Guid>(), DocumentType.Signature, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_NonExistentDonor_ThrowsNotFoundException()
     {
-        var command = MakeCommand(Guid.NewGuid());
+        _donorsMock.ExistsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => _handler.Handle(MakeCommand(Guid.NewGuid()), CancellationToken.None));
+
+        await _blobStorageMock.DidNotReceive().UploadAsync(
+            Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>());
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_UploadsToBlobStorageWithExpectedPathPattern()
     {
-        var donor = AddDonor();
-        var command = MakeCommand(donor.Id);
+        var donorId = SetupExistingDonor();
 
-        await _handler.Handle(command, CancellationToken.None);
+        await _handler.Handle(MakeCommand(donorId), CancellationToken.None);
 
         await _blobStorageMock.Received(1).UploadAsync(
             Arg.Any<Stream>(),
-            Arg.Is<string>(p => p.StartsWith($"donors/{donor.Id}/BBBEECertificate/") && p.EndsWith("cert.pdf")),
+            Arg.Is<string>(p => p.StartsWith($"donors/{donorId}/BBBEECertificate/") && p.EndsWith("cert.pdf")),
             "application/pdf");
     }
 }

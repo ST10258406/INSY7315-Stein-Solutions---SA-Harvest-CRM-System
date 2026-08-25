@@ -3,53 +3,47 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Queries.GetDocumentDownloadUrl;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Queries;
 
 public class GetDocumentDownloadUrlQueryHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IBlobStorageService _blobStorageMock;
+    private readonly IDonorDocumentRepository _documentsMock = Substitute.For<IDonorDocumentRepository>();
+    private readonly IBlobStorageService _blobStorageMock = Substitute.For<IBlobStorageService>();
     private readonly GetDocumentDownloadUrlQueryHandler _handler;
-
-    private readonly List<DonorDocument> _documents = [];
 
     public GetDocumentDownloadUrlQueryHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _blobStorageMock = Substitute.For<IBlobStorageService>();
-
         _blobStorageMock
             .GenerateSasUrlAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
             .Returns(ci => Task.FromResult("https://storage.blob.core.windows.net/" + ci.ArgAt<string>(0) + "?sv=sas"));
 
-        var documentsDbSet = _documents.BuildMockDbSet();
-        _contextMock.DonorDocuments.Returns(documentsDbSet);
-
-        _handler = new GetDocumentDownloadUrlQueryHandler(_contextMock, _blobStorageMock);
+        _handler = new GetDocumentDownloadUrlQueryHandler(_documentsMock, _blobStorageMock);
     }
 
-    private DonorDocument AddDocument(DocumentType type, Guid? donorId = null)
+    private DonorDocument SetupDocument(DocumentType type)
     {
         var document = new DonorDocument
         {
             Id = Guid.NewGuid(),
-            DonorId = donorId ?? Guid.NewGuid(),
+            DonorId = Guid.NewGuid(),
             DocumentType = type,
             FileName = "file.pdf",
             BlobStoragePath = $"donors/{Guid.NewGuid()}/{type}/blob.pdf",
             IsActive = true
         };
-        _documents.Add(document);
+
+        _documentsMock.GetReadOnlyAsync(document.DonorId, document.Id, Arg.Any<CancellationToken>())
+            .Returns(document);
+
         return document;
     }
 
     [Fact]
     public async Task Handle_ExistingDocument_ReturnsUrl()
     {
-        var document = AddDocument(DocumentType.Signature);
+        var document = SetupDocument(DocumentType.Signature);
 
         var result = await _handler.Handle(
             new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
@@ -62,6 +56,9 @@ public class GetDocumentDownloadUrlQueryHandlerTests
     [Fact]
     public async Task Handle_NonExistentDocument_ThrowsNotFoundException()
     {
+        _documentsMock.GetReadOnlyAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((DonorDocument?)null);
+
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(
             new GetDocumentDownloadUrlQuery { DonorId = Guid.NewGuid(), DocumentId = Guid.NewGuid() },
             CancellationToken.None));
@@ -70,7 +67,7 @@ public class GetDocumentDownloadUrlQueryHandlerTests
     [Fact]
     public async Task Handle_SuccessfulCall_SetsEntityIdForAuditBehaviour()
     {
-        var document = AddDocument(DocumentType.BBBEECertificate);
+        var document = SetupDocument(DocumentType.BBBEECertificate);
         var command = new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id };
 
         await _handler.Handle(command, CancellationToken.None);
@@ -93,7 +90,7 @@ public class GetDocumentDownloadUrlQueryHandlerTests
     [Fact]
     public async Task Handle_AlwaysGeneratesSasUrlWithHardcoded15MinuteExpiry()
     {
-        var document = AddDocument(DocumentType.Signature);
+        var document = SetupDocument(DocumentType.Signature);
 
         await _handler.Handle(
             new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
@@ -102,5 +99,18 @@ public class GetDocumentDownloadUrlQueryHandlerTests
         await _blobStorageMock.Received(1).GenerateSasUrlAsync(
             document.BlobStoragePath,
             TimeSpan.FromMinutes(15));
+    }
+
+    [Fact]
+    public async Task Handle_UsesTheReadOnlyLookupScopedToTheDonor()
+    {
+        var document = SetupDocument(DocumentType.Signature);
+
+        await _handler.Handle(
+            new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
+            CancellationToken.None);
+
+        await _documentsMock.Received(1).GetReadOnlyAsync(
+            document.DonorId, document.Id, Arg.Any<CancellationToken>());
     }
 }

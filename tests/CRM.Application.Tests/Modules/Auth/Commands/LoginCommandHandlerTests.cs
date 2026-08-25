@@ -4,22 +4,22 @@ using CRM.Application.Interfaces;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Auth.Commands;
 
 public class LoginCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IJwtTokenService _jwtTokenServiceMock;
+    private readonly IUserRepository _usersMock = Substitute.For<IUserRepository>();
+    private readonly IRefreshTokenRepository _refreshTokensMock = Substitute.For<IRefreshTokenRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
+    private readonly IJwtTokenService _jwtTokenServiceMock = Substitute.For<IJwtTokenService>();
     private readonly LoginCommandHandler _handler;
 
     public LoginCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _jwtTokenServiceMock = Substitute.For<IJwtTokenService>();
-        _handler = new LoginCommandHandler(_contextMock, _jwtTokenServiceMock);
+        _handler = new LoginCommandHandler(
+            _usersMock, _refreshTokensMock, _unitOfWorkMock, _jwtTokenServiceMock);
     }
 
     [Fact]
@@ -37,12 +37,7 @@ public class LoginCommandHandlerTests
             UserRoles = new List<UserRole>()
         };
 
-        var usersList = new List<User> { user };
-        var mockUsersDbSet = usersList.BuildMockDbSet();
-        _contextMock.Users.Returns(mockUsersDbSet);
-
-        var mockRefreshTokensDbSet = (new List<RefreshToken>()).BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockRefreshTokensDbSet);
+        _usersMock.GetByEmailWithRolesAsync("test@example.com", Arg.Any<CancellationToken>()).Returns(user);
 
         _jwtTokenServiceMock.GenerateAccessToken(user).Returns("access-token");
         _jwtTokenServiceMock.GenerateRefreshToken().Returns("refresh-token");
@@ -60,11 +55,36 @@ public class LoginCommandHandlerTests
         Assert.Equal(3600, result.ExpiresIn);
         Assert.Equal(user.Id, result.User.Id);
 
-        // Verify that a refresh token was added to the DbSet
-        mockRefreshTokensDbSet.Received(1).Add(Arg.Is<RefreshToken>(rt => rt.UserId == user.Id && rt.Token == "refresh-token"));
-        
-        // Verify SaveChangesAsync was called
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _refreshTokensMock.Received(1).AddAsync(
+            Arg.Is<RefreshToken>(rt => rt.UserId == user.Id && rt.Token == "refresh-token" && !rt.IsRevoked),
+            Arg.Any<CancellationToken>());
+
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ValidCredentials_ProjectsRoleNames()
+    {
+        var passwordHasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "roles@example.com",
+            FirstName = "Role",
+            LastName = "Holder",
+            PasswordHash = passwordHasher.HashPassword(null!, "CorrectPassword"),
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = "Admin" } }
+            }
+        };
+
+        _usersMock.GetByEmailWithRolesAsync("roles@example.com", Arg.Any<CancellationToken>()).Returns(user);
+        _jwtTokenServiceMock.GenerateRefreshToken().Returns("refresh-token");
+
+        var result = await _handler.Handle(new LoginCommand("roles@example.com", "CorrectPassword"), CancellationToken.None);
+
+        Assert.Equal(["Admin"], result.User.Roles);
     }
 
     [Fact]
@@ -80,29 +100,28 @@ public class LoginCommandHandlerTests
             UserRoles = new List<UserRole>()
         };
 
-        var usersList = new List<User> { user };
-        var mockUsersDbSet = usersList.BuildMockDbSet();
-        _contextMock.Users.Returns(mockUsersDbSet);
+        _usersMock.GetByEmailWithRolesAsync("test@example.com", Arg.Any<CancellationToken>()).Returns(user);
 
         var command = new LoginCommand("test@example.com", "WrongPassword");
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
         Assert.Equal("Invalid email or password.", ex.Message);
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_NonExistentEmail_ThrowsUnauthorizedException()
     {
         // Arrange
-        var usersList = new List<User>(); // Empty
-        var mockUsersDbSet = usersList.BuildMockDbSet();
-        _contextMock.Users.Returns(mockUsersDbSet);
+        _usersMock.GetByEmailWithRolesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((User?)null);
 
         var command = new LoginCommand("wrong@example.com", "SomePassword");
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
         Assert.Equal("Invalid email or password.", ex.Message); // Same exception message!
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

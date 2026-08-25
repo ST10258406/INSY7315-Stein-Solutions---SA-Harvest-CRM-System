@@ -8,6 +8,7 @@ using CRM.Domain.Entities;
 using CRM.Infrastructure.Auth;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
+using CRM.Infrastructure.Persistence.Repositories;
 using CRM.Infrastructure.Services;
 using FluentValidation;
 using Hangfire;
@@ -53,7 +54,17 @@ public static class ServiceCollectionExtensions
             options.UseNpgsql(configuration.GetConnectionString("Default"))
                    .AddInterceptors(new UpdatedAtInterceptor()));
                    
-        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<CrmDbContext>());
+        // Persistence abstractions. All scoped — same lifetime as CrmDbContext itself —
+        // so every repository and the UnitOfWork resolved within one request share a
+        // single DbContext instance. That is what lets a handler mutate entities via
+        // several repositories and commit them in one IUnitOfWork.SaveChangesAsync call.
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ILookupRepository, LookupRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IDonorRepository, DonorRepository>();
+        services.AddScoped<IDonorDocumentRepository, DonorDocumentRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();

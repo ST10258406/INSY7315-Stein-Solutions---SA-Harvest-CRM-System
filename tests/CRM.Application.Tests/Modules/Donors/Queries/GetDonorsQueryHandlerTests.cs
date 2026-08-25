@@ -1,206 +1,144 @@
-using AutoMapper;
 using CRM.Application.Common.Interfaces;
-using CRM.Application.Modules.Donors.Mappings;
+using CRM.Application.Common.Models;
+using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
-using CRM.Application.Modules.Lookups.Mappings;
-using CRM.Domain.Entities;
-using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
-using Microsoft.Extensions.Logging.Abstractions;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Queries;
 
+// Filtering, sorting and pagination SQL now live in DonorRepository and are covered
+// against a real database in CRM.Infrastructure.Tests. What remains here is the
+// handler's own job: translating the query into DonorSearchCriteria and assembling
+// the PaginatedResult envelope.
 public class GetDonorsQueryHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donorsMock = Substitute.For<IDonorRepository>();
     private readonly GetDonorsQueryHandler _handler;
+
+    private DonorSearchCriteria? _capturedCriteria;
 
     public GetDonorsQueryHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-
-        var config = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<DonorMappingProfile>();
-            cfg.AddProfile<LookupsMappingProfile>();
-        }, NullLoggerFactory.Instance);
-        _mapper = config.CreateMapper();
-
-        _handler = new GetDonorsQueryHandler(_contextMock, _mapper);
-    }
-
-    private void SetupDonors(List<Donor> donors)
-    {
-        var mockDonorsDbSet = donors.BuildMockDbSet();
-        _contextMock.Donors.Returns(mockDonorsDbSet);
-    }
-
-    private static Donor MakeDonor(string companyName, DonorStatus status, string regionCode = "JHB")
-    {
-        var companyType = new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true };
-        var frequency = new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true };
-        var region = new LookupOperationalRegion { Id = 1, Name = "Johannesburg", Code = regionCode, IsActive = true };
-
-        return new Donor
-        {
-            Id = Guid.NewGuid(),
-            CompanyName = companyName,
-            CompanyTypeId = companyType.Id,
-            CompanyType = companyType,
-            RegisteredCompanyName = companyName,
-            EntityTypeId = 1,
-            EntityType = new LookupEntityType { Id = 1, Name = "Pty Ltd", IsActive = true },
-            DonationFrequencyId = frequency.Id,
-            DonationFrequency = frequency,
-            Status = status,
-            SubmissionSource = SubmissionSource.ManualCapture,
-            CreatedByUserId = Guid.NewGuid(),
-            CreatedByUser = new User { Id = Guid.NewGuid(), FirstName = "Creator", LastName = "User", Email = "creator@test.com" },
-            OperationalRegions = new List<DonorOperationalRegion>
+        _donorsMock
+            .SearchAsync(Arg.Any<DonorSearchCriteria>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
             {
-                new() { OperationalRegionId = region.Id, OperationalRegion = region }
-            },
-            DonationTypes = new List<DonorDonationType>(),
-            InteractionLogs = new List<InteractionLog>()
-        };
+                _capturedCriteria = ci.ArgAt<DonorSearchCriteria>(0);
+                return (new List<DonorListItemDto>(), 0);
+            });
+
+        _handler = new GetDonorsQueryHandler(_donorsMock);
     }
 
     [Fact]
-    public async Task Handle_FiltersByStatus_ReturnsOnlyMatchingDonors()
+    public async Task Handle_MapsEveryFilterOntoTheCriteria()
     {
-        var donors = new List<Donor>
+        var managerId = Guid.NewGuid();
+
+        var query = new GetDonorsQuery
         {
-            MakeDonor("FoodCorp SA", DonorStatus.Active),
-            MakeDonor("Lapsed Co", DonorStatus.Lapsed),
-            MakeDonor("Pending Co", DonorStatus.PendingReview)
+            Search = "foodcorp",
+            Status = "Active",
+            CompanyTypeId = 1,
+            RegionCode = "CPT",
+            DonationTypeId = 3,
+            DonationFrequencyId = 2,
+            RelationshipManagerId = managerId,
+            FollowUpBefore = new DateOnly(2026, 8, 15),
+            SortBy = "companyName",
+            SortDir = "desc",
+            Page = 2,
+            PageSize = 10
         };
-        SetupDonors(donors);
 
-        var query = new GetDonorsQuery { Status = "Active" };
+        await _handler.Handle(query, CancellationToken.None);
 
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Single(result.Data);
-        Assert.Equal("FoodCorp SA", result.Data[0].CompanyName);
-        Assert.Equal(1, result.Pagination.TotalCount);
+        Assert.NotNull(_capturedCriteria);
+        Assert.Equal("foodcorp", _capturedCriteria!.Search);
+        Assert.Equal(DonorStatus.Active, _capturedCriteria.Status);
+        Assert.Equal((short)1, _capturedCriteria.CompanyTypeId);
+        Assert.Equal("CPT", _capturedCriteria.RegionCode);
+        Assert.Equal((short)3, _capturedCriteria.DonationTypeId);
+        Assert.Equal((short)2, _capturedCriteria.DonationFrequencyId);
+        Assert.Equal(managerId, _capturedCriteria.RelationshipManagerId);
+        Assert.Equal("companyName", _capturedCriteria.SortBy);
+        Assert.Equal("desc", _capturedCriteria.SortDir);
+        Assert.Equal(2, _capturedCriteria.Page);
+        Assert.Equal(10, _capturedCriteria.PageSize);
     }
 
     [Fact]
-    public async Task Handle_FiltersBySearch_IsCaseInsensitiveAndMatchesSubstring()
+    public async Task Handle_FollowUpBefore_IsWidenedToTheEndOfThatDay()
     {
-        var donors = new List<Donor>
+        var query = new GetDonorsQuery { FollowUpBefore = new DateOnly(2026, 8, 15) };
+
+        await _handler.Handle(query, CancellationToken.None);
+
+        Assert.Equal(
+            new DateOnly(2026, 8, 15).ToDateTime(TimeOnly.MaxValue),
+            _capturedCriteria!.FollowUpBefore);
+    }
+
+    [Fact]
+    public async Task Handle_NoFollowUpBefore_LeavesCriteriaNull()
+    {
+        await _handler.Handle(new GetDonorsQuery(), CancellationToken.None);
+
+        Assert.Null(_capturedCriteria!.FollowUpBefore);
+    }
+
+    [Theory]
+    [InlineData("Active", DonorStatus.Active)]
+    [InlineData("active", DonorStatus.Active)]
+    [InlineData("Lapsed", DonorStatus.Lapsed)]
+    public async Task Handle_ParsesStatusCaseInsensitively(string raw, DonorStatus expected)
+    {
+        await _handler.Handle(new GetDonorsQuery { Status = raw }, CancellationToken.None);
+
+        Assert.Equal(expected, _capturedCriteria!.Status);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("NotAStatus")]
+    public async Task Handle_UnusableStatus_AppliesNoStatusFilter(string? raw)
+    {
+        await _handler.Handle(new GetDonorsQuery { Status = raw }, CancellationToken.None);
+
+        Assert.Null(_capturedCriteria!.Status);
+    }
+
+    [Fact]
+    public async Task Handle_WrapsRepositoryResultInPaginationEnvelope()
+    {
+        var items = new List<DonorListItemDto>
         {
-            MakeDonor("FoodCorp SA", DonorStatus.Active),
-            MakeDonor("Other Company", DonorStatus.Active)
+            new() { Id = Guid.NewGuid(), CompanyName = "FoodCorp SA", Status = "Active" }
         };
-        SetupDonors(donors);
 
-        var query = new GetDonorsQuery { Search = "foodcorp" };
+        _donorsMock
+            .SearchAsync(Arg.Any<DonorSearchCriteria>(), Arg.Any<CancellationToken>())
+            .Returns((items, 25));
 
-        var result = await _handler.Handle(query, CancellationToken.None);
+        var result = await _handler.Handle(new GetDonorsQuery { Page = 2, PageSize = 10 }, CancellationToken.None);
 
-        Assert.Single(result.Data);
-        Assert.Equal("FoodCorp SA", result.Data[0].CompanyName);
-    }
-
-    [Fact]
-    public async Task Handle_FiltersByRegionCode_ReturnsOnlyMatchingDonors()
-    {
-        var donors = new List<Donor>
-        {
-            MakeDonor("Jhb Donor", DonorStatus.Active, "JHB"),
-            MakeDonor("Cpt Donor", DonorStatus.Active, "CPT")
-        };
-        SetupDonors(donors);
-
-        var query = new GetDonorsQuery { RegionCode = "CPT" };
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Single(result.Data);
-        Assert.Equal("Cpt Donor", result.Data[0].CompanyName);
-    }
-
-    [Fact]
-    public async Task Handle_EmptyResultSet_ReturnsEmptyDataAndZeroTotalCount()
-    {
-        SetupDonors(new List<Donor>());
-
-        var query = new GetDonorsQuery { Status = "Active" };
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Empty(result.Data);
-        Assert.Equal(0, result.Pagination.TotalCount);
-        Assert.Equal(0, result.Pagination.TotalPages);
-    }
-
-    [Fact]
-    public async Task Handle_Pagination_ReturnsCorrectPageAndTotalPages()
-    {
-        var donors = Enumerable.Range(1, 25)
-            .Select(i => MakeDonor($"Donor {i:00}", DonorStatus.Active))
-            .ToList();
-        SetupDonors(donors);
-
-        var query = new GetDonorsQuery { Page = 2, PageSize = 10 };
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Equal(10, result.Data.Count);
+        Assert.Same(items[0], result.Data.Single());
+        Assert.Equal(2, result.Pagination.Page);
+        Assert.Equal(10, result.Pagination.PageSize);
         Assert.Equal(25, result.Pagination.TotalCount);
         Assert.Equal(3, result.Pagination.TotalPages);
     }
 
     [Fact]
-    public async Task Handle_SortByCreatedAtAsc_ReturnsOldestFirst()
+    public async Task Handle_EmptyResultSet_ReturnsEmptyDataAndZeroTotalCount()
     {
-        var older = MakeDonor("Older Co", DonorStatus.Active);
-        older.CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var newer = MakeDonor("Newer Co", DonorStatus.Active);
-        newer.CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        SetupDonors(new List<Donor> { newer, older });
+        var result = await _handler.Handle(new GetDonorsQuery { Status = "Active" }, CancellationToken.None);
 
-        var query = new GetDonorsQuery { SortBy = "createdAt", SortDir = "asc" };
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Equal(["Older Co", "Newer Co"], result.Data.Select(d => d.CompanyName));
-    }
-
-    [Fact]
-    public async Task Handle_SortByCreatedAtDesc_ReturnsNewestFirst()
-    {
-        var older = MakeDonor("Older Co", DonorStatus.Active);
-        older.CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var newer = MakeDonor("Newer Co", DonorStatus.Active);
-        newer.CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        SetupDonors(new List<Donor> { older, newer });
-
-        var query = new GetDonorsQuery { SortBy = "createdAt", SortDir = "desc" };
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        Assert.Equal(["Newer Co", "Older Co"], result.Data.Select(d => d.CompanyName));
-    }
-
-    [Fact]
-    public async Task Handle_MapsDonationFrequencyAndOperationalRegions()
-    {
-        var donor = MakeDonor("FoodCorp SA", DonorStatus.Active, "JHB");
-        SetupDonors(new List<Donor> { donor });
-
-        var query = new GetDonorsQuery();
-
-        var result = await _handler.Handle(query, CancellationToken.None);
-
-        var dto = Assert.Single(result.Data);
-        Assert.Equal("Monthly", dto.DonationFrequency);
-        Assert.Equal("Manufacturer", dto.CompanyType);
-        Assert.Contains("JHB", dto.OperationalRegions);
-        Assert.Equal("Active", dto.Status);
+        Assert.Empty(result.Data);
+        Assert.Equal(0, result.Pagination.TotalCount);
+        Assert.Equal(0, result.Pagination.TotalPages);
     }
 }

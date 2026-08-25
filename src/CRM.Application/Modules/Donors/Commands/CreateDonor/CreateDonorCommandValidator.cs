@@ -2,11 +2,10 @@ namespace CRM.Application.Modules.Donors.Commands.CreateDonor;
 
 using CRM.Application.Common.Interfaces;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 
 public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
 {
-    public CreateDonorCommandValidator(IApplicationDbContext context)
+    public CreateDonorCommandValidator(ILookupRepository lookups, IUserRepository users)
     {
         RuleFor(x => x.Request).NotNull();
 
@@ -23,12 +22,12 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
 
                 RuleFor(x => x.Request.Company.CompanyTypeId)
                     .GreaterThan((short)0)
-                    .MustAsync(async (id, ct) => await context.LookupCompanyTypes.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => await lookups.CompanyTypeExistsActiveAsync(id, ct))
                     .WithMessage("Invalid company type.");
 
                 RuleFor(x => x.Request.Company.EntityTypeId)
                     .GreaterThan((short)0)
-                    .MustAsync(async (id, ct) => await context.LookupEntityTypes.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => await lookups.EntityTypeExistsActiveAsync(id, ct))
                     .WithMessage("Invalid entity type.");
 
                 // South African income tax number rule: must not start with '4'.
@@ -73,7 +72,7 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
 
                 RuleFor(x => x.Request.LegalAddress.ProvinceId)
                     .GreaterThan((short)0)
-                    .MustAsync(async (id, ct) => await context.LookupProvinces.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => await lookups.ProvinceExistsActiveAsync(id, ct))
                     .WithMessage("Invalid province.");
             });
 
@@ -84,7 +83,7 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
 
                 RuleFor(x => x.Request.Donations.FrequencyId)
                     .GreaterThan((short)0)
-                    .MustAsync(async (id, ct) => await context.LookupDonationFrequencies.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => await lookups.DonationFrequencyExistsActiveAsync(id, ct))
                     .WithMessage("Invalid donation frequency.");
 
                 RuleFor(x => x.Request.Donations.TypeIds)
@@ -92,7 +91,7 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
                     .MustAsync(async (ids, ct) =>
                     {
                         var distinct = ids.Distinct().ToList();
-                        var matchCount = await context.LookupDonationTypes.CountAsync(l => distinct.Contains(l.Id) && l.IsActive, ct);
+                        var matchCount = await lookups.CountActiveDonationTypesAsync(distinct, ct);
                         return matchCount == distinct.Count;
                     })
                     .WithMessage("One or more donation types are invalid.");
@@ -102,7 +101,7 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
                     .MustAsync(async (ids, ct) =>
                     {
                         var distinct = ids.Distinct().ToList();
-                        var matchCount = await context.LookupOperationalRegions.CountAsync(l => distinct.Contains(l.Id) && l.IsActive, ct);
+                        var matchCount = await lookups.CountActiveOperationalRegionsAsync(distinct, ct);
                         return matchCount == distinct.Count;
                     })
                     .WithMessage("One or more operational regions are invalid.");
@@ -111,14 +110,14 @@ public class CreateDonorCommandValidator : AbstractValidator<CreateDonorCommand>
             When(x => x.Request.Compliance?.BbbeeStatusId is not null, () =>
             {
                 RuleFor(x => x.Request.Compliance!.BbbeeStatusId!.Value)
-                    .MustAsync(async (id, ct) => await context.LookupBbbeeStatuses.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => await lookups.BbbeeStatusExistsActiveAsync(id, ct))
                     .WithMessage("Invalid BBBEE status.");
             });
 
             When(x => x.Request.Crm?.RelationshipManagerId is not null, () =>
             {
                 RuleFor(x => x.Request.Crm!.RelationshipManagerId!.Value)
-                    .MustAsync(async (id, ct) => await context.Users.AnyAsync(u => u.Id == id && u.IsActive, ct))
+                    .MustAsync(async (id, ct) => await users.ExistsAndActiveAsync(id, ct))
                     .WithMessage("Invalid relationship manager.");
             });
         });

@@ -1,44 +1,32 @@
-using AutoMapper;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Dtos;
-using CRM.Application.Modules.Donors.Mappings;
-using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
-using Microsoft.Extensions.Logging.Abstractions;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Commands;
 
 public class UpdateDonorCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donorsMock = Substitute.For<IDonorRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
     private readonly UpdateDonorCommandHandler _handler;
 
     public UpdateDonorCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
+        // Stands in for the post-save re-read through the shared DonorDetailDto
+        // projection, which is covered against a real database in CRM.Infrastructure.Tests.
+        _donorsMock.GetDetailByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new DonorDetailDto { Id = ci.ArgAt<Guid>(0) });
 
-        var config = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<DonorMappingProfile>();
-            cfg.AddProfile<LookupsMappingProfile>();
-        }, NullLoggerFactory.Instance);
-        _mapper = config.CreateMapper();
-
-        _handler = new UpdateDonorCommandHandler(_contextMock, _mapper);
+        _handler = new UpdateDonorCommandHandler(_donorsMock, _unitOfWorkMock);
     }
 
-    private void SetupDonors(List<Donor> donors)
-    {
-        var mockDonorsDbSet = donors.BuildMockDbSet();
-        _contextMock.Donors.Returns(mockDonorsDbSet);
-    }
+    private void SetupDonor(Donor donor)
+        => _donorsMock.GetForUpdateAsync(donor.Id, Arg.Any<CancellationToken>()).Returns(donor);
 
     private static Donor MakeFullyPopulatedDonor()
     {
@@ -110,7 +98,7 @@ public class UpdateDonorCommandHandlerTests
     public async Task Handle_UpdateOnlyCompanyName_LeavesEverythingElseUntouched()
     {
         var donor = MakeFullyPopulatedDonor();
-        SetupDonors(new List<Donor> { donor });
+        SetupDonor(donor);
 
         var command = new UpdateDonorCommand
         {
@@ -135,48 +123,56 @@ public class UpdateDonorCommandHandlerTests
         Assert.Single(donor.OperationalRegions);
         Assert.Single(donor.DonationTypes);
 
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_UpdateRegionIds_ReplacesJunctionRowsEntirely()
     {
         var donor = MakeFullyPopulatedDonor();
-        SetupDonors(new List<Donor> { donor });
-
-        var newRegion = new LookupOperationalRegion { Id = 5, Code = "CPT", Name = "Cape Town", IsActive = true };
-
-        // Real EF fixes up navigation properties for newly attached junction rows
-        // automatically via the change tracker. The mocked context doesn't, so this
-        // stands in for that fixup ahead of the handler's post-save ProjectTo re-query.
-        _contextMock.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
-        {
-            foreach (var region in donor.OperationalRegions.Where(r => r.OperationalRegion is null))
-                region.OperationalRegion = newRegion;
-            return Task.FromResult(1);
-        });
+        SetupDonor(donor);
 
         var command = new UpdateDonorCommand
         {
             Id = donor.Id,
             Request = new UpdateDonorRequest
             {
-                Donations = new UpdateDonorDonationsRequest { RegionIds = [newRegion.Id] }
+                Donations = new UpdateDonorDonationsRequest { RegionIds = [5] }
             }
         };
 
         await _handler.Handle(command, CancellationToken.None);
 
         var region = Assert.Single(donor.OperationalRegions);
-        Assert.Equal(newRegion.Id, region.OperationalRegionId);
+        Assert.Equal((short)5, region.OperationalRegionId);
         Assert.Equal(donor.Id, region.DonorId);
+    }
+
+    [Fact]
+    public async Task Handle_UpdateTypeIds_ReplacesJunctionRowsEntirely()
+    {
+        var donor = MakeFullyPopulatedDonor();
+        SetupDonor(donor);
+
+        var command = new UpdateDonorCommand
+        {
+            Id = donor.Id,
+            Request = new UpdateDonorRequest
+            {
+                Donations = new UpdateDonorDonationsRequest { TypeIds = [7, 7, 9] }
+            }
+        };
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal([(short)7, (short)9], donor.DonationTypes.Select(t => t.DonationTypeId));
     }
 
     [Fact]
     public async Task Handle_MarketingContactSuppliedForDonorWithoutOne_CreatesContact()
     {
         var donor = MakeFullyPopulatedDonor();
-        SetupDonors(new List<Donor> { donor });
+        SetupDonor(donor);
 
         var command = new UpdateDonorCommand
         {
@@ -198,18 +194,19 @@ public class UpdateDonorCommandHandlerTests
     [Fact]
     public async Task Handle_NonExistentDonorId_ThrowsNotFoundException()
     {
-        SetupDonors(new List<Donor>());
+        _donorsMock.GetForUpdateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((Donor?)null);
 
         var command = new UpdateDonorCommand { Id = Guid.NewGuid(), Request = new UpdateDonorRequest() };
 
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_SetsEntityIdForAuditBehaviour()
     {
         var donor = MakeFullyPopulatedDonor();
-        SetupDonors(new List<Donor> { donor });
+        SetupDonor(donor);
 
         var command = new UpdateDonorCommand
         {
@@ -228,13 +225,13 @@ public class UpdateDonorCommandHandlerTests
     {
         var donor = MakeFullyPopulatedDonor();
         var originalName = donor.CompanyName;
-        SetupDonors(new List<Donor> { donor });
+        SetupDonor(donor);
 
         var command = new UpdateDonorCommand { Id = donor.Id, Request = new UpdateDonorRequest() };
 
         await _handler.Handle(command, CancellationToken.None);
 
         Assert.Equal(originalName, donor.CompanyName);
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

@@ -5,7 +5,6 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 public class GetDocumentDownloadUrlQueryHandler : IRequestHandler<GetDocumentDownloadUrlQuery, DocumentDownloadUrlDto>
 {
@@ -13,24 +12,20 @@ public class GetDocumentDownloadUrlQueryHandler : IRequestHandler<GetDocumentDow
     // never source this from config, and never bump it for testing.
     private static readonly TimeSpan SasExpiry = TimeSpan.FromMinutes(15);
 
-    private readonly IApplicationDbContext _context;
+    private readonly IDonorDocumentRepository _documents;
     private readonly IBlobStorageService _blobStorage;
 
     public GetDocumentDownloadUrlQueryHandler(
-        IApplicationDbContext context,
+        IDonorDocumentRepository documents,
         IBlobStorageService blobStorage)
     {
-        _context = context;
+        _documents = documents;
         _blobStorage = blobStorage;
     }
 
     public async Task<DocumentDownloadUrlDto> Handle(GetDocumentDownloadUrlQuery request, CancellationToken cancellationToken)
     {
-        var document = await _context.DonorDocuments
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                d => d.Id == request.DocumentId && d.DonorId == request.DonorId,
-                cancellationToken);
+        var document = await _documents.GetReadOnlyAsync(request.DonorId, request.DocumentId, cancellationToken);
 
         if (document is null)
             throw new NotFoundException(nameof(DonorDocument), request.DocumentId);

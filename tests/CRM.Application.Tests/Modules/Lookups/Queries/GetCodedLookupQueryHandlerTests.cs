@@ -1,92 +1,62 @@
-using AutoMapper;
 using CRM.Application.Common.Interfaces;
-using CRM.Application.Modules.Lookups.Mappings;
+using CRM.Application.Common.Models;
 using CRM.Application.Modules.Lookups.Queries.GetCodedLookup;
-using CRM.Domain.Entities.Lookups;
-using Microsoft.Extensions.Logging.Abstractions;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Lookups.Queries;
 
 public class GetCodedLookupQueryHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
+    private readonly ILookupRepository _lookupsMock = Substitute.For<ILookupRepository>();
     private readonly GetCodedLookupQueryHandler _handler;
-
-    private readonly List<LookupOperationalRegion> _regions = [];
-    private readonly List<LookupProvince> _provinces = [];
 
     public GetCodedLookupQueryHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
+        _handler = new GetCodedLookupQueryHandler(_lookupsMock);
+    }
 
-        var config = new MapperConfiguration(cfg => cfg.AddProfile<LookupsMappingProfile>(), NullLoggerFactory.Instance);
-        var mapper = config.CreateMapper();
+    [Theory]
+    [InlineData(CodedLookupType.OperationalRegions)]
+    [InlineData(CodedLookupType.Provinces)]
+    public async Task Handle_DelegatesRequestedTypeToRepository(CodedLookupType type)
+    {
+        var expected = new List<CodedLookupDto> { new() { Id = 1, Code = "GP", Name = "Gauteng" } };
+        _lookupsMock.GetActiveCodedAsync(type, Arg.Any<CancellationToken>()).Returns(expected);
 
-        var regionsDbSet = _regions.BuildMockDbSet();
-        _contextMock.LookupOperationalRegions.Returns(regionsDbSet);
+        var result = await _handler.Handle(new GetCodedLookupQuery(type), CancellationToken.None);
 
-        var provincesDbSet = _provinces.BuildMockDbSet();
-        _contextMock.LookupProvinces.Returns(provincesDbSet);
-
-        _handler = new GetCodedLookupQueryHandler(_contextMock, mapper);
+        Assert.Same(expected, result);
+        await _lookupsMock.Received(1).GetActiveCodedAsync(type, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Handle_OperationalRegions_ReturnsIdCodeNamePairs()
+    public async Task Handle_PassesCancellationTokenThrough()
     {
-        _regions.Add(new LookupOperationalRegion { Id = 1, Code = "GP", Name = "Gauteng", IsActive = true, SortOrder = 1 });
-        _regions.Add(new LookupOperationalRegion { Id = 2, Code = "WC", Name = "Western Cape", IsActive = true, SortOrder = 2 });
+        using var cts = new CancellationTokenSource();
+        _lookupsMock.GetActiveCodedAsync(CodedLookupType.Provinces, cts.Token).Returns([]);
 
-        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.OperationalRegions), CancellationToken.None);
+        await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), cts.Token);
 
-        Assert.Equal(2, result.Count);
-        Assert.Contains(result, r => r.Id == 1 && r.Code == "GP" && r.Name == "Gauteng");
-        Assert.Contains(result, r => r.Id == 2 && r.Code == "WC" && r.Name == "Western Cape");
+        await _lookupsMock.Received(1).GetActiveCodedAsync(CodedLookupType.Provinces, cts.Token);
     }
 
     [Fact]
-    public async Task Handle_Provinces_ReturnsIdCodeNamePairs()
+    public async Task Handle_EmptyRepositoryResult_ReturnsEmptyList()
     {
-        _provinces.Add(new LookupProvince { Id = 1, Code = "GP", Name = "Gauteng", IsActive = true, SortOrder = 1 });
+        _lookupsMock.GetActiveCodedAsync(CodedLookupType.Provinces, Arg.Any<CancellationToken>()).Returns([]);
 
-        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
-
-        var item = Assert.Single(result);
-        Assert.Equal(1, item.Id);
-        Assert.Equal("GP", item.Code);
-        Assert.Equal("Gauteng", item.Name);
-    }
-
-    [Fact]
-    public async Task Handle_EmptyLookupTable_ReturnsEmptyList()
-    {
         var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
 
         Assert.Empty(result);
     }
 
     [Fact]
-    public async Task Handle_InactiveRow_IsExcluded()
+    public async Task Handle_PropagatesRepositoryException()
     {
-        _provinces.Add(new LookupProvince { Id = 1, Code = "GP", Name = "Gauteng", IsActive = true, SortOrder = 1 });
-        _provinces.Add(new LookupProvince { Id = 2, Code = "XX", Name = "Retired Province", IsActive = false, SortOrder = 2 });
+        _lookupsMock.GetActiveCodedAsync(Arg.Any<CodedLookupType>(), Arg.Any<CancellationToken>())
+            .Returns<List<CodedLookupDto>>(_ => throw new ArgumentOutOfRangeException("type"));
 
-        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
-
-        var item = Assert.Single(result);
-        Assert.Equal("Gauteng", item.Name);
-    }
-
-    [Fact]
-    public async Task Handle_ReturnsRowsOrderedBySortOrder()
-    {
-        _provinces.Add(new LookupProvince { Id = 1, Code = "WC", Name = "Second", IsActive = true, SortOrder = 2 });
-        _provinces.Add(new LookupProvince { Id = 2, Code = "GP", Name = "First", IsActive = true, SortOrder = 1 });
-
-        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
-
-        Assert.Equal(["First", "Second"], result.Select(r => r.Name));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _handler.Handle(new GetCodedLookupQuery((CodedLookupType)999), CancellationToken.None));
     }
 }

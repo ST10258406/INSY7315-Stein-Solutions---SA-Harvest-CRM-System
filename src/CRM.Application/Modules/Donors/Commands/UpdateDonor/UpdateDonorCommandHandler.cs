@@ -1,40 +1,32 @@
 namespace CRM.Application.Modules.Donors.Commands.UpdateDonor;
 
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 public class UpdateDonorCommandHandler : IRequestHandler<UpdateDonorCommand, DonorDetailDto>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donors;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public UpdateDonorCommandHandler(IApplicationDbContext context, IMapper mapper)
+    public UpdateDonorCommandHandler(IDonorRepository donors, IUnitOfWork unitOfWork)
     {
-        _context = context;
-        _mapper = mapper;
+        _donors = donors;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task<DonorDetailDto> Handle(UpdateDonorCommand command, CancellationToken cancellationToken)
     {
-        var donor = await _context.Donors
-            .Include(d => d.Contacts)
-            .Include(d => d.LegalAddress)
-            .Include(d => d.OperationalRegions)
-            .Include(d => d.DonationTypes)
-            .FirstOrDefaultAsync(d => d.Id == command.Id, cancellationToken);
+        // Tracked aggregate — this is a write, the persistence layer needs to track
+        // changes so SaveChangesAsync knows what to update.
+        var donor = await _donors.GetForUpdateAsync(command.Id, cancellationToken);
 
         if (donor is null)
             throw new NotFoundException(nameof(Donor), command.Id);
 
-        // Tracked query (no AsNoTracking) — this is a write, EF needs to track
-        // changes so SaveChangesAsync knows what to update.
         var req = command.Request;
 
         if (req.Company is not null)
@@ -155,15 +147,13 @@ public class UpdateDonorCommandHandler : IRequestHandler<UpdateDonorCommand, Don
         // automatically on SaveChangesAsync. Do NOT write to audit_logs here either —
         // AuditBehaviour does that after this handler returns.
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         command.EntityId = donor.Id;
         command.NewValues = new { donor.Id, donor.CompanyName, donor.Status };
 
-        return await _context.Donors
-            .AsNoTracking()
-            .Where(d => d.Id == donor.Id)
-            .ProjectTo<DonorDetailDto>(_mapper.ConfigurationProvider)
-            .FirstAsync(cancellationToken);
+        return await _donors.GetDetailByIdAsync(donor.Id, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Donor {donor.Id} could not be re-read immediately after being updated.");
     }
 }

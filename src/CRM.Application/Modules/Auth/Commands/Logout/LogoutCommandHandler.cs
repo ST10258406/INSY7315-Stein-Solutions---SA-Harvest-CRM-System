@@ -1,22 +1,22 @@
 using CRM.Application.Common.Interfaces;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.Logout;
 
 public class LogoutCommandHandler : IRequestHandler<LogoutCommand>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public LogoutCommandHandler(IApplicationDbContext context)
+    public LogoutCommandHandler(IRefreshTokenRepository refreshTokens, IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _refreshTokens = refreshTokens;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task Handle(LogoutCommand request, CancellationToken ct)
     {
-        var token = await _context.RefreshTokens
-            .FirstOrDefaultAsync(rt => rt.Token == request.RefreshToken, ct);
+        var token = await _refreshTokens.GetByTokenAsync(request.RefreshToken, ct);
 
         // If it doesn't exist or is already revoked, do nothing —
         // still return success either way. Don't throw NotFoundException
@@ -24,7 +24,7 @@ public class LogoutCommandHandler : IRequestHandler<LogoutCommand>
         if (token is not null && !token.IsRevoked)
         {
             token.IsRevoked = true;
-            await _context.SaveChangesAsync(ct);
+            await _unitOfWork.SaveChangesAsync(ct);
         }
     }
 }
