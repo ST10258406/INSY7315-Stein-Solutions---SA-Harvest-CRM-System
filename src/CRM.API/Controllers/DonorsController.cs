@@ -1,5 +1,6 @@
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
+using CRM.Application.Modules.Donors.Commands.DeleteDonorDocument;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Commands.UploadDonorDocument;
 using CRM.Application.Modules.Donors.Dtos;
@@ -79,5 +80,13 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(new GetDocumentDownloadUrlQuery { DonorId = id, DocumentId = docId });
         return Ok(new { data = result });
+    }
+
+    [HttpDelete("{id:guid}/documents/{docId:guid}")]
+    [Authorize(Policy = "AdminOrAbove")]
+    public async Task<IActionResult> DeleteDocument(Guid id, Guid docId)
+    {
+        await _mediator.Send(new DeleteDonorDocumentCommand { DonorId = id, DocumentId = docId });
+        return NoContent();
     }
 }
