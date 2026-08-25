@@ -1,5 +1,6 @@
 namespace CRM.API.Extensions;
 
+using CRM.API.Authorization;
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
@@ -13,6 +14,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +89,7 @@ public static class ServiceCollectionExtensions
             });
 
         services.AddCrmAuthorizationPolicies();
+        services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
 
 
         // Hangfire — same Postgres connection string, own schema

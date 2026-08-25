@@ -4,7 +4,6 @@ using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
-using CRM.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,16 +15,13 @@ public class GetDocumentDownloadUrlQueryHandler : IRequestHandler<GetDocumentDow
 
     private readonly IApplicationDbContext _context;
     private readonly IBlobStorageService _blobStorage;
-    private readonly ICurrentUserService _currentUserService;
 
     public GetDocumentDownloadUrlQueryHandler(
         IApplicationDbContext context,
-        IBlobStorageService blobStorage,
-        ICurrentUserService currentUserService)
+        IBlobStorageService blobStorage)
     {
         _context = context;
         _blobStorage = blobStorage;
-        _currentUserService = currentUserService;
     }
 
     public async Task<DocumentDownloadUrlDto> Handle(GetDocumentDownloadUrlQuery request, CancellationToken cancellationToken)
@@ -39,33 +35,13 @@ public class GetDocumentDownloadUrlQueryHandler : IRequestHandler<GetDocumentDow
         if (document is null)
             throw new NotFoundException(nameof(DonorDocument), request.DocumentId);
 
-        // Per-document-type role check — the controller's [Authorize(Policy = "ProcurementOrAbove")]
-        // only gets us past the endpoint gate. Whether Procurement can see *this*
-        // document depends on its type, which we only know after loading it, so
-        // the finer-grained rule has to live here rather than on the attribute.
-        if (document.DocumentType == DocumentType.BBBEECertificate
-            && !_currentUserService.GetCurrentUserRoles().Any(r => r is "Admin" or "SuperAdmin"))
-        {
-            throw new ForbiddenException("Insufficient role to download BBBEE certificate.");
-        }
+        // Per-document-type role authorization already happened before this handler
+        // ran — see DocumentTypeAuthorizationFilter (CRM.API.Authorization). A Query
+        // handler is not the place for role checks (Non-Negotiable rule).
+        request.EntityId = document.Id;
 
         var downloadUrl = await _blobStorage.GenerateSasUrlAsync(document.BlobStoragePath, SasExpiry);
         var expiresAt = DateTime.UtcNow.Add(SasExpiry);
-
-        // Deliberate exception to "handlers don't write audit_logs directly" —
-        // this is a Query, not a Command, so the standard AuditBehaviour pipeline
-        // (which only reacts to IAuditableCommand) never sees it. Download tracking
-        // still needs an audit trail, so it's written explicitly here.
-        _context.AuditLogs.Add(new AuditLog
-        {
-            Id = Guid.NewGuid(),
-            EntityType = nameof(DonorDocument),
-            EntityId = document.Id,
-            Action = AuditAction.Viewed,
-            UserId = _currentUserService.GetCurrentUserId(),
-            CreatedAt = DateTime.UtcNow
-        });
-        await _context.SaveChangesAsync(cancellationToken);
 
         return new DocumentDownloadUrlDto
         {

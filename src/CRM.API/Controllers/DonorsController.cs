@@ -1,3 +1,4 @@
+using CRM.API.Authorization;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Commands.DeleteDonorDocument;
@@ -76,6 +77,7 @@ public class DonorsController : ControllerBase
 
     [HttpGet("{id:guid}/documents/{docId:guid}/download")]
     [Authorize(Policy = "ProcurementOrAbove")]
+    [TypeFilter(typeof(DocumentTypeAuthorizationFilter))]
     public async Task<IActionResult> GetDocumentDownloadUrl(Guid id, Guid docId)
     {
         var result = await _mediator.Send(new GetDocumentDownloadUrlQuery { DonorId = id, DocumentId = docId });

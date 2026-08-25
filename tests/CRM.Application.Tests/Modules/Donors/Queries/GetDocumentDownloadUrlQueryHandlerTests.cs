@@ -12,20 +12,14 @@ public class GetDocumentDownloadUrlQueryHandlerTests
 {
     private readonly IApplicationDbContext _contextMock;
     private readonly IBlobStorageService _blobStorageMock;
-    private readonly ICurrentUserService _currentUserServiceMock;
     private readonly GetDocumentDownloadUrlQueryHandler _handler;
 
     private readonly List<DonorDocument> _documents = [];
-    private readonly List<AuditLog> _auditLogs = [];
-    private readonly Guid _currentUserId = Guid.NewGuid();
 
     public GetDocumentDownloadUrlQueryHandlerTests()
     {
         _contextMock = Substitute.For<IApplicationDbContext>();
         _blobStorageMock = Substitute.For<IBlobStorageService>();
-        _currentUserServiceMock = Substitute.For<ICurrentUserService>();
-
-        _currentUserServiceMock.GetCurrentUserId().Returns(_currentUserId);
 
         _blobStorageMock
             .GenerateSasUrlAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
@@ -34,11 +28,7 @@ public class GetDocumentDownloadUrlQueryHandlerTests
         var documentsDbSet = _documents.BuildMockDbSet();
         _contextMock.DonorDocuments.Returns(documentsDbSet);
 
-        var auditLogsDbSet = _auditLogs.BuildMockDbSet();
-        _contextMock.AuditLogs.Returns(auditLogsDbSet);
-        _contextMock.AuditLogs.Add(Arg.Do<AuditLog>(a => _auditLogs.Add(a)));
-
-        _handler = new GetDocumentDownloadUrlQueryHandler(_contextMock, _blobStorageMock, _currentUserServiceMock);
+        _handler = new GetDocumentDownloadUrlQueryHandler(_contextMock, _blobStorageMock);
     }
 
     private DonorDocument AddDocument(DocumentType type, Guid? donorId = null)
@@ -56,13 +46,9 @@ public class GetDocumentDownloadUrlQueryHandlerTests
         return document;
     }
 
-    private void SetRoles(params string[] roles) =>
-        _currentUserServiceMock.GetCurrentUserRoles().Returns(roles.ToList());
-
     [Fact]
-    public async Task Handle_ProcurementRequestingSignature_ReturnsUrl()
+    public async Task Handle_ExistingDocument_ReturnsUrl()
     {
-        SetRoles("Procurement");
         var document = AddDocument(DocumentType.Signature);
 
         var result = await _handler.Handle(
@@ -74,73 +60,39 @@ public class GetDocumentDownloadUrlQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ProcurementRequestingBBBEECertificate_ThrowsForbiddenException()
-    {
-        SetRoles("Procurement");
-        var document = AddDocument(DocumentType.BBBEECertificate);
-
-        await Assert.ThrowsAsync<ForbiddenException>(() => _handler.Handle(
-            new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Handle_AdminRequestingBBBEECertificate_ReturnsUrl()
-    {
-        SetRoles("Admin");
-        var document = AddDocument(DocumentType.BBBEECertificate);
-
-        var result = await _handler.Handle(
-            new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
-            CancellationToken.None);
-
-        Assert.False(string.IsNullOrEmpty(result.DownloadUrl));
-    }
-
-    [Fact]
-    public async Task Handle_AdminRequestingSignature_ReturnsUrl()
-    {
-        SetRoles("Admin");
-        var document = AddDocument(DocumentType.Signature);
-
-        var result = await _handler.Handle(
-            new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
-            CancellationToken.None);
-
-        Assert.False(string.IsNullOrEmpty(result.DownloadUrl));
-    }
-
-    [Fact]
     public async Task Handle_NonExistentDocument_ThrowsNotFoundException()
     {
-        SetRoles("Admin");
-
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(
             new GetDocumentDownloadUrlQuery { DonorId = Guid.NewGuid(), DocumentId = Guid.NewGuid() },
             CancellationToken.None));
     }
 
     [Fact]
-    public async Task Handle_SuccessfulCall_WritesAuditLogWithViewedAction()
+    public async Task Handle_SuccessfulCall_SetsEntityIdForAuditBehaviour()
     {
-        SetRoles("Admin");
         var document = AddDocument(DocumentType.BBBEECertificate);
+        var command = new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id };
 
-        await _handler.Handle(
-            new GetDocumentDownloadUrlQuery { DonorId = document.DonorId, DocumentId = document.Id },
-            CancellationToken.None);
+        await _handler.Handle(command, CancellationToken.None);
 
-        var entry = Assert.Single(_auditLogs);
-        Assert.Equal(AuditAction.Viewed, entry.Action);
-        Assert.Equal(nameof(DonorDocument), entry.EntityType);
-        Assert.Equal(document.Id, entry.EntityId);
-        Assert.Equal(_currentUserId, entry.UserId);
+        // AuditBehaviour reads EntityId (and EntityType/Action, which are fixed
+        // constants on the query) after the handler completes — this is the only
+        // audit mechanism now; the handler itself never touches AuditLogs.
+        Assert.Equal(document.Id, command.EntityId);
+    }
+
+    [Fact]
+    public void Query_ImplementsIAuditableCommand_WithViewedAction()
+    {
+        var command = new GetDocumentDownloadUrlQuery();
+
+        Assert.Equal(nameof(DonorDocument), command.EntityType);
+        Assert.Equal(AuditAction.Viewed, command.Action);
     }
 
     [Fact]
     public async Task Handle_AlwaysGeneratesSasUrlWithHardcoded15MinuteExpiry()
     {
-        SetRoles("Admin");
         var document = AddDocument(DocumentType.Signature);
 
         await _handler.Handle(
