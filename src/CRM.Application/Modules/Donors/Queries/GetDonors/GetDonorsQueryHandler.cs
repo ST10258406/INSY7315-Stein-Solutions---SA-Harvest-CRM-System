@@ -66,6 +66,8 @@ public class GetDonorsQueryHandler : IRequestHandler<GetDonorsQuery, PaginatedRe
                 d.InteractionLogs.OrderByDescending(i => i.CreatedAt).Select(i => (DateTime?)i.CreatedAt).FirstOrDefault()),
             ("lastinteractiondate", _) => query.OrderBy(d =>
                 d.InteractionLogs.OrderByDescending(i => i.CreatedAt).Select(i => (DateTime?)i.CreatedAt).FirstOrDefault()),
+            ("createdat", "asc") => query.OrderBy(d => d.CreatedAt),
+            ("createdat", _) => query.OrderByDescending(d => d.CreatedAt),
             (_, "desc") => query.OrderByDescending(d => d.CreatedAt),
             _ => query.OrderByDescending(d => d.CreatedAt)
         };

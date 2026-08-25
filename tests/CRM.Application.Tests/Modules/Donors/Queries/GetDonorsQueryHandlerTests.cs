@@ -156,6 +156,38 @@ public class GetDonorsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_SortByCreatedAtAsc_ReturnsOldestFirst()
+    {
+        var older = MakeDonor("Older Co", DonorStatus.Active);
+        older.CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var newer = MakeDonor("Newer Co", DonorStatus.Active);
+        newer.CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupDonors(new List<Donor> { newer, older });
+
+        var query = new GetDonorsQuery { SortBy = "createdAt", SortDir = "asc" };
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        Assert.Equal(["Older Co", "Newer Co"], result.Data.Select(d => d.CompanyName));
+    }
+
+    [Fact]
+    public async Task Handle_SortByCreatedAtDesc_ReturnsNewestFirst()
+    {
+        var older = MakeDonor("Older Co", DonorStatus.Active);
+        older.CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var newer = MakeDonor("Newer Co", DonorStatus.Active);
+        newer.CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        SetupDonors(new List<Donor> { older, newer });
+
+        var query = new GetDonorsQuery { SortBy = "createdAt", SortDir = "desc" };
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        Assert.Equal(["Newer Co", "Older Co"], result.Data.Select(d => d.CompanyName));
+    }
+
+    [Fact]
     public async Task Handle_MapsDonationFrequencyAndOperationalRegions()
     {
         var donor = MakeDonor("FoodCorp SA", DonorStatus.Active, "JHB");
