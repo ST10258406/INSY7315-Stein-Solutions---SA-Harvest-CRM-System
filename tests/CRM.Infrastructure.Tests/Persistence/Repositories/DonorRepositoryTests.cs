@@ -7,6 +7,7 @@ using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Repositories;
+using CRM.Infrastructure.Tests.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -20,9 +21,6 @@ namespace CRM.Infrastructure.Tests.Persistence.Repositories;
 /// </summary>
 public class DonorRepositoryTests
 {
-    private const string TestConnectionString =
-        "Host=localhost;Database=crm_test_donorrepository;Username=postgres;Password=P@ss1234ID";
-
     private readonly DbContextOptions<CrmDbContext> _options;
     private readonly IMapper _mapper;
 
@@ -39,7 +37,7 @@ public class DonorRepositoryTests
     public DonorRepositoryTests()
     {
         _options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestConnectionString)
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_donorrepository"))
             .Options;
 
         var config = new MapperConfiguration(cfg =>
@@ -57,7 +55,11 @@ public class DonorRepositoryTests
         await context.Database.EnsureCreatedAsync();
 
         // Wipe donor-scoped data between tests; reference data is upserted below.
-        context.InteractionLogs.RemoveRange(context.InteractionLogs);
+        // interaction_logs is append-only (no-negotiable rule: no DELETE statements
+        // against it anywhere in the codebase) — it is never targeted directly here.
+        // Removing the parent Donor cascades to InteractionLog at the database level
+        // (see InteractionLogConfiguration: OnDelete(DeleteBehavior.Cascade)), so no
+        // EF-tracked DELETE is ever generated against interaction_logs by this fixture.
         context.DonorOperationalRegions.RemoveRange(context.DonorOperationalRegions);
         context.DonorDonationTypes.RemoveRange(context.DonorDonationTypes);
         context.DonorLegalAddresses.RemoveRange(context.DonorLegalAddresses);

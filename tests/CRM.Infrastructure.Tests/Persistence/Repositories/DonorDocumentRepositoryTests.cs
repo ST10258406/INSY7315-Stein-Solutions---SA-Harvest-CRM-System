@@ -3,14 +3,13 @@ using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Repositories;
+using CRM.Infrastructure.Tests.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Infrastructure.Tests.Persistence.Repositories;
 
 public class DonorDocumentRepositoryTests
 {
-    private const string TestConnectionString =
-        "Host=localhost;Database=crm_test_donordocumentrepository;Username=postgres;Password=P@ss1234ID";
 
     private readonly DbContextOptions<CrmDbContext> _options;
 
@@ -20,7 +19,7 @@ public class DonorDocumentRepositoryTests
     public DonorDocumentRepositoryTests()
     {
         _options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestConnectionString)
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_donordocumentrepository"))
             .Options;
     }
 

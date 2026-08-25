@@ -5,6 +5,7 @@ using CRM.Application.Modules.Lookups.Queries.GetLookup;
 using CRM.Domain.Entities.Lookups;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Repositories;
+using CRM.Infrastructure.Tests.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -16,16 +17,13 @@ namespace CRM.Infrastructure.Tests.Persistence.Repositories;
 /// </summary>
 public class LookupRepositoryTests
 {
-    private const string TestConnectionString =
-        "Host=localhost;Database=crm_test_lookuprepository;Username=postgres;Password=P@ss1234ID";
-
     private readonly DbContextOptions<CrmDbContext> _options;
     private readonly IMapper _mapper;
 
     public LookupRepositoryTests()
     {
         _options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestConnectionString)
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_lookuprepository"))
             .Options;
 
         var config = new MapperConfiguration(cfg => cfg.AddProfile<LookupsMappingProfile>(), NullLoggerFactory.Instance);
