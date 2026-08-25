@@ -2,6 +2,7 @@ using AutoMapper;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Mappings;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
+using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
@@ -21,7 +22,11 @@ public class GetDonorsQueryHandlerTests
     {
         _contextMock = Substitute.For<IApplicationDbContext>();
 
-        var config = new MapperConfiguration(cfg => cfg.AddProfile<DonorMappingProfile>(), NullLoggerFactory.Instance);
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.AddProfile<DonorMappingProfile>();
+            cfg.AddProfile<LookupsMappingProfile>();
+        }, NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
 
         _handler = new GetDonorsQueryHandler(_contextMock, _mapper);
@@ -81,6 +86,24 @@ public class GetDonorsQueryHandlerTests
         Assert.Single(result.Data);
         Assert.Equal("FoodCorp SA", result.Data[0].CompanyName);
         Assert.Equal(1, result.Pagination.TotalCount);
+    }
+
+    [Fact]
+    public async Task Handle_FiltersBySearch_IsCaseInsensitiveAndMatchesSubstring()
+    {
+        var donors = new List<Donor>
+        {
+            MakeDonor("FoodCorp SA", DonorStatus.Active),
+            MakeDonor("Other Company", DonorStatus.Active)
+        };
+        SetupDonors(donors);
+
+        var query = new GetDonorsQuery { Search = "foodcorp" };
+
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        Assert.Single(result.Data);
+        Assert.Equal("FoodCorp SA", result.Data[0].CompanyName);
     }
 
     [Fact]

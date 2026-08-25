@@ -4,6 +4,7 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Donors.Mappings;
+using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
@@ -23,7 +24,11 @@ public class UpdateDonorCommandHandlerTests
     {
         _contextMock = Substitute.For<IApplicationDbContext>();
 
-        var config = new MapperConfiguration(cfg => cfg.AddProfile<DonorMappingProfile>(), NullLoggerFactory.Instance);
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.AddProfile<DonorMappingProfile>();
+            cfg.AddProfile<LookupsMappingProfile>();
+        }, NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
 
         _handler = new UpdateDonorCommandHandler(_contextMock, _mapper);

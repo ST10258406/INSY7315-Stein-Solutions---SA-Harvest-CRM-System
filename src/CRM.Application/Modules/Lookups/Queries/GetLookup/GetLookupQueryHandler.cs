@@ -23,18 +23,23 @@ public class GetLookupQueryHandler : IRequestHandler<GetLookupQuery, List<Lookup
         return request.Type switch
         {
             LookupType.CompanyTypes => _context.LookupCompanyTypes.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<LookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             LookupType.EntityTypes => _context.LookupEntityTypes.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<LookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             LookupType.DonationTypes => _context.LookupDonationTypes.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<LookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             LookupType.DonationFrequencies => _context.LookupDonationFrequencies.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<LookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             LookupType.BbbeeStatuses => _context.LookupBbbeeStatuses.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<LookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Type, "Unsupported lookup type.")

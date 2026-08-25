@@ -57,7 +57,7 @@ public class BlobStorageService : IBlobStorageService
         return Task.FromResult(blobClient.GenerateSasUri(sasBuilder).ToString());
     }
 
-    public Task SoftDeleteAsync(string path)
+    public Task DeleteAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
             throw new NotImplementedException("Blob storage is not configured yet. Set Azure:BlobStorage:ConnectionString to enable this feature.");

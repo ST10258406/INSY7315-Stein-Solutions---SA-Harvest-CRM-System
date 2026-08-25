@@ -1,6 +1,6 @@
 using AutoMapper;
 using CRM.Application.Common.Interfaces;
-using CRM.Application.Modules.Donors.Mappings;
+using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Application.Modules.Lookups.Queries.GetLookup;
 using CRM.Domain.Entities.Lookups;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +24,7 @@ public class GetLookupQueryHandlerTests
     {
         _contextMock = Substitute.For<IApplicationDbContext>();
 
-        var config = new MapperConfiguration(cfg => cfg.AddProfile<DonorMappingProfile>(), NullLoggerFactory.Instance);
+        var config = new MapperConfiguration(cfg => cfg.AddProfile<LookupsMappingProfile>(), NullLoggerFactory.Instance);
         var mapper = config.CreateMapper();
 
         var companyTypesDbSet = _companyTypes.BuildMockDbSet();
@@ -109,5 +109,28 @@ public class GetLookupQueryHandlerTests
         var result = await _handler.Handle(new GetLookupQuery(LookupType.CompanyTypes), CancellationToken.None);
 
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task Handle_InactiveRow_IsExcluded()
+    {
+        _companyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true, SortOrder = 1 });
+        _companyTypes.Add(new LookupCompanyType { Id = 2, Name = "Retired Type", IsActive = false, SortOrder = 2 });
+
+        var result = await _handler.Handle(new GetLookupQuery(LookupType.CompanyTypes), CancellationToken.None);
+
+        var item = Assert.Single(result);
+        Assert.Equal("Manufacturer", item.Name);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsRowsOrderedBySortOrder()
+    {
+        _companyTypes.Add(new LookupCompanyType { Id = 1, Name = "Second", IsActive = true, SortOrder = 2 });
+        _companyTypes.Add(new LookupCompanyType { Id = 2, Name = "First", IsActive = true, SortOrder = 1 });
+
+        var result = await _handler.Handle(new GetLookupQuery(LookupType.CompanyTypes), CancellationToken.None);
+
+        Assert.Equal(["First", "Second"], result.Select(r => r.Name));
     }
 }

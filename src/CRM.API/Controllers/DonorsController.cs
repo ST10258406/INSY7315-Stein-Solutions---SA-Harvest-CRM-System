@@ -67,7 +67,7 @@ public class DonorsController : ControllerBase
             DonorId = id,
             DocumentType = documentType,
             FileStream = stream,
-            OriginalFileName = file.FileName,
+            OriginalFileName = Path.GetFileName(file.FileName),
             ContentType = file.ContentType,
             FileSizeBytes = file.Length
         });

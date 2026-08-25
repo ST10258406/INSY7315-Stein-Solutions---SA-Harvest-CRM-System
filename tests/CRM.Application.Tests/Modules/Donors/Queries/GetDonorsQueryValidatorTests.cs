@@ -62,6 +62,19 @@ public class GetDonorsQueryValidatorTests
         Assert.Contains(result.Errors, e => e.PropertyName == "SortBy");
     }
 
+    [Theory]
+    [InlineData("companyName")]
+    [InlineData("COMPANYNAME")]
+    [InlineData("companyname")]
+    public void SortByWhitelisted_AnyCase_ShouldNotHaveValidationError(string sortBy)
+    {
+        var query = new GetDonorsQuery { SortBy = sortBy };
+
+        var result = _validator.Validate(query);
+
+        Assert.DoesNotContain(result.Errors, e => e.PropertyName == "SortBy");
+    }
+
     [Fact]
     public void StatusInvalid_ShouldHaveValidationError()
     {

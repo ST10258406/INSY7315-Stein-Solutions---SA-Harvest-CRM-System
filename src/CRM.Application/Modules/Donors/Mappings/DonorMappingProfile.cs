@@ -67,11 +67,6 @@ public class DonorMappingProfile : Profile
         CreateMap<Donor, DonorCrmDto>()
             .ForMember(d => d.RelationshipManager, o => o.MapFrom(s => s.RelationshipManager));
 
-        CreateMap<LookupCompanyType, LookupDto>();
-        CreateMap<LookupEntityType, LookupDto>();
-        CreateMap<LookupDonationFrequency, LookupDto>();
-        CreateMap<LookupDonationType, LookupDto>();
-        CreateMap<LookupBbbeeStatus, LookupDto>();
         CreateMap<LookupProvince, ProvinceDto>();
         CreateMap<LookupOperationalRegion, RegionDto>();
     }

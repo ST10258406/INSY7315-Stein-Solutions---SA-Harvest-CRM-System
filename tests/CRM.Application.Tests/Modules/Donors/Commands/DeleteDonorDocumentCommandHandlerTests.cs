@@ -11,7 +11,6 @@ namespace CRM.Application.Tests.Modules.Donors.Commands;
 public class DeleteDonorDocumentCommandHandlerTests
 {
     private readonly IApplicationDbContext _contextMock;
-    private readonly IBlobStorageService _blobStorageMock;
     private readonly DeleteDonorDocumentCommandHandler _handler;
 
     private readonly List<DonorDocument> _documents = [];
@@ -19,7 +18,6 @@ public class DeleteDonorDocumentCommandHandlerTests
     public DeleteDonorDocumentCommandHandlerTests()
     {
         _contextMock = Substitute.For<IApplicationDbContext>();
-        _blobStorageMock = Substitute.For<IBlobStorageService>();
 
         var documentsDbSet = _documents.BuildMockDbSet();
         _contextMock.DonorDocuments.Returns(documentsDbSet);
@@ -55,17 +53,9 @@ public class DeleteDonorDocumentCommandHandlerTests
         await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task Handle_ExistingActiveDocument_NeverCallsBlobDeletion()
-    {
-        var donorId = Guid.NewGuid();
-        var document = AddDocument(donorId);
-        var command = new DeleteDonorDocumentCommand { DonorId = donorId, DocumentId = document.Id };
-
-        await _handler.Handle(command, CancellationToken.None);
-
-        await _blobStorageMock.DidNotReceive().SoftDeleteAsync(Arg.Any<string>());
-    }
+    // No "never calls blob deletion" test here: DeleteDonorDocumentCommandHandler
+    // doesn't take an IBlobStorageService at all, which is a stronger guarantee
+    // than a mock assertion — there's no dependency through which it could call one.
 
     [Fact]
     public async Task Handle_NonExistentDocument_ThrowsNotFoundException()

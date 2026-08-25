@@ -6,7 +6,6 @@ using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Extensions;
 
 namespace CRM.Application.Modules.Donors.Queries.GetDonors;
 
@@ -26,7 +25,10 @@ public class GetDonorsQueryHandler : IRequestHandler<GetDonorsQuery, PaginatedRe
         var query = _context.Donors.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
-            query = query.Where(d => EF.Functions.ILike(d.CompanyName, $"%{request.Search}%"));
+        {
+            var search = request.Search.ToLower();
+            query = query.Where(d => d.CompanyName.ToLower().Contains(search));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Status) && Enum.TryParse<DonorStatus>(request.Status, true, out var status))
             query = query.Where(d => d.Status == status);

@@ -66,4 +66,27 @@ public class GetCodedLookupQueryHandlerTests
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public async Task Handle_InactiveRow_IsExcluded()
+    {
+        _provinces.Add(new LookupProvince { Id = 1, Code = "GP", Name = "Gauteng", IsActive = true, SortOrder = 1 });
+        _provinces.Add(new LookupProvince { Id = 2, Code = "XX", Name = "Retired Province", IsActive = false, SortOrder = 2 });
+
+        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
+
+        var item = Assert.Single(result);
+        Assert.Equal("Gauteng", item.Name);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsRowsOrderedBySortOrder()
+    {
+        _provinces.Add(new LookupProvince { Id = 1, Code = "WC", Name = "Second", IsActive = true, SortOrder = 2 });
+        _provinces.Add(new LookupProvince { Id = 2, Code = "GP", Name = "First", IsActive = true, SortOrder = 1 });
+
+        var result = await _handler.Handle(new GetCodedLookupQuery(CodedLookupType.Provinces), CancellationToken.None);
+
+        Assert.Equal(["First", "Second"], result.Select(r => r.Name));
+    }
 }

@@ -16,11 +16,11 @@ public class GetDonorsQueryValidator : AbstractValidator<GetDonorsQuery>
             .InclusiveBetween(1, 100);
 
         RuleFor(x => x.SortDir)
-            .Must(d => d.Equals("asc", StringComparison.OrdinalIgnoreCase) || d.Equals("desc", StringComparison.OrdinalIgnoreCase))
+            .Must(d => string.Equals(d, "asc", StringComparison.OrdinalIgnoreCase) || string.Equals(d, "desc", StringComparison.OrdinalIgnoreCase))
             .WithMessage("sortDir must be 'asc' or 'desc'");
 
         RuleFor(x => x.SortBy)
-            .Must(s => AllowedSortFields.Contains(s))
+            .Must(s => AllowedSortFields.Contains(s, StringComparer.OrdinalIgnoreCase))
             .When(x => !string.IsNullOrWhiteSpace(x.SortBy))
             .WithMessage($"sortBy must be one of: {string.Join(", ", AllowedSortFields)}");
 

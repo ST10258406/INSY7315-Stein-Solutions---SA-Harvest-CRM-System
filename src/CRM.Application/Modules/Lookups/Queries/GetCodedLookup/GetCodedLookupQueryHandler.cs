@@ -23,9 +23,11 @@ public class GetCodedLookupQueryHandler : IRequestHandler<GetCodedLookupQuery, L
         return request.Type switch
         {
             CodedLookupType.OperationalRegions => _context.LookupOperationalRegions.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<CodedLookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             CodedLookupType.Provinces => _context.LookupProvinces.AsNoTracking()
+                .Where(l => l.IsActive).OrderBy(l => l.SortOrder)
                 .ProjectTo<CodedLookupDto>(_mapper.ConfigurationProvider).ToListAsync(cancellationToken),
 
             _ => throw new ArgumentOutOfRangeException(nameof(request), request.Type, "Unsupported lookup type.")
