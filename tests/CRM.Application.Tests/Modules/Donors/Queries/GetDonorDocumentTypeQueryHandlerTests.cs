@@ -1,53 +1,32 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Queries.GetDonorDocumentType;
-using CRM.Domain.Entities;
 using CRM.Domain.Enums;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Queries;
 
 public class GetDonorDocumentTypeQueryHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
+    private readonly IDonorDocumentRepository _documentsMock = Substitute.For<IDonorDocumentRepository>();
     private readonly GetDonorDocumentTypeQueryHandler _handler;
-
-    private readonly List<DonorDocument> _documents = [];
 
     public GetDonorDocumentTypeQueryHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-
-        var documentsDbSet = _documents.BuildMockDbSet();
-        _contextMock.DonorDocuments.Returns(documentsDbSet);
-
-        _handler = new GetDonorDocumentTypeQueryHandler(_contextMock);
-    }
-
-    private DonorDocument AddDocument(DocumentType type, Guid donorId)
-    {
-        var document = new DonorDocument
-        {
-            Id = Guid.NewGuid(),
-            DonorId = donorId,
-            DocumentType = type,
-            FileName = "file.pdf",
-            BlobStoragePath = "donors/x/y/blob.pdf",
-            IsActive = true
-        };
-        _documents.Add(document);
-        return document;
+        _handler = new GetDonorDocumentTypeQueryHandler(_documentsMock);
     }
 
     [Fact]
     public async Task Handle_ExistingDocument_ReturnsItsDocumentType()
     {
         var donorId = Guid.NewGuid();
-        var document = AddDocument(DocumentType.BBBEECertificate, donorId);
+        var documentId = Guid.NewGuid();
+
+        _documentsMock.GetDocumentTypeAsync(donorId, documentId, Arg.Any<CancellationToken>())
+            .Returns(DocumentType.BBBEECertificate);
 
         var result = await _handler.Handle(
-            new GetDonorDocumentTypeQuery { DonorId = donorId, DocumentId = document.Id },
+            new GetDonorDocumentTypeQuery { DonorId = donorId, DocumentId = documentId },
             CancellationToken.None);
 
         Assert.Equal(DocumentType.BBBEECertificate, result);
@@ -56,18 +35,29 @@ public class GetDonorDocumentTypeQueryHandlerTests
     [Fact]
     public async Task Handle_NonExistentDocument_ThrowsNotFoundException()
     {
+        _documentsMock.GetDocumentTypeAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((DocumentType?)null);
+
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(
             new GetDonorDocumentTypeQuery { DonorId = Guid.NewGuid(), DocumentId = Guid.NewGuid() },
             CancellationToken.None));
     }
 
     [Fact]
-    public async Task Handle_DocumentBelongsToDifferentDonor_ThrowsNotFoundException()
+    public async Task Handle_ScopesLookupToTheRequestedDonor()
     {
-        var document = AddDocument(DocumentType.Signature, Guid.NewGuid());
+        // The donor-scoping of the lookup is what stops a caller from probing another
+        // donor's document ids; assert the donor id is actually passed down.
+        var donorId = Guid.NewGuid();
+        var documentId = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(
-            new GetDonorDocumentTypeQuery { DonorId = Guid.NewGuid(), DocumentId = document.Id },
-            CancellationToken.None));
+        _documentsMock.GetDocumentTypeAsync(donorId, documentId, Arg.Any<CancellationToken>())
+            .Returns(DocumentType.Signature);
+
+        await _handler.Handle(
+            new GetDonorDocumentTypeQuery { DonorId = donorId, DocumentId = documentId },
+            CancellationToken.None);
+
+        await _documentsMock.Received(1).GetDocumentTypeAsync(donorId, documentId, Arg.Any<CancellationToken>());
     }
 }

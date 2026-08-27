@@ -1,111 +1,66 @@
-using AutoMapper;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Dtos;
-using CRM.Application.Modules.Donors.Mappings;
-using CRM.Application.Modules.Lookups.Mappings;
 using CRM.Domain.Entities;
-using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
-using Microsoft.Extensions.Logging.Abstractions;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Commands;
 
 public class CreateDonorCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly ICurrentUserService _currentUserServiceMock;
-    private readonly INotificationService _notificationServiceMock;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donorsMock = Substitute.For<IDonorRepository>();
+    private readonly IUserRepository _usersMock = Substitute.For<IUserRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
+    private readonly INotificationService _notificationServiceMock = Substitute.For<INotificationService>();
+    private readonly ICurrentUserService _currentUserServiceMock = Substitute.For<ICurrentUserService>();
     private readonly CreateDonorCommandHandler _handler;
 
     private readonly List<Donor> _donors = [];
     private readonly List<DonorApproval> _approvals = [];
     private readonly Guid _currentUserId = Guid.NewGuid();
 
-    private readonly LookupCompanyType _companyType = new() { Id = 1, Name = "Manufacturer", IsActive = true };
-    private readonly LookupEntityType _entityType = new() { Id = 1, Name = "Private Company", IsActive = true };
-    private readonly LookupDonationFrequency _frequency = new() { Id = 1, Name = "Monthly", IsActive = true };
-    private readonly LookupProvince _province = new() { Id = 3, Code = "GP", Name = "Gauteng", IsActive = true };
-    private readonly LookupOperationalRegion _region = new() { Id = 1, Code = "JHB", Name = "Johannesburg", IsActive = true };
-    private readonly LookupDonationType _donationType = new() { Id = 1, Name = "Meat", IsActive = true };
-
     public CreateDonorCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _currentUserServiceMock = Substitute.For<ICurrentUserService>();
-        _notificationServiceMock = Substitute.For<INotificationService>();
-
-        var config = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<DonorMappingProfile>();
-            cfg.AddProfile<LookupsMappingProfile>();
-        }, NullLoggerFactory.Instance);
-        _mapper = config.CreateMapper();
-
         _currentUserServiceMock.GetCurrentUserId().Returns(_currentUserId);
 
-        var donorsDbSet = _donors.BuildMockDbSet();
-        _contextMock.Donors.Returns(donorsDbSet);
-        _contextMock.Donors.Add(Arg.Do<Donor>(SimulateDatabaseJoin));
+        _donorsMock.AddAsync(Arg.Do<Donor>(_donors.Add), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _donorsMock.AddApprovalAsync(Arg.Do<DonorApproval>(_approvals.Add), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
 
-        var approvalsDbSet = _approvals.BuildMockDbSet();
-        _contextMock.DonorApprovals.Returns(approvalsDbSet);
-        _contextMock.DonorApprovals.Add(Arg.Do<DonorApproval>(a => _approvals.Add(a)));
+        // Stands in for the post-save re-read the handler performs through the same
+        // projection GetDonorById uses; the projection itself is covered in
+        // CRM.Infrastructure.Tests against a real database.
+        _donorsMock.GetDetailByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var id = ci.ArgAt<Guid>(0);
+                var donor = _donors.SingleOrDefault(d => d.Id == id);
+                return donor is null
+                    ? null
+                    : new DonorDetailDto
+                    {
+                        Id = donor.Id,
+                        Status = donor.Status.ToString(),
+                        SubmissionSource = donor.SubmissionSource.ToString()
+                    };
+            });
 
-        _handler = new CreateDonorCommandHandler(_contextMock, _mapper, _notificationServiceMock, _currentUserServiceMock);
+        _usersMock.GetActiveUserIdsByRoleAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        _handler = new CreateDonorCommandHandler(
+            _donorsMock, _usersMock, _unitOfWorkMock, _notificationServiceMock, _currentUserServiceMock);
     }
 
-    // The handler re-queries via ProjectTo after SaveChangesAsync, which against a real
-    // EF provider resolves navigation properties through server-side joins. Against the
-    // in-memory mock DbSet there's no join engine, so this stands in for "what the DB
-    // would have returned" by wiring up the same navigation properties by Id.
-    private void SimulateDatabaseJoin(Donor donor)
+    private void SetupAdmins(int adminCount)
     {
-        donor.CompanyType = _companyType;
-        donor.EntityType = _entityType;
-        donor.DonationFrequency = _frequency;
-        donor.CreatedByUser = new User { Id = donor.CreatedByUserId, FirstName = "Creator", LastName = "User", Email = "creator@test.com" };
-
-        if (donor.LegalAddress is not null)
-            donor.LegalAddress.Province = _province;
-
-        foreach (var region in donor.OperationalRegions)
-            region.OperationalRegion = _region;
-
-        foreach (var donationType in donor.DonationTypes)
-            donationType.DonationType = _donationType;
-
-        _donors.Add(donor);
+        _usersMock.GetActiveUserIdsByRoleAsync("Admin", Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Range(0, adminCount).Select(_ => Guid.NewGuid()).ToList());
     }
 
-    private void SetupAdmins(int adminCount, int nonAdminCount = 0)
-    {
-        var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin" };
-        var otherRole = new Role { Id = Guid.NewGuid(), Name = "Procurement" };
-        var users = new List<User>();
-
-        for (var i = 0; i < adminCount; i++)
-        {
-            var admin = new User { Id = Guid.NewGuid(), Email = $"admin{i}@test.com", FirstName = "Admin", LastName = $"{i}", IsActive = true };
-            admin.UserRoles.Add(new UserRole { UserId = admin.Id, User = admin, RoleId = adminRole.Id, Role = adminRole });
-            users.Add(admin);
-        }
-
-        for (var i = 0; i < nonAdminCount; i++)
-        {
-            var other = new User { Id = Guid.NewGuid(), Email = $"other{i}@test.com", FirstName = "Other", LastName = $"{i}", IsActive = true };
-            other.UserRoles.Add(new UserRole { UserId = other.Id, User = other, RoleId = otherRole.Id, Role = otherRole });
-            users.Add(other);
-        }
-
-        var usersDbSet = users.BuildMockDbSet();
-        _contextMock.Users.Returns(usersDbSet);
-    }
-
-    private static CreateDonorRequest MakeValidRequest(short? statusLikeFieldsIgnored = null) => new()
+    private static CreateDonorRequest MakeValidRequest() => new()
     {
         Company = new CreateDonorCompanyRequest
         {
@@ -140,7 +95,7 @@ public class CreateDonorCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_PersistsDonorApprovalAndNotifiesAdmins()
     {
-        SetupAdmins(adminCount: 2, nonAdminCount: 1);
+        SetupAdmins(adminCount: 2);
         var command = new CreateDonorCommand { Request = MakeValidRequest() };
 
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -151,7 +106,9 @@ public class CreateDonorCommandHandlerTests
         Assert.Equal(_donors[0].Id, _approvals[0].DonorId);
         Assert.Equal(_currentUserId, _approvals[0].RequestedByUserId);
 
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        // Donor, children and the approval commit in a single transaction.
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
         await _notificationServiceMock.Received(2).CreateAsync(
             Arg.Any<Guid>(), NotificationType.NewDonorPendingReview, Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<Guid?>(), Arg.Any<string?>());
@@ -163,7 +120,6 @@ public class CreateDonorCommandHandlerTests
     [Fact]
     public async Task Handle_AlwaysSetsPendingReviewAndManualCapture_RegardlessOfInputShape()
     {
-        SetupAdmins(adminCount: 0);
         var command = new CreateDonorCommand { Request = MakeValidRequest() };
 
         await _handler.Handle(command, CancellationToken.None);
@@ -180,7 +136,6 @@ public class CreateDonorCommandHandlerTests
     [Fact]
     public async Task Handle_JunctionRows_PersistWithCompositeKeys()
     {
-        SetupAdmins(adminCount: 0);
         var request = MakeValidRequest();
         request.Donations.RegionIds = [1];
         request.Donations.TypeIds = [1];
@@ -201,7 +156,7 @@ public class CreateDonorCommandHandlerTests
     [Fact]
     public async Task Handle_NoAdmins_DoesNotCallNotificationService()
     {
-        SetupAdmins(adminCount: 0, nonAdminCount: 1);
+        SetupAdmins(adminCount: 0);
         var command = new CreateDonorCommand { Request = MakeValidRequest() };
 
         await _handler.Handle(command, CancellationToken.None);
@@ -212,9 +167,18 @@ public class CreateDonorCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_FansOutOnlyToTheAdminRole()
+    {
+        var command = new CreateDonorCommand { Request = MakeValidRequest() };
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        await _usersMock.Received(1).GetActiveUserIdsByRoleAsync("Admin", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_SetsEntityIdForAuditBehaviour()
     {
-        SetupAdmins(adminCount: 0);
         var command = new CreateDonorCommand { Request = MakeValidRequest() };
 
         await _handler.Handle(command, CancellationToken.None);

@@ -3,22 +3,19 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Domain.Entities;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Auth.Commands;
 
 public class RefreshTokenCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
-    private readonly IJwtTokenService _jwtTokenServiceMock;
+    private readonly IRefreshTokenRepository _refreshTokensMock = Substitute.For<IRefreshTokenRepository>();
+    private readonly IJwtTokenService _jwtTokenServiceMock = Substitute.For<IJwtTokenService>();
     private readonly RefreshTokenCommandHandler _handler;
 
     public RefreshTokenCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _jwtTokenServiceMock = Substitute.For<IJwtTokenService>();
-        _handler = new RefreshTokenCommandHandler(_contextMock, _jwtTokenServiceMock);
+        _handler = new RefreshTokenCommandHandler(_refreshTokensMock, _jwtTokenServiceMock);
     }
 
     [Fact]
@@ -45,9 +42,8 @@ public class RefreshTokenCommandHandlerTests
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var tokensList = new List<RefreshToken> { refreshToken };
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("valid-refresh-token", Arg.Any<CancellationToken>())
+            .Returns(refreshToken);
 
         _jwtTokenServiceMock.GenerateAccessToken(user).Returns("new-access-token");
         _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
@@ -61,20 +57,13 @@ public class RefreshTokenCommandHandlerTests
         Assert.NotNull(result);
         Assert.Equal("new-access-token", result.AccessToken);
         Assert.Equal(3600, result.ExpiresIn);
-
-        // Verify SaveChangesAsync was NOT called
-        await _contextMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_ExpiredToken_ThrowsUnauthorizedException()
     {
         // Arrange
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = "expired-test@example.com"
-        };
+        var user = new User { Id = Guid.NewGuid(), Email = "expired-test@example.com" };
 
         var refreshToken = new RefreshToken
         {
@@ -87,9 +76,8 @@ public class RefreshTokenCommandHandlerTests
             CreatedAt = DateTimeOffset.UtcNow.AddDays(-7)
         };
 
-        var tokensList = new List<RefreshToken> { refreshToken };
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("expired-token", Arg.Any<CancellationToken>())
+            .Returns(refreshToken);
 
         var command = new RefreshTokenCommand("expired-token");
 
@@ -102,11 +90,7 @@ public class RefreshTokenCommandHandlerTests
     public async Task Handle_RevokedToken_ThrowsUnauthorizedException()
     {
         // Arrange
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = "revoked-test@example.com"
-        };
+        var user = new User { Id = Guid.NewGuid(), Email = "revoked-test@example.com" };
 
         var refreshToken = new RefreshToken
         {
@@ -119,9 +103,8 @@ public class RefreshTokenCommandHandlerTests
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        var tokensList = new List<RefreshToken> { refreshToken };
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("revoked-token", Arg.Any<CancellationToken>())
+            .Returns(refreshToken);
 
         var command = new RefreshTokenCommand("revoked-token");
 
@@ -134,9 +117,8 @@ public class RefreshTokenCommandHandlerTests
     public async Task Handle_NonExistentToken_ThrowsUnauthorizedException()
     {
         // Arrange
-        var tokensList = new List<RefreshToken>(); // Empty
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenWithUserAndRolesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((RefreshToken?)null);
 
         var command = new RefreshTokenCommand("nonexistent-token");
 

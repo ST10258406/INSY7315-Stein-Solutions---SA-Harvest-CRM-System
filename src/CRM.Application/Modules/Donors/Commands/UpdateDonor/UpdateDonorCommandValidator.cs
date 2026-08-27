@@ -2,11 +2,10 @@ namespace CRM.Application.Modules.Donors.Commands.UpdateDonor;
 
 using CRM.Application.Common.Interfaces;
 using FluentValidation;
-using Microsoft.EntityFrameworkCore;
 
 public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
 {
-    public UpdateDonorCommandValidator(IApplicationDbContext context)
+    public UpdateDonorCommandValidator(ILookupRepository lookups, IUserRepository users)
     {
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Request).NotNull();
@@ -43,11 +42,11 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .WithMessage("Income tax number cannot start with 4.");
 
                 RuleFor(x => x.Request.Company!.CompanyTypeId)
-                    .MustAsync(async (id, ct) => id is null || await context.LookupCompanyTypes.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await lookups.CompanyTypeExistsActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid company type.");
 
                 RuleFor(x => x.Request.Company!.EntityTypeId)
-                    .MustAsync(async (id, ct) => id is null || await context.LookupEntityTypes.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await lookups.EntityTypeExistsActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid entity type.");
             });
 
@@ -115,7 +114,7 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .When(x => x.Request.LegalAddress!.PostalCode is not null);
 
                 RuleFor(x => x.Request.LegalAddress!.ProvinceId)
-                    .MustAsync(async (id, ct) => id is null || await context.LookupProvinces.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await lookups.ProvinceExistsActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid province.");
             });
 
@@ -126,7 +125,7 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .When(x => x.Request.Donations!.CollectionAddress is not null);
 
                 RuleFor(x => x.Request.Donations!.FrequencyId)
-                    .MustAsync(async (id, ct) => id is null || await context.LookupDonationFrequencies.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await lookups.DonationFrequencyExistsActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid donation frequency.");
 
                 When(x => x.Request.Donations!.TypeIds is not null, () =>
@@ -137,7 +136,7 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                         .MustAsync(async (ids, ct) =>
                         {
                             var distinct = ids.Distinct().ToList();
-                            var matchCount = await context.LookupDonationTypes.CountAsync(l => distinct.Contains(l.Id) && l.IsActive, ct);
+                            var matchCount = await lookups.CountActiveDonationTypesAsync(distinct, ct);
                             return matchCount == distinct.Count;
                         })
                         .WithMessage("One or more donation types are invalid.");
@@ -151,7 +150,7 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                         .MustAsync(async (ids, ct) =>
                         {
                             var distinct = ids.Distinct().ToList();
-                            var matchCount = await context.LookupOperationalRegions.CountAsync(l => distinct.Contains(l.Id) && l.IsActive, ct);
+                            var matchCount = await lookups.CountActiveOperationalRegionsAsync(distinct, ct);
                             return matchCount == distinct.Count;
                         })
                         .WithMessage("One or more operational regions are invalid.");
@@ -161,14 +160,14 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
             When(x => x.Request.Compliance is not null, () =>
             {
                 RuleFor(x => x.Request.Compliance!.BbbeeStatusId)
-                    .MustAsync(async (id, ct) => id is null || await context.LookupBbbeeStatuses.AnyAsync(l => l.Id == id && l.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await lookups.BbbeeStatusExistsActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid BBBEE status.");
             });
 
             When(x => x.Request.Crm is not null, () =>
             {
                 RuleFor(x => x.Request.Crm!.RelationshipManagerId)
-                    .MustAsync(async (id, ct) => id is null || await context.Users.AnyAsync(u => u.Id == id && u.IsActive, ct))
+                    .MustAsync(async (id, ct) => id is null || await users.ExistsAndActiveAsync(id!.Value, ct))
                     .WithMessage("Invalid relationship manager.");
             });
         });

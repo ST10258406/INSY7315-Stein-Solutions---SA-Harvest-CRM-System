@@ -1,51 +1,37 @@
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Dtos;
-using CRM.Domain.Entities;
-using CRM.Domain.Entities.Lookups;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Commands;
 
 public class CreateDonorCommandValidatorTests
 {
-    private readonly IApplicationDbContext _contextMock;
+    private readonly ILookupRepository _lookupsMock = Substitute.For<ILookupRepository>();
+    private readonly IUserRepository _usersMock = Substitute.For<IUserRepository>();
     private readonly CreateDonorCommandValidator _validator;
+
+    // The only active reference data these tests know about. Anything else is
+    // inactive/unknown, which is the default NSubstitute returns (false / 0).
+    private static readonly short[] ActiveDonationTypeIds = [1];
+    private static readonly short[] ActiveRegionIds = [1];
 
     public CreateDonorCommandValidatorTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
+        _lookupsMock.CompanyTypeExistsActiveAsync(1, Arg.Any<CancellationToken>()).Returns(true);
+        _lookupsMock.EntityTypeExistsActiveAsync(1, Arg.Any<CancellationToken>()).Returns(true);
+        _lookupsMock.ProvinceExistsActiveAsync(3, Arg.Any<CancellationToken>()).Returns(true);
+        _lookupsMock.DonationFrequencyExistsActiveAsync(1, Arg.Any<CancellationToken>()).Returns(true);
 
-        // Each mock DbSet is built as its own statement before being handed to
-        // Returns() — chaining BuildMockDbSet() straight into Returns() confuses
-        // NSubstitute's call-tracking (its internal substitute calls overwrite
-        // the "last call" the outer Returns() is trying to configure).
-        var companyTypes = new List<LookupCompanyType> { new() { Id = 1, Name = "Manufacturer", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupCompanyTypes.Returns(companyTypes);
+        _lookupsMock.CountActiveDonationTypesAsync(Arg.Any<IEnumerable<short>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.ArgAt<IEnumerable<short>>(0).Count(ActiveDonationTypeIds.Contains));
 
-        var entityTypes = new List<LookupEntityType> { new() { Id = 1, Name = "Private Company", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupEntityTypes.Returns(entityTypes);
+        _lookupsMock.CountActiveOperationalRegionsAsync(Arg.Any<IEnumerable<short>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.ArgAt<IEnumerable<short>>(0).Count(ActiveRegionIds.Contains));
 
-        var provinces = new List<LookupProvince> { new() { Id = 3, Code = "GP", Name = "Gauteng", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupProvinces.Returns(provinces);
-
-        var frequencies = new List<LookupDonationFrequency> { new() { Id = 1, Name = "Monthly", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupDonationFrequencies.Returns(frequencies);
-
-        var donationTypes = new List<LookupDonationType> { new() { Id = 1, Name = "Meat", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupDonationTypes.Returns(donationTypes);
-
-        var regions = new List<LookupOperationalRegion> { new() { Id = 1, Code = "JHB", Name = "Johannesburg", IsActive = true } }.BuildMockDbSet();
-        _contextMock.LookupOperationalRegions.Returns(regions);
-
-        var bbbeeStatuses = new List<LookupBbbeeStatus>().BuildMockDbSet();
-        _contextMock.LookupBbbeeStatuses.Returns(bbbeeStatuses);
-
-        var users = new List<User>().BuildMockDbSet();
-        _contextMock.Users.Returns(users);
-
-        _validator = new CreateDonorCommandValidator(_contextMock);
+        // No active BBBEE statuses and no active users configured — both default to
+        // "not found", matching the original fixture's empty tables.
+        _validator = new CreateDonorCommandValidator(_lookupsMock, _usersMock);
     }
 
     private static CreateDonorRequest MakeValidRequest() => new()

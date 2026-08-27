@@ -1,84 +1,46 @@
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Donors.Queries.GetDonors;
 
 public class GetDonorsQueryHandler : IRequestHandler<GetDonorsQuery, PaginatedResult<DonorListItemDto>>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donors;
 
-    public GetDonorsQueryHandler(IApplicationDbContext context, IMapper mapper)
-    {
-        _context = context;
-        _mapper = mapper;
-    }
+    public GetDonorsQueryHandler(IDonorRepository donors) => _donors = donors;
 
     public async Task<PaginatedResult<DonorListItemDto>> Handle(GetDonorsQuery request, CancellationToken cancellationToken)
     {
-        var query = _context.Donors.AsNoTracking().AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(request.Search))
+        // Status arrives as a raw string; an unparseable value applies no status filter,
+        // matching the previous behaviour (GetDonorsQueryValidator rejects bad values first).
+        DonorStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(request.Status)
+            && Enum.TryParse<DonorStatus>(request.Status, true, out var parsedStatus))
         {
-            var search = request.Search.ToLower();
-            query = query.Where(d => d.CompanyName.ToLower().Contains(search));
+            status = parsedStatus;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Status) && Enum.TryParse<DonorStatus>(request.Status, true, out var status))
-            query = query.Where(d => d.Status == status);
-
-        if (request.CompanyTypeId.HasValue)
-            query = query.Where(d => d.CompanyTypeId == request.CompanyTypeId.Value);
-
-        if (!string.IsNullOrWhiteSpace(request.RegionCode))
-            query = query.Where(d => d.OperationalRegions.Any(r => r.OperationalRegion.Code == request.RegionCode));
-
-        if (request.DonationTypeId.HasValue)
-            query = query.Where(d => d.DonationTypes.Any(dt => dt.DonationTypeId == request.DonationTypeId.Value));
-
-        if (request.DonationFrequencyId.HasValue)
-            query = query.Where(d => d.DonationFrequencyId == request.DonationFrequencyId.Value);
-
-        if (request.RelationshipManagerId.HasValue)
-            query = query.Where(d => d.RelationshipManagerId == request.RelationshipManagerId.Value);
-
-        if (request.FollowUpBefore.HasValue)
+        var criteria = new DonorSearchCriteria
         {
-            var followUpBefore = request.FollowUpBefore.Value.ToDateTime(TimeOnly.MaxValue);
-            query = query.Where(d => d.FollowUpDate != null && d.FollowUpDate <= followUpBefore);
-        }
-
-        // Whitelist sortBy against known fields - never build dynamic LINQ from an arbitrary string.
-        var sortDir = request.SortDir.ToLowerInvariant();
-        query = (request.SortBy?.ToLowerInvariant(), sortDir) switch
-        {
-            ("followupdate", "desc") => query.OrderByDescending(d => d.FollowUpDate),
-            ("followupdate", _) => query.OrderBy(d => d.FollowUpDate),
-            ("companyname", "desc") => query.OrderByDescending(d => d.CompanyName),
-            ("companyname", _) => query.OrderBy(d => d.CompanyName),
-            ("lastinteractiondate", "desc") => query.OrderByDescending(d =>
-                d.InteractionLogs.OrderByDescending(i => i.CreatedAt).Select(i => (DateTime?)i.CreatedAt).FirstOrDefault()),
-            ("lastinteractiondate", _) => query.OrderBy(d =>
-                d.InteractionLogs.OrderByDescending(i => i.CreatedAt).Select(i => (DateTime?)i.CreatedAt).FirstOrDefault()),
-            ("createdat", "asc") => query.OrderBy(d => d.CreatedAt),
-            ("createdat", _) => query.OrderByDescending(d => d.CreatedAt),
-            (_, "desc") => query.OrderByDescending(d => d.CreatedAt),
-            _ => query.OrderByDescending(d => d.CreatedAt)
+            Search = request.Search,
+            Status = status,
+            CompanyTypeId = request.CompanyTypeId,
+            RegionCode = request.RegionCode,
+            DonationTypeId = request.DonationTypeId,
+            DonationFrequencyId = request.DonationFrequencyId,
+            RelationshipManagerId = request.RelationshipManagerId,
+            // Inclusive of the whole requested day.
+            FollowUpBefore = request.FollowUpBefore?.ToDateTime(TimeOnly.MaxValue),
+            SortBy = request.SortBy,
+            SortDir = request.SortDir,
+            Page = request.Page,
+            PageSize = request.PageSize
         };
 
-        var totalCount = await query.CountAsync(cancellationToken);
-
-        var items = await query
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ProjectTo<DonorListItemDto>(_mapper.ConfigurationProvider)
-            .ToListAsync(cancellationToken);
+        var (items, totalCount) = await _donors.SearchAsync(criteria, cancellationToken);
 
         return PaginatedResult<DonorListItemDto>.Create(items, request.Page, request.PageSize, totalCount);
     }

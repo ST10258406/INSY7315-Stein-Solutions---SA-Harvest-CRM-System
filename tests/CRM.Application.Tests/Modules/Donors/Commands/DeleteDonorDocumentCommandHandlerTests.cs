@@ -3,29 +3,22 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Commands.DeleteDonorDocument;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Donors.Commands;
 
 public class DeleteDonorDocumentCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
+    private readonly IDonorDocumentRepository _documentsMock = Substitute.For<IDonorDocumentRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
     private readonly DeleteDonorDocumentCommandHandler _handler;
-
-    private readonly List<DonorDocument> _documents = [];
 
     public DeleteDonorDocumentCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-
-        var documentsDbSet = _documents.BuildMockDbSet();
-        _contextMock.DonorDocuments.Returns(documentsDbSet);
-
-        _handler = new DeleteDonorDocumentCommandHandler(_contextMock);
+        _handler = new DeleteDonorDocumentCommandHandler(_documentsMock, _unitOfWorkMock);
     }
 
-    private DonorDocument AddDocument(Guid donorId, bool isActive = true)
+    private DonorDocument SetupDocument(Guid donorId, bool isActive = true)
     {
         var document = new DonorDocument
         {
@@ -36,7 +29,10 @@ public class DeleteDonorDocumentCommandHandlerTests
             BlobStoragePath = $"donors/{donorId}/BBBEECertificate/cert.pdf",
             IsActive = isActive
         };
-        _documents.Add(document);
+
+        _documentsMock.GetForMutationAsync(donorId, document.Id, Arg.Any<CancellationToken>())
+            .Returns(document);
+
         return document;
     }
 
@@ -44,31 +40,39 @@ public class DeleteDonorDocumentCommandHandlerTests
     public async Task Handle_ExistingActiveDocument_FlipsIsActiveToFalse()
     {
         var donorId = Guid.NewGuid();
-        var document = AddDocument(donorId);
+        var document = SetupDocument(donorId);
         var command = new DeleteDonorDocumentCommand { DonorId = donorId, DocumentId = document.Id };
 
         await _handler.Handle(command, CancellationToken.None);
 
         Assert.False(document.IsActive);
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     // No "never calls blob deletion" test here: DeleteDonorDocumentCommandHandler
     // doesn't take an IBlobStorageService at all, which is a stronger guarantee
     // than a mock assertion — there's no dependency through which it could call one.
+    // Likewise, the handler has no way to hard-delete: IDonorDocumentRepository
+    // exposes no Remove/Delete method at all.
 
     [Fact]
     public async Task Handle_NonExistentDocument_ThrowsNotFoundException()
     {
+        _documentsMock.GetForMutationAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((DonorDocument?)null);
+
         var command = new DeleteDonorDocumentCommand { DonorId = Guid.NewGuid(), DocumentId = Guid.NewGuid() };
 
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(command, CancellationToken.None));
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_DocumentBelongsToDifferentDonor_ThrowsNotFoundException()
     {
-        var document = AddDocument(Guid.NewGuid());
+        // The donor-scoped lookup returns null for a mismatched donor id — the repository
+        // filters on both ids, so an unrelated donor id never resolves the document.
+        var document = SetupDocument(Guid.NewGuid());
         var command = new DeleteDonorDocumentCommand { DonorId = Guid.NewGuid(), DocumentId = document.Id };
 
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.Handle(command, CancellationToken.None));
@@ -76,16 +80,15 @@ public class DeleteDonorDocumentCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_DocumentStaysInCollection_RowIsNeverRemoved()
+    public async Task Handle_ScopesLookupToTheRequestedDonor()
     {
         var donorId = Guid.NewGuid();
-        var document = AddDocument(donorId);
-        var command = new DeleteDonorDocumentCommand { DonorId = donorId, DocumentId = document.Id };
+        var document = SetupDocument(donorId);
 
-        await _handler.Handle(command, CancellationToken.None);
+        await _handler.Handle(
+            new DeleteDonorDocumentCommand { DonorId = donorId, DocumentId = document.Id },
+            CancellationToken.None);
 
-        Assert.Single(_documents);
-        Assert.Contains(document, _documents);
-        _contextMock.DonorDocuments.DidNotReceive().Remove(Arg.Any<DonorDocument>());
+        await _documentsMock.Received(1).GetForMutationAsync(donorId, document.Id, Arg.Any<CancellationToken>());
     }
 }

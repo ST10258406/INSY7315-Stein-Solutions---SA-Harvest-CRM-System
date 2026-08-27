@@ -6,13 +6,12 @@ namespace CRM.Infrastructure.Tests.Persistence;
 
 public class RefreshTokenConfigurationTests
 {
-    private const string TestConnectionString = "Host=localhost;Database=crm_test_refreshtoken;Username=postgres;Password=P@ss1234ID";
     private readonly DbContextOptions<CrmDbContext> _options;
 
     public RefreshTokenConfigurationTests()
     {
         _options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestConnectionString)
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_refreshtoken"))
             .Options;
     }
 

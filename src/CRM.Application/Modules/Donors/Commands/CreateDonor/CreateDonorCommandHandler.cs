@@ -1,29 +1,29 @@
 namespace CRM.Application.Modules.Donors.Commands.CreateDonor;
 
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, DonorDetailDto>
 {
-    private readonly IApplicationDbContext _context;
-    private readonly IMapper _mapper;
+    private readonly IDonorRepository _donors;
+    private readonly IUserRepository _users;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly INotificationService _notificationService;
     private readonly ICurrentUserService _currentUserService;
 
     public CreateDonorCommandHandler(
-        IApplicationDbContext context,
-        IMapper mapper,
+        IDonorRepository donors,
+        IUserRepository users,
+        IUnitOfWork unitOfWork,
         INotificationService notificationService,
         ICurrentUserService currentUserService)
     {
-        _context = context;
-        _mapper = mapper;
+        _donors = donors;
+        _users = users;
+        _unitOfWork = unitOfWork;
         _notificationService = notificationService;
         _currentUserService = currentUserService;
     }
@@ -116,7 +116,7 @@ public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, Don
             donor.DonationTypes.Add(new DonorDonationType { DonorId = donor.Id, DonationTypeId = typeId });
         }
 
-        _context.Donors.Add(donor);
+        await _donors.AddAsync(donor, cancellationToken);
 
         var approval = new DonorApproval
         {
@@ -125,19 +125,16 @@ public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, Don
             RequestedByUserId = currentUserId,
             Status = ApprovalStatus.Pending
         };
-        _context.DonorApprovals.Add(approval);
+        await _donors.AddApprovalAsync(approval, cancellationToken);
 
         // One SaveChangesAsync call — donor, its children, and the approval
         // commit together in a single transaction.
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         command.EntityId = donor.Id;
         command.NewValues = new { donor.Id, donor.CompanyName, donor.Status, donor.SubmissionSource };
 
-        var adminUserIds = await _context.Users
-            .Where(u => u.IsActive && u.UserRoles.Any(ur => ur.Role.Name == "Admin"))
-            .Select(u => u.Id)
-            .ToListAsync(cancellationToken);
+        var adminUserIds = await _users.GetActiveUserIdsByRoleAsync("Admin", cancellationToken);
 
         foreach (var adminUserId in adminUserIds)
         {
@@ -150,13 +147,11 @@ public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, Don
                 nameof(Donor));
         }
 
-        // Re-query through the same ProjectTo shape GetDonorByIdQueryHandler uses,
-        // rather than mapping the in-memory graph — keeps a single source of truth
-        // for the DonorDetailDto projection.
-        return await _context.Donors
-            .AsNoTracking()
-            .Where(d => d.Id == donor.Id)
-            .ProjectTo<DonorDetailDto>(_mapper.ConfigurationProvider)
-            .FirstAsync(cancellationToken);
+        // Re-read through the same projection GetDonorByIdQueryHandler uses, rather
+        // than mapping the in-memory graph — keeps a single source of truth for the
+        // DonorDetailDto projection.
+        return await _donors.GetDetailByIdAsync(donor.Id, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Donor {donor.Id} could not be re-read immediately after being created.");
     }
 }

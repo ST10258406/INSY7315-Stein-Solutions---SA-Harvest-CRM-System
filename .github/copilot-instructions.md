@@ -230,6 +230,29 @@ explicitly — do not let them pass because the code otherwise looks clean.
 - `AsNoTracking()` must be called on all read (Query) operations.
   If a query handler loads entities without `AsNoTracking()`, flag it.
 
+- **Where that rule now applies.** Since the repository refactor, no EF Core
+  query lives in CRM.Application at all. `AsNoTracking()`, `Include()`,
+  `ProjectTo<>()` and every other EF Core / LINQ-to-Entities construct belong
+  exclusively to the repository implementations in
+  `CRM.Infrastructure/Persistence/Repositories/`. Application-layer handlers and
+  validators depend only on the narrow repository interfaces in
+  `CRM.Application/Common/Interfaces/` plus `IUnitOfWork`; they never see a
+  `DbSet<T>` or an `IQueryable<T>`. So read the rule as: every repository read
+  method must be `AsNoTracking()` unless its name and XML doc say it deliberately
+  returns a **tracked** entity for a caller to mutate (e.g. `GetForUpdateAsync`,
+  `GetForMutationAsync`). A query handler containing `AsNoTracking()` is itself
+  the violation now — the query belongs in a repository.
+
+- **CRM.Application must have zero EF Core references — including the core
+  `Microsoft.EntityFrameworkCore` package, not just provider packages.**
+  There must be no `PackageReference` to any `Microsoft.EntityFrameworkCore.*`
+  assembly in `CRM.Application.csproj`, and no `using Microsoft.EntityFrameworkCore;`
+  anywhere under `src/CRM.Application/`. This is checkable with:
+  `grep -rn "Microsoft.EntityFrameworkCore" src/CRM.Application/` → must be empty.
+  There is deliberately no `IApplicationDbContext` abstraction any more: exposing
+  `DbSet<T>` from the Application layer was what forced the EF Core dependency in
+  the first place. Do not reintroduce it.
+
 - All enum properties must use `.HasConversion<string>()`
   in the entity configuration so they are stored as readable
   strings in PostgreSQL, not integers.

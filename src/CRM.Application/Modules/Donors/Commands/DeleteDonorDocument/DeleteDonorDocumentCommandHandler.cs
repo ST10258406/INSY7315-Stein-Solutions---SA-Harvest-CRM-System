@@ -4,23 +4,21 @@ using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 public class DeleteDonorDocumentCommandHandler : IRequestHandler<DeleteDonorDocumentCommand>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IDonorDocumentRepository _documents;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public DeleteDonorDocumentCommandHandler(IApplicationDbContext context)
+    public DeleteDonorDocumentCommandHandler(IDonorDocumentRepository documents, IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _documents = documents;
+        _unitOfWork = unitOfWork;
     }
 
     public async Task Handle(DeleteDonorDocumentCommand request, CancellationToken cancellationToken)
     {
-        var document = await _context.DonorDocuments
-            .FirstOrDefaultAsync(
-                d => d.Id == request.DocumentId && d.DonorId == request.DonorId,
-                cancellationToken);
+        var document = await _documents.GetForMutationAsync(request.DonorId, request.DocumentId, cancellationToken);
 
         if (document is null)
             throw new NotFoundException(nameof(DonorDocument), request.DocumentId);
@@ -29,6 +27,6 @@ public class DeleteDonorDocumentCommandHandler : IRequestHandler<DeleteDonorDocu
         // Azure Storage for audit purposes; this flips a visibility flag only.
         document.IsActive = false;
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

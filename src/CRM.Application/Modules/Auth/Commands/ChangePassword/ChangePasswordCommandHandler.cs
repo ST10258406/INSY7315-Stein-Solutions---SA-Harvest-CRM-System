@@ -3,19 +3,23 @@ using CRM.Application.Common.Interfaces;
 using CRM.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.ChangePassword;
 
 public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordCommand>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
-    public ChangePasswordCommandHandler(IApplicationDbContext context, ICurrentUserService currentUserService)
+    public ChangePasswordCommandHandler(
+        IUserRepository users,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
-        _context = context;
+        _users = users;
+        _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
     }
 
@@ -24,8 +28,7 @@ public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordComman
         var currentUserId = _currentUserService.GetCurrentUserId();
 
         // Tracked — we're updating this entity.
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Id == currentUserId, ct);
+        var user = await _users.GetByIdAsync(currentUserId, ct);
 
         if (user is null)
             throw new NotFoundException("User not found."); // shouldn't happen if the token is valid, but don't assume
@@ -45,6 +48,6 @@ public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordComman
 
         user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
-        await _context.SaveChangesAsync(ct);
+        await _unitOfWork.SaveChangesAsync(ct);
     }
 }

@@ -4,6 +4,7 @@ using CRM.Domain.Common;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
+using CRM.Infrastructure.Tests.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
@@ -11,13 +12,11 @@ using Xunit;
 
 public class UpdatedAtInterceptorTests
 {
-    private const string TestConnectionString = "Host=localhost;Database=crm_test_interceptor;Username=postgres;Password=P@ss1234ID";
-
     [Fact]
     public async Task SavingChanges_SetsUpdatedAt_OnModifiedEntity()
     {
         var options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestConnectionString)
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_interceptor"))
             .AddInterceptors(new UpdatedAtInterceptor())
             .Options;
 

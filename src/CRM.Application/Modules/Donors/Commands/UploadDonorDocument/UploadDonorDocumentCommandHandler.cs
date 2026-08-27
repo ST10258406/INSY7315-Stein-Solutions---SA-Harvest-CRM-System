@@ -7,22 +7,27 @@ using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 public class UploadDonorDocumentCommandHandler : IRequestHandler<UploadDonorDocumentCommand, DonorDocumentDto>
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IDonorRepository _donors;
+    private readonly IDonorDocumentRepository _documents;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IBlobStorageService _blobStorage;
     private readonly ICurrentUserService _currentUserService;
     private readonly IMapper _mapper;
 
     public UploadDonorDocumentCommandHandler(
-        IApplicationDbContext context,
+        IDonorRepository donors,
+        IDonorDocumentRepository documents,
+        IUnitOfWork unitOfWork,
         IBlobStorageService blobStorage,
         ICurrentUserService currentUserService,
         IMapper mapper)
     {
-        _context = context;
+        _donors = donors;
+        _documents = documents;
+        _unitOfWork = unitOfWork;
         _blobStorage = blobStorage;
         _currentUserService = currentUserService;
         _mapper = mapper;
@@ -30,7 +35,7 @@ public class UploadDonorDocumentCommandHandler : IRequestHandler<UploadDonorDocu
 
     public async Task<DonorDocumentDto> Handle(UploadDonorDocumentCommand request, CancellationToken cancellationToken)
     {
-        var donorExists = await _context.Donors.AnyAsync(d => d.Id == request.DonorId, cancellationToken);
+        var donorExists = await _donors.ExistsAsync(request.DonorId, cancellationToken);
         if (!donorExists)
             throw new NotFoundException(nameof(Donor), request.DonorId);
 
@@ -39,9 +44,8 @@ public class UploadDonorDocumentCommandHandler : IRequestHandler<UploadDonorDocu
         // Soft-delete the existing active document of the same type, then upload
         // and insert the new one — both committed together in one SaveChangesAsync
         // call so a failed insert can't leave zero active documents.
-        var existingActive = await _context.DonorDocuments
-            .Where(d => d.DonorId == request.DonorId && d.DocumentType == documentType && d.IsActive)
-            .ToListAsync(cancellationToken);
+        var existingActive = await _documents.GetActiveByDonorAndTypeAsync(
+            request.DonorId, documentType, cancellationToken);
 
         foreach (var doc in existingActive)
             doc.IsActive = false;
@@ -66,8 +70,8 @@ public class UploadDonorDocumentCommandHandler : IRequestHandler<UploadDonorDocu
             IsActive = true
         };
 
-        _context.DonorDocuments.Add(document);
-        await _context.SaveChangesAsync(cancellationToken);
+        await _documents.AddAsync(document, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return _mapper.Map<DonorDocumentDto>(document);
     }
