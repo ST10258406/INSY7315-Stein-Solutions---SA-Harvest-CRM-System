@@ -130,7 +130,7 @@ MediatR, validators, and AutoMapper profiles are auto-registered by assembly sca
 ### Pipeline behaviours (run around every `Send`)
 
 Registered order in `ServiceCollectionExtensions.AddApplicationServices`:
-`ValidationBehaviour` → `LoggingBehaviour` → `AuditBehaviour`.
+`LoggingBehaviour` → `ValidationBehaviour` → `AuditBehaviour`.
 
 | Behaviour | Does | Your handler therefore must NOT |
 |---|---|---|
