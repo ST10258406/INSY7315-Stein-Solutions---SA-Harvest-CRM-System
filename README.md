@@ -57,7 +57,7 @@ Donors never log in. The primary users are the NPO's procurement and marketing t
 
 - ASP.NET Core 9 Web API on **.NET 10**, C# 13
 - **Modular Monolith** + **Clean Architecture** (Domain → Application → Infrastructure → API)
-- **CQRS** via MediatR, with three pipeline behaviours: `ValidationBehaviour` → `LoggingBehaviour` → `AuditBehaviour`
+- **CQRS** via MediatR, with three pipeline behaviours: `LoggingBehaviour` → `ValidationBehaviour` → `AuditBehaviour`
 - **PostgreSQL 16** via EF Core 10 + Npgsql (code-first migrations, Fluent API only)
 - **FluentValidation** for all command/query validation
 - **AutoMapper** for entity → DTO projection
