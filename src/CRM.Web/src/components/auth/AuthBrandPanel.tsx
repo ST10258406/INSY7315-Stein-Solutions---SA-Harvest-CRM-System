@@ -1,4 +1,5 @@
 import React from 'react';
+import logoImg from '@/assets/sa-harvest-logo.png';
 
 const TONNES_RESCUED_THIS_MONTH = 124;
 
@@ -21,12 +22,11 @@ const AuthBrandPanel: React.FC = () => {
       <div className="absolute top-0 left-0 w-full h-1 bg-[#F2B705]" />
 
       <div className="flex items-center gap-[11px]">
-        <div className="w-9 h-9 rounded-[10px] bg-[#F2B705] flex items-center justify-center flex-none">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C12 8 8 9 8 14C8 17.3 9.8 20 12 22C14.2 20 16 17.3 16 14C16 9 12 8 12 2Z" fill="#17140F" />
-            <path d="M12 12V22" stroke="#F2B705" strokeWidth={1.4} />
-          </svg>
-        </div>
+        <img
+          src={logoImg}
+          alt="S.A. Harvest"
+          className="w-9 h-9 rounded-[10px] object-cover flex-none"
+        />
         <div className="leading-tight">
           <div className="font-bold text-[15px] text-[#FBF7EE]">SA Harvest</div>
           <div className="text-[11px] text-[#8C8578] font-medium">Donor CRM</div>

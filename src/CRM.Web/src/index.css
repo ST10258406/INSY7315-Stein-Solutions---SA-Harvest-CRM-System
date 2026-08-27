@@ -27,6 +27,11 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.85 0.15 90);
   --radius: 0.625rem;
+
+  /* App shell brand accent — must stay exactly rgb(250 223 1), matches the
+     Claude Design mockup for the top bar / sidebar. Same value in light and
+     dark, so it's declared once here rather than in the .dark override. */
+  --brand: rgb(250 223 1);
 }
 
 .dark {
@@ -57,6 +62,7 @@
 }
 
 @theme inline {
+  --color-brand: var(--brand);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);

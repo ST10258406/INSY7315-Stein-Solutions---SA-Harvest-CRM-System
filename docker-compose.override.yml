@@ -7,4 +7,6 @@ services:
 
   postgres:
     ports:
-      - "5432:5432"  # exposed to host for local DB tools (pgAdmin, DBeaver, etc.)
+      # exposed to host for local DB tools (pgAdmin, DBeaver, etc.). Override
+      # POSTGRES_HOST_PORT in your local .env if 5432 is already taken on your machine.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
