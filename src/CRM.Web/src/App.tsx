@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardPage from './features/dashboard/DashboardPage';
 import ApprovalsPage from './components/pages/ApprovalsPage';
-import DonorsPage from './components/pages/DonorsPage';
+import DonorListPage from './features/donors/DonorListPage';
 import NewDonorPage from './components/pages/NewDonorPage';
 import DonorDetailPage from './components/pages/DonorDetailPage';
 import TasksPage from './components/pages/TasksPage';
@@ -50,7 +50,7 @@ function App() {
               <Route path={paths.root} element={<Navigate to={paths.dashboard} replace />} />
               <Route path={paths.notAuthorized} element={<NotAuthorizedPage />} />
               <Route path={paths.dashboard} element={<DashboardPage />} />
-              <Route path={paths.donors} element={<DonorsPage />} />
+              <Route path={paths.donors} element={<DonorListPage />} />
               <Route path={paths.donorNew} element={<NewDonorPage />} />
               <Route path={paths.donorDetailPattern} element={<DonorDetailPage />} />
               <Route path={paths.tasks} element={<TasksPage />} />
