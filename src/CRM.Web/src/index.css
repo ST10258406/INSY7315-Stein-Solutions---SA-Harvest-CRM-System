@@ -56,7 +56,12 @@
   --popover-foreground: var(--ink);
 
   --primary: var(--brand-yellow);
-  --primary-foreground: var(--ink);
+  /* Fixed, not var(--ink): --brand-yellow is deliberately the same value in
+     both themes (see --brand below), so the text/icon color sitting on top
+     of it must stay fixed too — tying it to --ink made it flip to near-white
+     in dark mode (--ink is the page's foreground, not a "safe on yellow"
+     color) and made brand-colored buttons/tabs/chips unreadable. */
+  --primary-foreground: #16160F;
 
   --secondary: var(--soft);
   --secondary-foreground: var(--ink);
@@ -115,7 +120,12 @@
   --popover-foreground: var(--ink);
 
   --primary: var(--brand-yellow);
-  --primary-foreground: var(--ink);
+  /* Fixed, not var(--ink): --brand-yellow is deliberately the same value in
+     both themes (see --brand below), so the text/icon color sitting on top
+     of it must stay fixed too — tying it to --ink made it flip to near-white
+     in dark mode (--ink is the page's foreground, not a "safe on yellow"
+     color) and made brand-colored buttons/tabs/chips unreadable. */
+  --primary-foreground: #16160F;
 
   --secondary: var(--soft);
   --secondary-foreground: var(--ink);
