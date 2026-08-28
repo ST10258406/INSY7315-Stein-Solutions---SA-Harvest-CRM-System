@@ -127,6 +127,60 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Keep the section nav in sync while the user scrolls the form, not just
+  // when they click a nav item. The sections render inside AppLayout's
+  // <main overflow-y-auto> (see AppLayout.tsx) rather than in a scroll
+  // container DonorForm owns itself, so we walk up to find whichever
+  // ancestor actually scrolls instead of assuming `window`.
+  useEffect(() => {
+    if (mode === 'edit' && (donorQuery.isPending || donorQuery.isError)) return;
+
+    const sectionEls = SECTIONS.map((s) => document.getElementById(s.id)).filter(
+      (el): el is HTMLElement => el !== null
+    );
+    if (sectionEls.length === 0) return;
+
+    function findScrollParent(el: HTMLElement): HTMLElement | null {
+      let node = el.parentElement;
+      while (node) {
+        const overflowY = getComputedStyle(node).overflowY;
+        if (overflowY === 'auto' || overflowY === 'scroll') return node;
+        node = node.parentElement;
+      }
+      return null;
+    }
+
+    const scrollParent = findScrollParent(sectionEls[0]);
+    if (!scrollParent) return;
+
+    // A section is "current" once its top has scrolled up to (or past) this
+    // many pixels below the scroll container's own top edge.
+    const ACTIVE_LINE_OFFSET = 32;
+    let ticking = false;
+
+    function updateActiveSection() {
+      const containerTop = scrollParent!.getBoundingClientRect().top;
+      let current = sectionEls[0].id;
+      for (const el of sectionEls) {
+        if (el.getBoundingClientRect().top - containerTop <= ACTIVE_LINE_OFFSET) {
+          current = el.id;
+        }
+      }
+      setActiveSection(current);
+      ticking = false;
+    }
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(updateActiveSection);
+    }
+
+    updateActiveSection();
+    scrollParent.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', onScroll);
+  }, [mode, donorQuery.isPending, donorQuery.isError]);
+
   if (mode === 'edit' && donorQuery.isPending) {
     return (
       <div className="flex flex-col gap-6">
