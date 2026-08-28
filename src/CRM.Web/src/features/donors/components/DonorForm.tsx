@@ -470,7 +470,7 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
             />
             <div className="flex flex-col gap-2 sm:col-span-2">
               <span className="text-xs font-bold text-foreground">B-BBEE certificate</span>
-              <p className="m-0 rounded-2xl border border-dashed border-border bg-background p-4 text-[11.5px] font-medium text-muted-foreground">
+              <p className="m-0 rounded-2xl border border-dashed border-border bg-field p-4 text-[11.5px] font-medium text-muted-foreground">
                 Certificate upload is available once this donor has been created — from the Compliance tab on the
                 donor's profile.
               </p>
@@ -482,7 +482,7 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
               <span className="flex items-center gap-1 text-xs font-bold text-foreground">
                 <span>Relationship manager</span>
               </span>
-              <div className="flex h-11 items-center gap-2.5 rounded-full border border-border bg-background px-3.75 opacity-50">
+              <div className="flex h-11 items-center gap-2.5 rounded-full border border-border bg-field px-3.75 opacity-50">
                 <Search className="h-3.75 w-3.75 shrink-0 text-muted-foreground" />
                 <select
                   {...register('relationshipManagerId')}
