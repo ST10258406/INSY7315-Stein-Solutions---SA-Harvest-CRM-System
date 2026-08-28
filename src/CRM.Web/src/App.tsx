@@ -1,5 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import LandingPage from './features/landing/LandingPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import ApprovalsPage from './components/pages/ApprovalsPage';
 import DonorListPage from './features/donors/DonorListPage';
@@ -36,6 +37,10 @@ function App() {
       <Router>
         <div className="dark bg-background text-foreground min-h-screen">
           <Routes>
+            {/* Public landing page — entry point, not wrapped in the
+                authenticated app shell (no top bar/sidebar), but shares its
+                dark palette directly (see LandingPage.tsx). */}
+            <Route path={paths.root} element={<LandingPage />} />
             <Route path={paths.login} element={<LoginPage />} />
             <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
@@ -48,7 +53,6 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path={paths.root} element={<Navigate to={paths.dashboard} replace />} />
               <Route path={paths.notAuthorized} element={<NotAuthorizedPage />} />
               <Route path={paths.dashboard} element={<DashboardPage />} />
               <Route path={paths.donors} element={<DonorListPage />} />
