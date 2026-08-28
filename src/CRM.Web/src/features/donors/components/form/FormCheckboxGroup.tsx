@@ -40,7 +40,7 @@ export function FormCheckboxGroup({ label, error, required, options, value, onCh
                 className={`inline-flex h-9 items-center gap-1.75 rounded-full border px-3.75 text-[12.5px] font-bold transition-colors ${
                   checked
                     ? 'border-brand bg-brand text-primary-foreground'
-                    : 'border-border bg-background text-foreground hover:border-foreground/40'
+                    : 'border-border bg-chip text-foreground hover:border-foreground/40'
                 }`}
               >
                 {checked && <Check className="h-3 w-3 stroke-[3.2]" />}

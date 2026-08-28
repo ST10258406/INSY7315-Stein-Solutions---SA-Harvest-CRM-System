@@ -46,7 +46,7 @@ export function FormSelect({
           id={registration.name}
           {...registration}
           disabled={disabled || isLoading}
-          className={`h-11 w-full appearance-none rounded-full border bg-background px-3.75 pr-10 text-[13.5px] font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/60 disabled:opacity-50 ${
+          className={`h-11 w-full appearance-none rounded-full border bg-field px-3.75 pr-10 text-[13.5px] font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/60 disabled:opacity-50 ${
             error ? 'border-destructive/70' : 'border-border'
           }`}
         >

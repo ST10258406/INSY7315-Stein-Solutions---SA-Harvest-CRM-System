@@ -80,13 +80,13 @@ export function TopBar() {
               aria-current={isActive ? 'page' : undefined}
               className={`flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
                 isActive
-                  ? 'border-brand bg-brand text-primary-foreground font-bold'
-                  : 'border-border bg-secondary text-muted-foreground hover:border-foreground/60'
+                  ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
+                  : 'border-border bg-pill text-pill-ink hover:border-foreground'
               }`}
             >
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                  isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -104,7 +104,7 @@ export function TopBar() {
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-secondary text-muted-foreground transition-colors hover:border-foreground/60"
+          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-card text-icon transition-colors hover:border-foreground"
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
@@ -126,7 +126,7 @@ export function TopBar() {
           onClick={() => logout()}
           disabled={isLoggingOut}
           title="Log out"
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-secondary text-muted-foreground transition-colors hover:border-foreground/60 disabled:opacity-50"
+          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-card text-icon transition-colors hover:border-foreground disabled:opacity-50"
         >
           <LogOut className="h-4 w-4" />
         </button>

@@ -27,7 +27,7 @@ export function FormTextArea({ label, error, required, hint, registration, rows 
         {...registration}
         {...textareaProps}
         rows={rows}
-        className={`resize-y rounded-2xl border bg-background px-3.75 py-3.5 text-[13.5px] leading-relaxed font-medium text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand/60 ${
+        className={`resize-y rounded-2xl border bg-field px-3.75 py-3.5 text-[13.5px] leading-relaxed font-medium text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand/60 ${
           error ? 'border-destructive/70' : 'border-border'
         }`}
       />

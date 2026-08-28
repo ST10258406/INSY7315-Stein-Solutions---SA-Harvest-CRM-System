@@ -27,7 +27,7 @@ export function FormField({ label, error, fullWidth, required, hint, registratio
         id={registration.name}
         {...registration}
         {...inputProps}
-        className={`h-11 rounded-full border bg-background px-3.75 text-[13.5px] font-medium text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand/60 ${
+        className={`h-11 rounded-full border bg-field px-3.75 text-[13.5px] font-medium text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand/60 ${
           error ? 'border-destructive/70' : 'border-border'
         }`}
       />
