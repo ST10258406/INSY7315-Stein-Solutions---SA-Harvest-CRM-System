@@ -1,2 +1,10 @@
 export { lookupKeys } from './lookupKeys';
-export { useCompanyTypes, useOperationalRegions, useDonationTypes, useDonationFrequencies } from './useLookups';
+export {
+  useCompanyTypes,
+  useEntityTypes,
+  useOperationalRegions,
+  useDonationTypes,
+  useDonationFrequencies,
+  useProvinces,
+  useBbbeeStatuses,
+} from './useLookups';
