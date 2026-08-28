@@ -4,22 +4,35 @@ import type { UseFormRegisterReturn } from 'react-hook-form';
 interface FormTextAreaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className'> {
   label: string;
   error?: string;
+  required?: boolean;
+  hint?: string;
   registration: UseFormRegisterReturn;
 }
 
-export function FormTextArea({ label, error, registration, rows = 3, ...textareaProps }: FormTextAreaProps) {
+export function FormTextArea({ label, error, required, hint, registration, rows = 3, ...textareaProps }: FormTextAreaProps) {
   return (
-    <label className="flex flex-col gap-1.5 sm:col-span-2">
-      <span className="text-xs text-[#6B6B60] uppercase tracking-wide">{label}</span>
+    <div className="flex flex-col gap-2 sm:col-span-2">
+      <span className="flex items-center gap-1">
+        <label htmlFor={registration.name} className="text-xs font-bold text-foreground">
+          {label}
+        </label>
+        {required && (
+          <span aria-hidden="true" className="text-xs font-bold text-destructive">
+            *
+          </span>
+        )}
+      </span>
       <textarea
+        id={registration.name}
         {...registration}
         {...textareaProps}
         rows={rows}
-        className={`rounded-lg border bg-[#0F0F0C] px-3 py-2 text-sm text-[#F4F4EE] outline-none placeholder:text-[#6B6B60] focus-visible:border-[#F4F4EE] ${
-          error ? 'border-rose-500/70' : 'border-[#2B2B23]'
+        className={`resize-y rounded-2xl border bg-background px-3.75 py-3.5 text-[13.5px] leading-relaxed font-medium text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand/60 ${
+          error ? 'border-destructive/70' : 'border-border'
         }`}
       />
-      {error && <span className="text-xs text-rose-400">{error}</span>}
-    </label>
+      {hint && !error && <span className="pl-3.75 text-[11.5px] font-medium text-muted-foreground">{hint}</span>}
+      {error && <span className="pl-3.75 text-xs text-destructive">{error}</span>}
+    </div>
   );
 }

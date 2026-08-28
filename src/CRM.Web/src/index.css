@@ -6,25 +6,31 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  
+  /* Warm off-white rather than paper-white, softened foreground rather than
+     near-black — a pure white/near-black pairing plus the --border token
+     that used to be undefined here (falling back to currentColor, i.e.
+     near-black borders on every card/pill) is what made light mode read as
+     high-contrast instead of soft. */
+  --background: oklch(0.985 0.004 90);
+  --foreground: oklch(0.26 0.012 270);
+  --card: oklch(0.995 0.002 90);
+  --card-foreground: oklch(0.26 0.012 270);
+  --popover: oklch(0.995 0.002 90);
+  --popover-foreground: oklch(0.26 0.012 270);
+
   /* Primary Accent: Yellow */
   --primary: oklch(0.85 0.15 90);
   --primary-foreground: oklch(0.2 0 0);
-  
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --input: oklch(0.922 0 0);
+
+  --secondary: oklch(0.955 0.004 90);
+  --secondary-foreground: oklch(0.3 0.01 270);
+  --muted: oklch(0.955 0.004 90);
+  --muted-foreground: oklch(0.52 0.012 270);
+  --accent: oklch(0.955 0.004 90);
+  --accent-foreground: oklch(0.3 0.01 270);
+  --destructive: oklch(0.58 0.19 27.325);
+  --border: oklch(0.9 0.006 90);
+  --input: oklch(0.9 0.006 90);
   --ring: oklch(0.85 0.15 90);
   --radius: 0.625rem;
 
