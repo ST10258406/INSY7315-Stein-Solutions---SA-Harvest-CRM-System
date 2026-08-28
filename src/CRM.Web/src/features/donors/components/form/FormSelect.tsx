@@ -1,4 +1,5 @@
 import type { UseFormRegisterReturn } from 'react-hook-form';
+import { ChevronDown } from 'lucide-react';
 
 export interface FormSelectOption {
   value: string;
@@ -9,6 +10,7 @@ interface FormSelectProps {
   label: string;
   error?: string;
   fullWidth?: boolean;
+  required?: boolean;
   registration: UseFormRegisterReturn;
   options: FormSelectOption[];
   placeholder: string;
@@ -20,6 +22,7 @@ export function FormSelect({
   label,
   error,
   fullWidth,
+  required,
   registration,
   options,
   placeholder,
@@ -27,23 +30,36 @@ export function FormSelect({
   disabled,
 }: FormSelectProps) {
   return (
-    <label className={`flex flex-col gap-1.5 ${fullWidth ? 'sm:col-span-2' : ''}`}>
-      <span className="text-xs text-[#6B6B60] uppercase tracking-wide">{label}</span>
-      <select
-        {...registration}
-        disabled={disabled || isLoading}
-        className={`h-9 rounded-lg border bg-[#0F0F0C] px-3 text-sm text-[#F4F4EE] outline-none focus-visible:border-[#F4F4EE] disabled:opacity-50 ${
-          error ? 'border-rose-500/70' : 'border-[#2B2B23]'
-        }`}
-      >
-        <option value="">{isLoading ? 'Loading…' : placeholder}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {error && <span className="text-xs text-rose-400">{error}</span>}
-    </label>
+    <div className={`flex flex-col gap-2 ${fullWidth ? 'sm:col-span-2' : ''}`}>
+      <span className="flex items-center gap-1">
+        <label htmlFor={registration.name} className="text-xs font-bold text-foreground">
+          {label}
+        </label>
+        {required && (
+          <span aria-hidden="true" className="text-xs font-bold text-destructive">
+            *
+          </span>
+        )}
+      </span>
+      <div className="relative">
+        <select
+          id={registration.name}
+          {...registration}
+          disabled={disabled || isLoading}
+          className={`h-11 w-full appearance-none rounded-full border bg-background px-3.75 pr-10 text-[13.5px] font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/60 disabled:opacity-50 ${
+            error ? 'border-destructive/70' : 'border-border'
+          }`}
+        >
+          <option value="">{isLoading ? 'Loading…' : placeholder}</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute top-3.5 right-4 h-3.5 w-3.5 text-muted-foreground" />
+      </div>
+      {error && <span className="pl-3.75 text-xs text-destructive">{error}</span>}
+    </div>
   );
 }
