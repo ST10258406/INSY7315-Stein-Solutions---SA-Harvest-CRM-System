@@ -26,7 +26,7 @@ export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
         <DetailField label="B-BBEE status" value={compliance.bbbeeStatus?.name ?? 'Not verified'} />
       </DetailSectionCard>
 
-      <DonorDocumentsSection documents={compliance.documents} />
+      <DonorDocumentsSection donorId={donor.id} documents={compliance.documents} />
     </div>
   );
 }

@@ -1,58 +1,30 @@
-import { FileText } from 'lucide-react';
+import { RoleGuard } from '@/features/auth/components/RoleGuard';
+import { DocumentUpload } from './DocumentUpload';
+import { DocumentList } from './DocumentList';
+import { ADMIN_ROLES } from '../lib/documentTypes';
 import type { DonorDocumentDto } from '../types';
-import { formatDate, formatFileSize } from '../lib/donorFormatters';
 
 interface DonorDocumentsSectionProps {
+  donorId: string;
   documents: DonorDocumentDto[];
 }
 
-/**
- * Read-only list of documents already on the donor record — the data is part
- * of DonorDetailDto so it's real, not a placeholder. Upload/download actions
- * are deliberately not wired here: those are dedicated reusable components
- * from Issue 44, which don't exist yet. This section is the integration
- * point they'll slot into.
- */
-export function DonorDocumentsSection({ documents }: DonorDocumentsSectionProps) {
+export function DonorDocumentsSection({ donorId, documents }: DonorDocumentsSectionProps) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Documents</h3>
-        <span
-          title="Upload/download tools ship with Issue 44"
-          className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
-        >
-          Upload coming soon
-        </span>
-      </div>
+      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Documents</h3>
 
-      {documents.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">No documents uploaded for this donor.</p>
-      ) : (
-        <ul className="mt-4 flex flex-col gap-2">
-          {documents.map((doc) => (
-            <li
-              key={doc.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary px-3 py-2.5"
-            >
-              <div className="flex min-w-0 items-center gap-2.5">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{doc.originalFileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {doc.documentType} · {formatFileSize(doc.fileSizeBytes)} · Uploaded {formatDate(doc.uploadedAt)}
-                  </p>
-                </div>
-              </div>
-              {!doc.isActive && (
-                <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  Archived
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Upload is Admin/SuperAdmin-only for both document types — mirrors the
+          backend's blanket [Authorize(Policy = "AdminOrAbove")] on the whole
+          POST /documents endpoint (DonorsController), not just BBBEE. */}
+      <RoleGuard allowedRoles={ADMIN_ROLES}>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <DocumentUpload donorId={donorId} documentType="BBBEECertificate" />
+          <DocumentUpload donorId={donorId} documentType="Signature" />
+        </div>
+      </RoleGuard>
+
+      <DocumentList donorId={donorId} documents={documents} />
     </div>
   );
 }

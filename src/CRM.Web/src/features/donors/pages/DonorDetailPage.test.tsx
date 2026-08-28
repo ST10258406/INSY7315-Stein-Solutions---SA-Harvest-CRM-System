@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { api } from '@/lib/axios';
+import { useAuthStore } from '@/store/authStore';
 import DonorDetailPage from './DonorDetailPage';
 import type { DonorDetailDto } from '../types';
 
@@ -82,6 +83,13 @@ function renderPage(id = 'donor-1') {
 describe('DonorDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuthStore.setState({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isHydrating: false,
+    });
   });
   afterEach(cleanup);
 
@@ -123,7 +131,7 @@ describe('DonorDetailPage', () => {
     expect(screen.getByText('No documents uploaded for this donor.')).toBeInTheDocument();
   });
 
-  it('lists existing documents on the Legal tab without wiring upload/download', async () => {
+  it('lists existing documents on the Legal tab, with no upload/download/delete controls for a non-Admin viewer', async () => {
     const user = userEvent.setup();
     vi.mocked(api.get).mockResolvedValueOnce({
       data: {
@@ -133,7 +141,7 @@ describe('DonorDetailPage', () => {
             documents: [
               {
                 id: 'doc-1',
-                documentType: 'BBBEE Certificate',
+                documentType: 'BBBEECertificate',
                 originalFileName: 'bbbee-cert.pdf',
                 fileSizeBytes: 204800,
                 mimeType: 'application/pdf',
@@ -151,8 +159,50 @@ describe('DonorDetailPage', () => {
     await user.click(screen.getByRole('tab', { name: 'Legal' }));
 
     expect(screen.getByText('bbbee-cert.pdf')).toBeInTheDocument();
-    expect(screen.getByText('Upload coming soon')).toBeInTheDocument();
+    // No authenticated Admin/SuperAdmin role in this test — upload dropzones,
+    // the BBBEE download button, and delete are all RoleGuard-gated off.
+    expect(screen.queryByText('Drop file here or browse')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /download/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+  });
+
+  it('shows upload dropzones and document download/delete controls on the Legal tab for an Admin viewer', async () => {
+    const user = userEvent.setup();
+    useAuthStore.setState({
+      user: { id: 'admin-1', firstName: 'Ada', lastName: 'Min', email: 'ada@crm.local', roles: ['Admin'] },
+      isAuthenticated: true,
+    });
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        data: donorDetail({
+          compliance: {
+            bbbeeStatus: null,
+            documents: [
+              {
+                id: 'doc-1',
+                documentType: 'BBBEECertificate',
+                originalFileName: 'bbbee-cert.pdf',
+                fileSizeBytes: 204800,
+                mimeType: 'application/pdf',
+                uploadedAt: '2026-01-10T00:00:00Z',
+                isActive: true,
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    renderPage();
+    await screen.findByRole('heading', { name: 'Acme Co' });
+    await user.click(screen.getByRole('tab', { name: 'Legal' }));
+
+    expect(screen.getByText('bbbee-cert.pdf')).toBeInTheDocument();
+    expect(screen.getByText('BBBEE Certificate')).toBeInTheDocument();
+    expect(screen.getByText('Signature')).toBeInTheDocument();
+    expect(screen.getAllByText('Drop file here or browse')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Download bbbee-cert.pdf' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete bbbee-cert.pdf' })).toBeInTheDocument();
   });
 
   it('switches to the CRM tab and shows RM, consent, and notes', async () => {
