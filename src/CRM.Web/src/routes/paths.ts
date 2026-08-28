@@ -7,6 +7,8 @@ export const paths = {
   // Route pattern for <Route path>. Use donorDetail(id) to build a link href.
   donorDetailPattern: '/donors/:id',
   donorDetail: (id: string) => `/donors/${id}`,
+  donorEditPattern: '/donors/:id/edit',
+  donorEdit: (id: string) => `/donors/${id}/edit`,
   tasks: '/tasks',
   approvals: '/approvals',
   reports: '/reports',

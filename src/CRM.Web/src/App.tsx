@@ -4,7 +4,8 @@ import DashboardPage from './features/dashboard/DashboardPage';
 import ApprovalsPage from './components/pages/ApprovalsPage';
 import DonorListPage from './features/donors/DonorListPage';
 import NewDonorPage from './components/pages/NewDonorPage';
-import DonorDetailPage from './components/pages/DonorDetailPage';
+import EditDonorPage from './components/pages/EditDonorPage';
+import DonorDetailPage from './features/donors/pages/DonorDetailPage';
 import TasksPage from './components/pages/TasksPage';
 import ReportsPage from './components/pages/ReportsPage';
 import UsersPage from './components/pages/UsersPage';
@@ -52,6 +53,7 @@ function App() {
               <Route path={paths.dashboard} element={<DashboardPage />} />
               <Route path={paths.donors} element={<DonorListPage />} />
               <Route path={paths.donorNew} element={<NewDonorPage />} />
+              <Route path={paths.donorEditPattern} element={<EditDonorPage />} />
               <Route path={paths.donorDetailPattern} element={<DonorDetailPage />} />
               <Route path={paths.tasks} element={<TasksPage />} />
               <Route path={paths.reports} element={<ReportsPage />} />
