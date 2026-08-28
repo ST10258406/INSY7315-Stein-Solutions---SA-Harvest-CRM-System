@@ -16,9 +16,9 @@ export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
           <DetailField label="Postal code" value={legalAddress.postalCode} />
         </DetailSectionCard>
       ) : (
-        <div className="rounded-2xl border border-dashed border-[#2B2B23] bg-[#141410]/60 p-5">
-          <h3 className="text-xs font-semibold tracking-wide text-[#B9B9AE] uppercase">Registered address</h3>
-          <p className="mt-4 text-sm text-[#6B6B60]">No legal address on file.</p>
+        <div className="rounded-2xl border border-dashed border-border bg-card/60 p-5">
+          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Registered address</h3>
+          <p className="mt-4 text-sm text-muted-foreground">No legal address on file.</p>
         </div>
       )}
 

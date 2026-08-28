@@ -19,6 +19,7 @@ import { useHydrateAuth } from '@/features/auth/hooks/useHydrateAuth';
 import { useAuthStore } from '@/store/authStore';
 import { AppLayout } from '@/features/shell/AppLayout';
 import { paths } from '@/routes/paths';
+import '@/store/themeStore';
 import './App.css';
 import './lib/axios';
 
@@ -29,13 +30,13 @@ function App() {
   const isHydrating = useAuthStore((s) => s.isHydrating);
 
   if (isHydrating) {
-    return <div className="flex min-h-screen items-center justify-center dark bg-background text-foreground">Loading...</div>;
+    return <div className="flex min-h-screen items-center justify-center bg-background text-foreground">Loading...</div>;
   }
 
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="dark bg-background text-foreground min-h-screen">
+        <div className="bg-background text-foreground min-h-screen">
           <Routes>
             {/* Public landing page — entry point, not wrapped in the
                 authenticated app shell (no top bar/sidebar), but shares its

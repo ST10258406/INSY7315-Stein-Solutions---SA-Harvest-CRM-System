@@ -51,26 +51,26 @@ export function DonorTable({
 
   return (
     <div
-      className={`overflow-x-auto rounded-2xl border border-[#2B2B23] bg-[#141410] transition-opacity ${
+      className={`overflow-x-auto rounded-2xl border border-border bg-card transition-opacity ${
         isFetching && !isPending ? 'opacity-60' : ''
       }`}
     >
       <table className="w-full min-w-[900px] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-[#2B2B23]">
+          <tr className="border-b border-border">
             {COLUMNS.map((column) => (
               <th key={column.key} className="px-4 py-3 text-left">
                 {column.sortField ? (
                   <button
                     type="button"
                     onClick={() => onSort(column.sortField!)}
-                    className="flex items-center gap-1 text-xs font-medium tracking-wide text-[#B9B9AE] uppercase transition-colors hover:text-[#F4F4EE]"
+                    className="flex items-center gap-1 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
                   >
                     {column.label}
                     <SortIcon active={sortBy === column.sortField} dir={sortDir} />
                   </button>
                 ) : (
-                  <span className="text-xs font-medium tracking-wide text-[#B9B9AE] uppercase">{column.label}</span>
+                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{column.label}</span>
                 )}
               </th>
             ))}
@@ -83,13 +83,13 @@ export function DonorTable({
             <tr>
               <td colSpan={COLUMNS.length} className="px-4 py-12">
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
-                  <TriangleAlert className="h-5 w-5 text-[#6B6B60]" />
-                  <p className="text-sm font-medium text-[#B9B9AE]">Couldn't load donors</p>
-                  <p className="text-xs text-[#6B6B60]">{error?.response?.data?.message ?? 'Something went wrong.'}</p>
+                  <TriangleAlert className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium text-muted-foreground">Couldn't load donors</p>
+                  <p className="text-xs text-muted-foreground">{error?.response?.data?.message ?? 'Something went wrong.'}</p>
                   <button
                     type="button"
                     onClick={onRetry}
-                    className="mt-1 rounded-full border border-[#2B2B23] px-3 py-1 text-xs font-medium text-[#F4F4EE] transition-colors hover:border-[#F4F4EE]"
+                    className="mt-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-foreground/60"
                   >
                     Retry
                   </button>
@@ -100,9 +100,9 @@ export function DonorTable({
             <tr>
               <td colSpan={COLUMNS.length} className="px-4 py-12">
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
-                  <Inbox className="h-5 w-5 text-[#6B6B60]" />
-                  <p className="text-sm font-medium text-[#B9B9AE]">No donors found</p>
-                  <p className="text-xs text-[#6B6B60]">
+                  <Inbox className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium text-muted-foreground">No donors found</p>
+                  <p className="text-xs text-muted-foreground">
                     {hasActiveFilters ? 'Try adjusting or clearing your filters.' : 'Donors will appear here once added.'}
                   </p>
                 </div>
@@ -113,27 +113,27 @@ export function DonorTable({
               <tr
                 key={donor.id}
                 onClick={() => navigate(paths.donorDetail(donor.id))}
-                className="cursor-pointer border-b border-[#2B2B23] transition-colors last:border-b-0 hover:bg-[#1A1A14]"
+                className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-secondary"
               >
                 <td className="px-4 py-3">
-                  <div className="font-medium text-[#F4F4EE]">{donor.companyName}</div>
-                  <div className="text-xs text-[#6B6B60]">{donor.companyType}</div>
+                  <div className="font-medium text-foreground">{donor.companyName}</div>
+                  <div className="text-xs text-muted-foreground">{donor.companyType}</div>
                 </td>
                 <td className="px-4 py-3">
                   <DonorStatusBadge status={donor.status} />
                 </td>
-                <td className="px-4 py-3 text-[#B9B9AE]">{joinOrDash(donor.operationalRegions)}</td>
-                <td className="px-4 py-3 text-[#B9B9AE]">{donor.donationFrequency ?? '—'}</td>
-                <td className="px-4 py-3 text-[#B9B9AE]">{donor.relationshipManager?.fullName ?? 'Unassigned'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{joinOrDash(donor.operationalRegions)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{donor.donationFrequency ?? '—'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{donor.relationshipManager?.fullName ?? 'Unassigned'}</td>
                 <td className="px-4 py-3">
-                  <span className={isOverdue(donor.followUpDate) ? 'font-medium text-rose-400' : 'text-[#B9B9AE]'}>
+                  <span className={isOverdue(donor.followUpDate) ? 'font-medium text-rose-400' : 'text-muted-foreground'}>
                     {formatDate(donor.followUpDate)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-[#B9B9AE]">
+                <td className="px-4 py-3 text-muted-foreground">
                   {formatDate(donor.lastInteractionDate)}
                   {donor.lastInteractionType && (
-                    <span className="ml-1.5 text-xs text-[#6B6B60]">({donor.lastInteractionType})</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">({donor.lastInteractionType})</span>
                   )}
                 </td>
               </tr>
@@ -154,10 +154,10 @@ function SkeletonRows() {
   return (
     <>
       {Array.from({ length: 8 }, (_, i) => (
-        <tr key={i} className="border-b border-[#2B2B23] last:border-b-0">
+        <tr key={i} className="border-b border-border last:border-b-0">
           {COLUMNS.map((column) => (
             <td key={column.key} className="px-4 py-3.5">
-              <div className="h-4 w-full max-w-32 animate-pulse rounded-md bg-[#26261D]" aria-hidden />
+              <div className="h-4 w-full max-w-32 animate-pulse rounded-md bg-muted" aria-hidden />
             </td>
           ))}
         </tr>

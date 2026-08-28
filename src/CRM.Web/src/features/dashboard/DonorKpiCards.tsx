@@ -43,21 +43,21 @@ function KpiCard({ label, icon: Icon, query }: KpiCardProps) {
   const { data, isPending, isError } = query;
 
   return (
-    <div className="rounded-2xl border border-[#2B2B23] bg-[#141410] p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium tracking-wide text-[#B9B9AE] uppercase">{label}</span>
-        <Icon className="h-4 w-4 text-[#B9B9AE]" />
+        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
 
       <div className="mt-3">
         {isPending ? (
-          <div className="h-9 w-16 animate-pulse rounded-md bg-[#26261D]" aria-hidden />
+          <div className="h-9 w-16 animate-pulse rounded-md bg-muted" aria-hidden />
         ) : isError ? (
-          <span className="text-2xl font-semibold text-[#B9B9AE]" title="Couldn't load this count">
+          <span className="text-2xl font-semibold text-muted-foreground" title="Couldn't load this count">
             —
           </span>
         ) : (
-          <span className="text-3xl font-semibold text-[#F4F4EE]">{data.pagination.totalCount}</span>
+          <span className="text-3xl font-semibold text-foreground">{data.pagination.totalCount}</span>
         )}
       </div>
     </div>

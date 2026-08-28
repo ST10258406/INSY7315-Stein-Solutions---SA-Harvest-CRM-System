@@ -4,9 +4,9 @@ import { DetailSectionCard, DetailField } from '../../components/DetailSectionCa
 function ContactCard({ title, contact }: { title: string; contact: DonorContactDto | null }) {
   if (!contact) {
     return (
-      <div className="rounded-2xl border border-dashed border-[#2B2B23] bg-[#141410]/60 p-5">
-        <h3 className="text-xs font-semibold tracking-wide text-[#B9B9AE] uppercase">{title}</h3>
-        <p className="mt-4 text-sm text-[#6B6B60]">Not provided.</p>
+      <div className="rounded-2xl border border-dashed border-border bg-card/60 p-5">
+        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+        <p className="mt-4 text-sm text-muted-foreground">Not provided.</p>
       </div>
     );
   }

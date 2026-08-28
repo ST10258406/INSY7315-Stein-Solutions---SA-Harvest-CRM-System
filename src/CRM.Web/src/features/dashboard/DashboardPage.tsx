@@ -6,8 +6,8 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-8 p-8">
       <div>
-        <h1 className="text-2xl font-semibold text-[#F4F4EE]">Dashboard</h1>
-        <p className="mt-1 text-sm text-[#B9B9AE]">An overview of donor activity across S.A. Harvest.</p>
+        <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">An overview of donor activity across S.A. Harvest.</p>
       </div>
 
       <DonorKpiCards />

@@ -12,7 +12,7 @@ const STATUS_OPTIONS: { value: DonorStatus; label: string }[] = [
 ];
 
 const SELECT_CLASSES =
-  'h-9 rounded-lg border border-[#2B2B23] bg-[#141410] px-3 text-sm text-[#F4F4EE] outline-none focus-visible:border-[#F4F4EE] disabled:opacity-50';
+  'h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-foreground/60 disabled:opacity-50';
 
 interface DonorFiltersBarProps {
   filters: DonorFilters;
@@ -67,13 +67,13 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[#6B6B60]" />
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search donors by company name…"
-            className="h-9 w-full rounded-lg border border-[#2B2B23] bg-[#141410] pr-3 pl-9 text-sm text-[#F4F4EE] placeholder:text-[#6B6B60] outline-none focus-visible:border-[#F4F4EE]"
+            className="h-9 w-full rounded-lg border border-border bg-card pr-3 pl-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-foreground/60"
           />
         </div>
 
@@ -97,7 +97,7 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
           className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
             showMore
               ? 'border-brand bg-brand/10 text-brand'
-              : 'border-[#2B2B23] bg-[#141410] text-[#B9B9AE] hover:border-[#F4F4EE]'
+              : 'border-border bg-card text-muted-foreground hover:border-foreground/60'
           }`}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -108,7 +108,7 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
           <button
             type="button"
             onClick={onClear}
-            className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[#B9B9AE] transition-colors hover:text-[#F4F4EE]"
+            className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
             Clear filters
@@ -117,7 +117,7 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
       </div>
 
       {showMore && (
-        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-[#2B2B23] bg-[#141410]/60 p-3">
+        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card/60 p-3">
           <select
             value={filters.companyTypeId ?? ''}
             onChange={(e) => onFilterChange('companyTypeId', e.target.value || undefined)}
@@ -174,7 +174,7 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
             ))}
           </select>
 
-          <label className="flex items-center gap-2 text-sm text-[#B9B9AE]">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             Follow-up before
             <input
               type="date"
