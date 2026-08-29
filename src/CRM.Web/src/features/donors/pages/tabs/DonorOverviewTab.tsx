@@ -5,6 +5,15 @@ import { formatDateTime, joinOrDash } from '../../lib/donorFormatters';
 
 export function DonorOverviewTab({ donor }: { donor: DonorDetailDto }) {
   const { company, donations } = donor;
+  const safeWebsite = (() => {
+    if (!company.website) return null;
+    try {
+      const url = new URL(company.website);
+      return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <div className="flex flex-col gap-4">
@@ -19,8 +28,8 @@ export function DonorOverviewTab({ donor }: { donor: DonorDetailDto }) {
         <DetailField
           label="Website"
           value={
-            company.website ? (
-              <a href={company.website} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+            safeWebsite ? (
+              <a href={safeWebsite} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
                 {company.website}
               </a>
             ) : undefined
