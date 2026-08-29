@@ -7,20 +7,25 @@ const buttonClasses =
 
 /**
  * The two — and only two — primary actions into the system. "To CRM" bypasses
- * auth in dev builds only (see authStore.enableDevBypass); in production it's
- * a plain link and ProtectedRoute enforces the normal /login redirect.
+ * auth in dev builds only (see authStore.enableDevBypass). In production it
+ * takes authenticated users to the dashboard, and unauthenticated users to the
+ * existing /login flow.
  * "To SignIn" always goes through the existing auth flow — there's no
  * separate "Primer Auth" in this codebase, so this points at the real one.
  */
 export function LandingButtons() {
   const navigate = useNavigate();
   const enableDevBypass = useAuthStore((s) => s.enableDevBypass);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   function handleToCrm() {
     if (import.meta.env.DEV) {
       enableDevBypass();
+      navigate(paths.dashboard);
+      return;
     }
-    navigate(paths.dashboard);
+
+    navigate(isAuthenticated ? paths.dashboard : paths.login);
   }
 
   return (
