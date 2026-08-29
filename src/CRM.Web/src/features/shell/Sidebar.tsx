@@ -19,12 +19,12 @@ export function Sidebar() {
 
   if (!isOpen) {
     return (
-      <aside className="flex w-[30px] shrink-0 items-end justify-center bg-[#0C0C0A] pb-4">
+      <aside className="flex w-[30px] shrink-0 items-end justify-center bg-background pb-4">
         <button
           type="button"
           onClick={() => setIsOpen(true)}
           title="Expand rail"
-          className="flex h-10 w-6 items-center justify-center rounded-lg border border-[#2B2B23] bg-[#1A1A14] text-[#B9B9AE] transition-colors hover:border-[#F4F4EE]"
+          className="flex h-10 w-6 items-center justify-center rounded-lg border border-border bg-card text-icon transition-colors hover:border-foreground"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -33,14 +33,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex w-[68px] shrink-0 flex-col items-center bg-[#0C0C0A] py-5.5 pb-4">
-      <div className="mt-4 flex flex-col gap-1 rounded-[26px] border border-[#2B2B23] bg-[#1A1A14] p-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.55)]">
+    <aside className="flex w-[68px] shrink-0 flex-col items-center bg-background py-5.5 pb-4">
+      <div className="mt-4 flex flex-col gap-1 rounded-[26px] border border-border bg-card p-1.5 shadow-[0_1px_3px_var(--shadow)]">
         {quickActions.map(({ title, icon: Icon }) => (
           <button
             key={title}
             type="button"
             title={title}
-            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-[#B9B9AE] transition-colors hover:bg-[#26261D]"
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover"
           >
             <Icon className="h-4 w-4" />
           </button>
@@ -51,7 +51,7 @@ export function Sidebar() {
         type="button"
         onClick={() => setIsOpen(false)}
         title="Collapse rail"
-        className="mt-auto flex h-10 w-10 items-center justify-center rounded-full border border-[#2B2B23] bg-[#1A1A14] text-[#B9B9AE] transition-colors hover:border-[#F4F4EE]"
+        className="mt-auto flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-icon transition-colors hover:border-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>

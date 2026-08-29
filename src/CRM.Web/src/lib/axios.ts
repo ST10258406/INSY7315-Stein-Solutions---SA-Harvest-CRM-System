@@ -45,6 +45,15 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Dev-only landing-page bypass (authStore.enableDevBypass) has no real
+    // token, so every request 401s. Without this, the first one would hit the
+    // refresh attempt below, fail (no refresh token either), and force-logout
+    // back to /login — defeating the bypass immediately. Let the caller's own
+    // error handling (query isError states, etc.) deal with it instead.
+    if (useAuthStore.getState().isDevBypass) {
+      return Promise.reject(error);
+    }
+
     // Don't try to "refresh" the refresh call itself — that's the loop guard.
     if (originalRequest.url?.includes('/auth/refresh')) {
       useAuthStore.getState().logout();

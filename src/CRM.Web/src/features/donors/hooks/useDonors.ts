@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
 import { donorKeys } from './donorKeys';
 import type { ApiError, DonorFilters, DonorListItemDto, PaginatedResult } from '../types';
@@ -12,5 +12,8 @@ export function useDonors(filters: DonorFilters = {}) {
       });
       return data;
     },
+    // Keep the current page's rows on screen while the next page/filter/sort
+    // fetches, instead of flashing the table back to a loading skeleton.
+    placeholderData: keepPreviousData,
   });
 }

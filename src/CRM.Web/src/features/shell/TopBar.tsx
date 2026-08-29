@@ -7,9 +7,12 @@ import {
   BarChart3,
   UserCog,
   LogOut,
+  Sun,
+  Moon,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { paths } from '@/routes/paths';
 import logoImg from '@/assets/sa-harvest-logo.png';
@@ -42,6 +45,8 @@ export function TopBar() {
   const roles = user?.roles ?? [];
   const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
+  const theme = useThemeStore((s) => s.theme);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   // Filtered before render — Admin-only items never reach the DOM for other roles.
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
@@ -49,17 +54,17 @@ export function TopBar() {
   const initials = user ? `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() : '';
 
   return (
-    <header className="flex h-[88px] shrink-0 items-center gap-7 border-b border-[#2B2B23] bg-[#0C0C0A] px-6.5">
+    <header className="flex h-[88px] shrink-0 items-center gap-7 border-b border-border bg-background px-6.5">
       {/* Brand */}
       <Link to={paths.dashboard} className="flex shrink-0 items-center gap-3">
         <img
           src={logoImg}
           alt="S.A. Harvest"
-          className="h-[46px] w-[46px] rounded-2xl border border-[#2B2B23] object-cover"
+          className="h-[46px] w-[46px] rounded-2xl border border-border object-cover"
         />
         <div className="flex flex-col leading-snug">
-          <span className="text-[15.5px] font-extrabold tracking-tight text-[#F4F4EE]">SA Harvest</span>
-          <span className="text-[9.5px] font-bold tracking-[1.4px] text-[#9C9C92]">DONOR CRM</span>
+          <span className="text-[15.5px] font-extrabold tracking-tight text-foreground">SA Harvest</span>
+          <span className="text-[9.5px] font-bold tracking-[1.4px] text-muted-foreground">DONOR CRM</span>
         </div>
       </Link>
 
@@ -75,13 +80,13 @@ export function TopBar() {
               aria-current={isActive ? 'page' : undefined}
               className={`flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
                 isActive
-                  ? 'border-brand bg-brand text-[#16160F] font-bold'
-                  : 'border-[#2B2B23] bg-[#1D1D17] text-[#C9C9C0] hover:border-[#F4F4EE]'
+                  ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
+                  : 'border-border bg-pill text-pill-ink hover:border-foreground'
               }`}
             >
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                  isActive ? 'bg-[#16160F]/20 text-[#16160F]' : 'bg-[#26261D] text-[#B9B9AE]'
+                  isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -94,15 +99,25 @@ export function TopBar() {
 
       {/* User controls */}
       <div className="ml-auto flex shrink-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-card text-icon transition-colors hover:border-foreground"
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+
         <div className="flex items-center gap-2.5 pl-1.5">
-          <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full border-2 border-[#2B2B23] bg-[#1A1A14] text-xs font-bold text-[#F4F4EE]">
+          <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full border-2 border-border bg-secondary text-xs font-bold text-foreground">
             {initials}
           </div>
           <div className="hidden flex-col leading-tight sm:flex">
-            <span className="text-[13px] font-semibold text-[#F4F4EE]">
+            <span className="text-[13px] font-semibold text-foreground">
               {user ? `${user.firstName} ${user.lastName}` : ''}
             </span>
-            <span className="text-[10.5px] text-[#9C9C92]">{roles[0]}</span>
+            <span className="text-[10.5px] text-muted-foreground">{roles[0]}</span>
           </div>
         </div>
 
@@ -111,7 +126,7 @@ export function TopBar() {
           onClick={() => logout()}
           disabled={isLoggingOut}
           title="Log out"
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-[#2B2B23] bg-[#1A1A14] text-[#B9B9AE] transition-colors hover:border-[#F4F4EE] disabled:opacity-50"
+          className="flex h-9.5 w-9.5 items-center justify-center rounded-full border border-border bg-card text-icon transition-colors hover:border-foreground disabled:opacity-50"
         >
           <LogOut className="h-4 w-4" />
         </button>

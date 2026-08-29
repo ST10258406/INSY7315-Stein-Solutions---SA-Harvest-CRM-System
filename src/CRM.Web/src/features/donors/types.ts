@@ -108,14 +108,26 @@ export interface DonorDonationsDto {
   operationalRegions: RegionDto[];
 }
 
+// Mirrors CRM.Domain.Enums.DocumentType exactly (AutoMapper maps it via
+// .ToString(), see DonorMappingProfile) — keep in sync.
+export type DocumentTypeCode = 'BBBEECertificate' | 'Signature';
+
 export interface DonorDocumentDto {
   id: string;
-  documentType: string;
+  documentType: DocumentTypeCode;
   originalFileName: string;
   fileSizeBytes: number;
   mimeType: string;
   uploadedAt: string;
   isActive: boolean;
+}
+
+// Mirrors DocumentDownloadUrlDto (CRM.Application.Modules.Donors.Dtos) — a
+// single-use SAS URL. See useDownloadDonorDocument: never cache/store this.
+export interface DocumentDownloadUrlDto {
+  downloadUrl: string;
+  expiresAt: string;
+  originalFileName: string;
 }
 
 export interface DonorComplianceDto {

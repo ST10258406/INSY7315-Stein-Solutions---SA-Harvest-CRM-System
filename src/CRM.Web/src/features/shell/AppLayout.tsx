@@ -9,7 +9,7 @@ import { Sidebar } from './Sidebar';
  */
 export function AppLayout() {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0C0C0A] text-[#F4F4EE]">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
