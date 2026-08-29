@@ -10,6 +10,7 @@ interface ThemeState {
 }
 
 function applyThemeClass(theme: Theme) {
+  if (typeof document === 'undefined') return;
   document.documentElement.classList.toggle('dark', theme === 'dark');
 }
 
