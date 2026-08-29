@@ -112,7 +112,15 @@ export function DonorTable({
             donors.map((donor) => (
               <tr
                 key={donor.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate(paths.donorDetail(donor.id))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(paths.donorDetail(donor.id));
+                  }
+                }}
                 className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-secondary"
               >
                 <td className="px-4 py-3">
