@@ -18,6 +18,8 @@ const buttonVariants = cva(
           "bg-[var(--brand-green)] text-white font-bold hover:opacity-90 shadow-[0_2px_8px_rgba(30,110,60,0.28)]",
         reject:
           "border-[1.5px] border-[var(--brand-red)] bg-transparent text-[var(--brand-red)] font-bold hover:bg-[var(--brand-red)]/10",
+        destructive:
+          "bg-[var(--brand-red)] text-white font-bold hover:opacity-90 shadow-[0_2px_8px_rgba(220,38,38,0.28)]",
         ghost:
           "bg-transparent text-[var(--ink)] hover:bg-[var(--hover)]",
         outline:

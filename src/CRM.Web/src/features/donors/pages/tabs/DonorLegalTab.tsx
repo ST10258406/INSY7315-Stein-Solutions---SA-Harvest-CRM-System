@@ -1,6 +1,7 @@
 import { ShieldAlert, FileText, Download } from 'lucide-react';
 import type { DonorDetailDto } from '../../types';
 import { Button } from '@/components/ui/button';
+import { DOCUMENT_TYPE_META } from '../../lib/documentTypes';
 
 export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
   const { company, legalAddress, compliance } = donor;
@@ -102,10 +103,10 @@ export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-13 font-bold text-[var(--ink)] truncate">
-                    {doc.fileName}
+                    {doc.originalFileName}
                   </div>
                   <div className="text-[11.5px] font-medium text-[var(--muted2)] mt-0.5">
-                    {doc.documentType.name}
+                    {DOCUMENT_TYPE_META[doc.documentType]?.label ?? doc.documentType}
                   </div>
                 </div>
                 <Button variant="secondary" size="sm" className="shrink-0">
