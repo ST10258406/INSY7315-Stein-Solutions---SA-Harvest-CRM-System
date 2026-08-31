@@ -31,6 +31,7 @@ import { donorToFormValues, formValuesToCreateRequest, formValuesToUpdateRequest
 import { applyServerErrors } from '../lib/applyServerErrors';
 import { FormSection, FormField, FormSelect, FormTextArea, FormCheckbox, FormCheckboxGroup } from './form';
 import type { ApiError } from '../types';
+import { Button } from '@/components/ui/button';
 
 interface DonorFormProps {
   mode: 'create' | 'edit';
@@ -197,13 +198,14 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
         <p className="text-xs text-muted-foreground">
           {donorQuery.error?.response?.data?.message ?? 'Something went wrong.'}
         </p>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => donorQuery.refetch()}
-          className="mt-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-foreground/60"
+          className="mt-1"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -574,20 +576,19 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
               be submitted for approval.
             </p>
             <div className="ml-auto flex items-center gap-2.5">
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => navigate(mode === 'edit' && donorId ? paths.donorDetail(donorId) : paths.donors)}
-                className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/60"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isSaving}
-                className="h-11 rounded-full bg-brand px-6.5 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? 'Saving…' : mode === 'create' ? 'Create donor' : 'Save changes'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

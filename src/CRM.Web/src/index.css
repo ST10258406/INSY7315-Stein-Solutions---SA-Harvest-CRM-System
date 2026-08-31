@@ -1,9 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Matches the CRM-UI-Demo reference repo's index.css font choice so every
+   page (not just donors/dashboard) renders with one consistent typeface. */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
 
 /* Palette ported from the CRM-UI-Demo reference repo
    (github.com/ST10258406/INSY7315-Stein-Solutions---CRM-UI-Demo) so both
@@ -206,4 +212,27 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Ported from the reference repo's index.css for loading-skeleton fidelity. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted2);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes shimmer {
+  0% { background-position: -420px 0; }
+  100% { background-position: 420px 0; }
+}
+
+.animate-shimmer {
+  background-size: 840px 100%;
+  animation: shimmer 1.25s linear infinite;
 }

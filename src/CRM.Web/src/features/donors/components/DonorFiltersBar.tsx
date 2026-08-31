@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import type { SelectHTMLAttributes } from 'react';
+import { Search, SlidersHorizontal, ChevronDown, FilterX } from 'lucide-react';
 import { useCompanyTypes, useOperationalRegions, useDonationTypes, useDonationFrequencies } from '@/features/lookups';
 import type { DonorFilters, DonorStatus } from '../types';
 import type { DonorFilterKey } from '../hooks/useDonorListFilters';
+import { Button } from '@/components/ui/button';
 
 const STATUS_OPTIONS: { value: DonorStatus; label: string }[] = [
   { value: 'PendingReview', label: 'Pending review' },
@@ -11,13 +13,32 @@ const STATUS_OPTIONS: { value: DonorStatus; label: string }[] = [
   { value: 'Rejected', label: 'Rejected' },
 ];
 
-const SELECT_CLASSES =
-  'h-9 rounded-lg border border-border bg-card px-3 text-sm text-foreground outline-none focus-visible:border-foreground/60 disabled:opacity-50';
+const PILL_SELECT_CLASSES =
+  'h-[42px] appearance-none rounded-full border border-[var(--border)] bg-[var(--card)] pr-8 pl-3.5 text-[12.5px] font-semibold text-[var(--ink)] outline-none focus-visible:border-[var(--ink)] disabled:opacity-50 transition-colors';
+
+const PILL_SELECT_ACTIVE_CLASSES =
+  'h-[42px] appearance-none rounded-full border border-brand bg-brand pr-8 pl-3.5 text-[12.5px] font-semibold text-primary-foreground outline-none transition-colors';
 
 interface DonorFiltersBarProps {
   filters: DonorFilters;
   onFilterChange: (key: DonorFilterKey, value: string | undefined) => void;
   onClear: () => void;
+}
+
+function PillSelect({
+  className,
+  isActive,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { isActive?: boolean }) {
+  return (
+    <div className="relative shrink-0">
+      <select 
+        {...props} 
+        className={`${isActive ? PILL_SELECT_ACTIVE_CLASSES : PILL_SELECT_CLASSES} ${className ?? ''}`} 
+      />
+      <ChevronDown className={`pointer-events-none absolute top-1/2 right-3 h-3.5 w-3.5 -translate-y-1/2 ${isActive ? 'text-primary-foreground' : 'text-[var(--icon)]'}`} />
+    </div>
+  );
 }
 
 export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFiltersBarProps) {
@@ -30,18 +51,11 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
   const donationTypes = useDonationTypes();
   const donationFrequencies = useDonationFrequencies();
 
-  // Keep the input in sync when a filter reset (e.g. "Clear filters") changes
-  // `filters.search` out from under the local draft. Adjusted during render
-  // (React's sanctioned pattern for "state derived from a changed prop")
-  // rather than an effect, since an effect would set state after an extra
-  // render/paint instead of before this one commits.
   if (filters.search !== syncedSearch) {
     setSyncedSearch(filters.search);
     setSearchInput(filters.search ?? '');
   }
 
-  // Debounce the search box: only push to the URL (and therefore refetch)
-  // 400ms after the user stops typing, rather than on every keystroke.
   useEffect(() => {
     const trimmed = searchInput.trim();
     if (trimmed === (filters.search ?? '')) return;
@@ -64,125 +78,126 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
     !!filters.followUpBefore;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mb-5">
       <div className="flex flex-wrap items-center gap-2.5">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative flex-1 min-w-[280px]">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-[var(--icon)]" />
+          </div>
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search donors by company name…"
-            className="h-9 w-full rounded-lg border border-border bg-card pr-3 pl-9 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-foreground/60"
+            className="w-full h-[42px] pl-10 pr-4 rounded-full border border-[var(--border)] bg-[var(--card)] text-[13.5px] font-medium text-[var(--ink)] placeholder-[var(--muted-c)] focus:outline-none focus:border-[var(--ink)] transition-colors shadow-sm"
           />
         </div>
 
-        <select
-          value={filters.status ?? ''}
+        <PillSelect 
+          value={filters.status ?? ''} 
           onChange={(e) => onFilterChange('status', e.target.value || undefined)}
-          className={SELECT_CLASSES}
+          isActive={!!filters.status}
         >
-          <option value="">All statuses</option>
+          <option value="">Status: All</option>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </PillSelect>
+        
+        <PillSelect
+          value={filters.companyTypeId ?? ''}
+          onChange={(e) => onFilterChange('companyTypeId', e.target.value || undefined)}
+          disabled={companyTypes.isPending}
+          isActive={!!filters.companyTypeId}
+        >
+          <option value="">Type: All</option>
+          {companyTypes.data?.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.name}
+            </option>
+          ))}
+        </PillSelect>
 
-        <button
-          type="button"
+        <PillSelect
+          value={filters.regionCode ?? ''}
+          onChange={(e) => onFilterChange('regionCode', e.target.value || undefined)}
+          disabled={regions.isPending}
+          isActive={!!filters.regionCode}
+        >
+          <option value="">Region: All</option>
+          {regions.data?.map((region) => (
+            <option key={region.id} value={region.code}>
+              {region.name}
+            </option>
+          ))}
+        </PillSelect>
+
+        <Button
+          variant={showMore ? 'dark' : 'secondary'}
           onClick={() => setShowMore((v) => !v)}
           aria-expanded={showMore}
-          className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
-            showMore
-              ? 'border-brand bg-brand/10 text-brand'
-              : 'border-border bg-card text-muted-foreground hover:border-foreground/60'
-          }`}
         >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <SlidersHorizontal className="h-3.75 w-3.75" />
           More filters
-        </button>
+        </Button>
 
         {hasActiveFilters && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={onClear}
-            className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="font-bold text-[var(--muted-c)] hover:text-[var(--ink)]"
           >
-            <X className="h-3.5 w-3.5" />
-            Clear filters
-          </button>
+            <FilterX className="w-3.5 h-3.5" />
+            Clear
+          </Button>
         )}
       </div>
 
       {showMore && (
-        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card/60 p-3">
-          <select
-            value={filters.companyTypeId ?? ''}
-            onChange={(e) => onFilterChange('companyTypeId', e.target.value || undefined)}
-            disabled={companyTypes.isPending}
-            className={SELECT_CLASSES}
-          >
-            <option value="">All company types</option>
-            {companyTypes.data?.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filters.regionCode ?? ''}
-            onChange={(e) => onFilterChange('regionCode', e.target.value || undefined)}
-            disabled={regions.isPending}
-            className={SELECT_CLASSES}
-          >
-            <option value="">All regions</option>
-            {regions.data?.map((region) => (
-              <option key={region.id} value={region.code}>
-                {region.name}
-              </option>
-            ))}
-          </select>
-
-          <select
+        <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-2xl border border-[var(--border)] bg-[var(--soft)] p-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <PillSelect
             value={filters.donationTypeId ?? ''}
             onChange={(e) => onFilterChange('donationTypeId', e.target.value || undefined)}
             disabled={donationTypes.isPending}
-            className={SELECT_CLASSES}
+            isActive={!!filters.donationTypeId}
           >
-            <option value="">All donation types</option>
+            <option value="">Donation Type: All</option>
             {donationTypes.data?.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}
               </option>
             ))}
-          </select>
+          </PillSelect>
 
-          <select
+          <PillSelect
             value={filters.donationFrequencyId ?? ''}
             onChange={(e) => onFilterChange('donationFrequencyId', e.target.value || undefined)}
             disabled={donationFrequencies.isPending}
-            className={SELECT_CLASSES}
+            isActive={!!filters.donationFrequencyId}
           >
-            <option value="">All frequencies</option>
+            <option value="">Frequency: All</option>
             {donationFrequencies.data?.map((frequency) => (
               <option key={frequency.id} value={frequency.id}>
                 {frequency.name}
               </option>
             ))}
-          </select>
+          </PillSelect>
 
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            Follow-up before
+          <div className="flex items-center gap-2">
+            <span className="text-[12.5px] font-semibold text-[var(--muted-c)] ml-1">Follow-up before:</span>
             <input
               type="date"
               value={filters.followUpBefore ?? ''}
               onChange={(e) => onFilterChange('followUpBefore', e.target.value || undefined)}
-              className={SELECT_CLASSES}
+              className={`h-[42px] rounded-full border px-3.5 text-[12.5px] font-semibold outline-none transition-colors ${
+                filters.followUpBefore 
+                  ? 'border-brand bg-brand text-primary-foreground' 
+                  : 'border-[var(--border)] bg-[var(--card)] text-[var(--ink)] focus-visible:border-[var(--ink)]'
+              }`}
             />
-          </label>
+          </div>
         </div>
       )}
     </div>

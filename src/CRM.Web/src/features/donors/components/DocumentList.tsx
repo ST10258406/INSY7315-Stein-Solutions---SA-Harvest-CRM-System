@@ -6,6 +6,7 @@ import { useDeleteDonorDocument } from '../hooks/useDeleteDonorDocument';
 import { ADMIN_ROLES, DOCUMENT_TYPE_META, isRestrictedDocumentType } from '../lib/documentTypes';
 import { formatDate, formatFileSize } from '../lib/donorFormatters';
 import type { DonorDocumentDto } from '../types';
+import { Button } from '@/components/ui/button';
 
 interface DocumentListProps {
   donorId: string;
@@ -31,16 +32,17 @@ export function DocumentList({ donorId, documents }: DocumentListProps) {
         const deleteFailed = remove.isError && remove.variables?.documentId === doc.id;
 
         const downloadButton = (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="icon"
             onClick={() => download.mutate({ documentId: doc.id })}
             disabled={isDownloadingThis}
             aria-label={`Download ${doc.originalFileName}`}
             title="Download"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-foreground/60 hover:text-foreground disabled:opacity-50"
+            className="h-8 w-8 shrink-0 border-border text-muted-foreground hover:border-foreground/60 hover:text-foreground disabled:opacity-50"
           >
             {isDownloadingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          </button>
+          </Button>
         );
 
         return (
@@ -69,16 +71,17 @@ export function DocumentList({ donorId, documents }: DocumentListProps) {
                   downloadButton
                 )}
                 <RoleGuard allowedRoles={ADMIN_ROLES}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="icon"
                     onClick={() => setPendingDeleteId(doc.id)}
                     disabled={isDeletingThis}
                     aria-label={`Delete ${doc.originalFileName}`}
                     title="Delete"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive disabled:opacity-50"
+                    className="h-8 w-8 shrink-0 border-border text-muted-foreground hover:border-destructive/60 hover:text-destructive disabled:opacity-50"
                   >
                     {isDeletingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  </button>
+                  </Button>
                 </RoleGuard>
               </div>
             </div>
@@ -87,23 +90,25 @@ export function DocumentList({ donorId, documents }: DocumentListProps) {
               <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2">
                 <p className="m-0 text-xs font-medium text-destructive">Delete this document? This can't be undone.</p>
                 <div className="flex shrink-0 items-center gap-3">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setPendingDeleteId(null)}
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                    className="h-8 text-xs font-medium text-muted-foreground hover:text-foreground"
                   >
                     Cancel
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={() => {
                       remove.mutate({ documentId: doc.id });
                       setPendingDeleteId(null);
                     }}
-                    className="rounded-full bg-destructive px-3 py-1 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                    className="h-8 px-3 py-1 text-xs font-bold rounded-full"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
