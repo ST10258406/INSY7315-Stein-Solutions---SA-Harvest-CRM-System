@@ -11,6 +11,7 @@ using CRM.Application.Modules.Donors.Queries.GetDonors;
 using CRM.Application.Modules.Interactions.Commands.LogInteraction;
 using CRM.Application.Modules.Interactions.Dtos;
 using CRM.Application.Modules.Interactions.Queries.GetDonorInteractions;
+using CRM.Application.Modules.Tasks.Queries.GetDonorTasks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -81,6 +82,14 @@ public class DonorsController : ControllerBase
             FollowUpDate = request.FollowUpDate
         });
         return StatusCode(201, new { data = result });
+    }
+
+    [HttpGet("{id:guid}/tasks")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> GetDonorTasks(Guid id, [FromQuery] GetDonorTasksQuery query)
+    {
+        var result = await _mediator.Send(query with { DonorId = id });
+        return Ok(result);
     }
 
     [HttpPost("{id:guid}/documents")]
