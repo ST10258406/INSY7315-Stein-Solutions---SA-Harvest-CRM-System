@@ -7,12 +7,17 @@ using System.Text.Json;
 
 public class AuditBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
 {
-    private readonly IApplicationDbContext _dbContext;
+    private readonly IAuditLogRepository _auditLogs;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
 
-    public AuditBehaviour(IApplicationDbContext dbContext, ICurrentUserService currentUserService)
+    public AuditBehaviour(
+        IAuditLogRepository auditLogs,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
-        _dbContext = dbContext;
+        _auditLogs = auditLogs;
+        _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
     }
 
@@ -35,8 +40,8 @@ public class AuditBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, T
                 CreatedAt = DateTime.UtcNow
             };
 
-            _dbContext.AuditLogs.Add(auditLog);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditLogs.AddAsync(auditLog, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         return response;

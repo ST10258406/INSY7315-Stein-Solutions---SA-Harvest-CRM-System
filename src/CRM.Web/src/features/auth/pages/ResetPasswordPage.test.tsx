@@ -97,7 +97,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('Valid submit → mutation fires with token/email from URL plus form values', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { message: 'Password has been reset successfully.' } });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { message: 'Password has been reset successfully.' } });
 
     renderPage();
     fillAndSubmit('Str0ng!Pass', 'Str0ng!Pass');
@@ -113,7 +113,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('Successful reset → shows success message; clicking continue navigates to login', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { message: 'Password has been reset successfully.' } });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { message: 'Password has been reset successfully.' } });
 
     renderPage();
     fillAndSubmit('Str0ng!Pass', 'Str0ng!Pass');
@@ -127,7 +127,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('Failed reset with invalid/expired token → shows invalid-link message', async () => {
-    (api.post as any).mockRejectedValueOnce({
+    vi.mocked(api.post).mockRejectedValueOnce({
       isAxiosError: true,
       response: {
         status: 400,
@@ -150,7 +150,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('Failed reset with generic/network error → shows generic error message', async () => {
-    (api.post as any).mockRejectedValueOnce(new Error('Network Error'));
+    vi.mocked(api.post).mockRejectedValueOnce(new Error('Network Error'));
 
     renderPage();
     fillAndSubmit('Str0ng!Pass', 'Str0ng!Pass');
@@ -161,11 +161,11 @@ describe('ResetPasswordPage', () => {
   });
 
   it('Submit button disabled and shows loading text while isPending', async () => {
-    let resolvePost: any;
+    let resolvePost!: (value?: unknown) => void;
     const postPromise = new Promise((resolve) => {
       resolvePost = resolve;
     });
-    (api.post as any).mockReturnValueOnce(postPromise);
+    vi.mocked(api.post).mockReturnValueOnce(postPromise);
 
     renderPage();
     fillAndSubmit('Str0ng!Pass', 'Str0ng!Pass');

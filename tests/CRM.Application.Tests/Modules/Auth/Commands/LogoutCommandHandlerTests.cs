@@ -1,20 +1,19 @@
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Domain.Entities;
-using MockQueryable.NSubstitute;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Auth.Commands;
 
 public class LogoutCommandHandlerTests
 {
-    private readonly IApplicationDbContext _contextMock;
+    private readonly IRefreshTokenRepository _refreshTokensMock = Substitute.For<IRefreshTokenRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
     private readonly LogoutCommandHandler _handler;
 
     public LogoutCommandHandlerTests()
     {
-        _contextMock = Substitute.For<IApplicationDbContext>();
-        _handler = new LogoutCommandHandler(_contextMock);
+        _handler = new LogoutCommandHandler(_refreshTokensMock, _unitOfWorkMock);
     }
 
     [Fact]
@@ -28,9 +27,7 @@ public class LogoutCommandHandlerTests
             IsRevoked = false
         };
 
-        var tokensList = new List<RefreshToken> { refreshToken };
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(refreshToken);
 
         var command = new LogoutCommand("valid-token");
 
@@ -39,7 +36,7 @@ public class LogoutCommandHandlerTests
 
         // Assert
         Assert.True(refreshToken.IsRevoked);
-        await _contextMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -53,9 +50,7 @@ public class LogoutCommandHandlerTests
             IsRevoked = true
         };
 
-        var tokensList = new List<RefreshToken> { refreshToken };
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenAsync("revoked-token", Arg.Any<CancellationToken>()).Returns(refreshToken);
 
         var command = new LogoutCommand("revoked-token");
 
@@ -64,16 +59,15 @@ public class LogoutCommandHandlerTests
 
         // Assert
         Assert.True(refreshToken.IsRevoked); // stays true
-        await _contextMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_NonExistentToken_DoesNotThrow()
     {
         // Arrange
-        var tokensList = new List<RefreshToken>();
-        var mockDbSet = tokensList.BuildMockDbSet();
-        _contextMock.RefreshTokens.Returns(mockDbSet);
+        _refreshTokensMock.GetByTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((RefreshToken?)null);
 
         var command = new LogoutCommand("nonexistent-token");
 
@@ -82,6 +76,6 @@ public class LogoutCommandHandlerTests
 
         // Assert
         Assert.Null(exception);
-        await _contextMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

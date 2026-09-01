@@ -19,6 +19,9 @@ public class DonorDocumentConfiguration : IEntityTypeConfiguration<DonorDocument
         builder.Property(x => x.DocumentType).HasColumnName("document_type").HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(x => x.FileName).HasColumnName("file_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.BlobStoragePath).HasColumnName("blob_storage_path").HasColumnType("text").IsRequired();
+        builder.Property(x => x.FileSizeBytes).HasColumnName("file_size_bytes").IsRequired();
+        builder.Property(x => x.MimeType).HasColumnName("mime_type").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.IsActive).HasColumnName("is_active").IsRequired().HasDefaultValue(true);
         builder.Property(x => x.UploadedByUserId).HasColumnName("uploaded_by_user_id");
 
         builder.HasOne(x => x.Donor).WithMany(x => x.Documents).HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Cascade);

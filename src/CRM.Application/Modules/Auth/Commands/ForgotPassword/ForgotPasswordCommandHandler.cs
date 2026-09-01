@@ -2,26 +2,30 @@ using System.Security.Cryptography;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Dtos;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Application.Modules.Auth.Commands.ForgotPassword;
 
 public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordCommand, ForgotPasswordResponseDto>
 {
     private const string GenericMessage = "If this email address exists, a reset link has been sent.";
-    private readonly IApplicationDbContext _context;
+    private readonly IUserRepository _users;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IEmailService _emailService;
 
-    public ForgotPasswordCommandHandler(IApplicationDbContext context, IEmailService emailService)
+    public ForgotPasswordCommandHandler(
+        IUserRepository users,
+        IUnitOfWork unitOfWork,
+        IEmailService emailService)
     {
-        _context = context;
+        _users = users;
+        _unitOfWork = unitOfWork;
         _emailService = emailService;
     }
 
     public async Task<ForgotPasswordResponseDto> Handle(ForgotPasswordCommand request, CancellationToken ct)
     {
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+        // Tracked lookup — the token fields below are mutated on this instance.
+        var user = await _users.GetByEmailAsync(request.Email, ct);
 
         // IMPORTANT: do this DB lookup and the branching below unconditionally
         // for every request, existing user or not. Do NOT short-circuit with
@@ -35,7 +39,7 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
 
             user.PasswordResetToken = token;
             user.PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
-            await _context.SaveChangesAsync(ct);
+            await _unitOfWork.SaveChangesAsync(ct);
 
             var resetLink = $"http://localhost:5173/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(user.Email)}";
 

@@ -1,62 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/* Matches the CRM-UI-Demo reference repo's index.css font choice so every
+   page (not just donors/dashboard) renders with one consistent typeface. */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* Palette ported from the CRM-UI-Demo reference repo
+   (github.com/ST10258406/INSY7315-Stein-Solutions---CRM-UI-Demo) so both
+   themes match it exactly. Reference token names are kept as-is below and
+   then aliased onto our existing shadcn-style names (--background,
+   --foreground, --card, ...) so every component already written against
+   those names picks up the new palette for free. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  
-  /* Primary Accent: Yellow */
-  --primary: oklch(0.85 0.15 90);
-  --primary-foreground: oklch(0.2 0 0);
-  
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.85 0.15 90);
+  --page: #F2F2EF;
+  --card-surface: #FFFFFF;
+  --soft: #EDEDE9;
+  --border-c: #E4E4DE;
+  --hair: #F0F0EB;
+  --divider: #EBEBE5;
+  --ink: #16160F;
+  --muted-c: #82827A;
+  --muted2: #9A9A90;
+  --icon: #4A4A43;
+  --icon-bg: #F4F4F0;
+  --hover: #EFEFEB;
+  --row-hover: #FAFAF7;
+  --pill: #F4F4F1;
+  --pill-ink: #3D3D36;
+  --pill-icon-bg: #FFFFFF;
+  --pill-active-bg: #16160F;
+  --pill-active-fg: #FFFFFF;
+  --pill-active-icon: #FADF01;
+  --badge-bg: #16160F;
+  --badge-fg: #FADF01;
+  --field: #FAFAF8;
+  --chip: #F1F1EC;
+  --shadow: rgba(20, 20, 15, .05);
+  --bar-track: #E7E7E1;
+  --urgent: #1A1A12;
+  --brand-yellow: #FADF01;
+  --brand-green: #1E6E3C;
+  --brand-red: #C0272B;
+  --info-bg: #FCF6D8;
+  --info-border: #EFE0A0;
+  --skel: #EAEAE4;
+  --skel2: #F5F5F1;
+
+  /* Aliases onto the token names the rest of the app already consumes via
+     Tailwind utilities (bg-background, text-foreground, border-border, ...) */
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--card-surface);
+  --card-foreground: var(--ink);
+  --popover: var(--card-surface);
+  --popover-foreground: var(--ink);
+
+  --primary: var(--brand-yellow);
+  /* Fixed, not var(--ink): --brand-yellow is deliberately the same value in
+     both themes (see --brand below), so the text/icon color sitting on top
+     of it must stay fixed too — tying it to --ink made it flip to near-white
+     in dark mode (--ink is the page's foreground, not a "safe on yellow"
+     color) and made brand-colored buttons/tabs/chips unreadable. */
+  --primary-foreground: #16160F;
+
+  --secondary: var(--soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--soft);
+  --muted-foreground: var(--muted-c);
+  --accent: var(--hover);
+  --accent-foreground: var(--ink);
+  --destructive: var(--brand-red);
+  --border: var(--border-c);
+  --input: var(--border-c);
+  --ring: var(--brand-yellow);
   --radius: 0.625rem;
+
+  /* App shell brand accent — must stay exactly rgb(250 223 1)/#FADF01, same
+     value in light and dark, so it's declared once here. */
+  --brand: var(--brand-yellow);
 }
 
 .dark {
-  /* Deep dark background inspired by Laravel */
-  --background: oklch(0.15 0.01 270);
-  --foreground: oklch(0.98 0 0);
-  
-  --card: oklch(0.2 0.01 270 / 0.5); /* Glassmorphism ready */
-  --card-foreground: oklch(0.98 0 0);
-  
-  --popover: oklch(0.18 0.01 270);
-  --popover-foreground: oklch(0.98 0 0);
-  
-  /* Primary Accent: Vibrant Yellow */
-  --primary: oklch(0.85 0.18 90);
-  --primary-foreground: oklch(0.15 0.01 270);
-  
-  --secondary: oklch(0.25 0.01 270);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.25 0.01 270);
-  --muted-foreground: oklch(0.7 0 0);
-  --accent: oklch(0.25 0.01 270);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.85 0.18 90);
+  --page: #0C0C0A;
+  --card-surface: #1A1A14;
+  --soft: #131310;
+  --border-c: #2B2B23;
+  --hair: #27271F;
+  --divider: #2B2B23;
+  --ink: #F4F4EE;
+  --muted-c: #9C9C92;
+  --muted2: #86867C;
+  --icon: #B9B9AE;
+  --icon-bg: #26261D;
+  --hover: #26261D;
+  --row-hover: #21211A;
+  --pill: #1D1D17;
+  --pill-ink: #C9C9C0;
+  --pill-icon-bg: #26261D;
+  --pill-active-bg: #FADF01;
+  --pill-active-fg: #16160F;
+  --pill-active-icon: #16160F;
+  --badge-bg: #FADF01;
+  --badge-fg: #16160F;
+  --field: #131310;
+  --chip: #26261D;
+  --shadow: rgba(0, 0, 0, .55);
+  --bar-track: #2E2E25;
+  --urgent: #241F05;
+  --info-bg: #241F05;
+  --info-border: #4A400C;
+  --skel: #26261D;
+  --skel2: #32322A;
+
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--card-surface);
+  --card-foreground: var(--ink);
+  --popover: var(--card-surface);
+  --popover-foreground: var(--ink);
+
+  --primary: var(--brand-yellow);
+  /* Fixed, not var(--ink): --brand-yellow is deliberately the same value in
+     both themes (see --brand below), so the text/icon color sitting on top
+     of it must stay fixed too — tying it to --ink made it flip to near-white
+     in dark mode (--ink is the page's foreground, not a "safe on yellow"
+     color) and made brand-colored buttons/tabs/chips unreadable. */
+  --primary-foreground: #16160F;
+
+  --secondary: var(--soft);
+  --secondary-foreground: var(--ink);
+  --muted: var(--soft);
+  --muted-foreground: var(--muted-c);
+  --accent: var(--hover);
+  --accent-foreground: var(--ink);
+  --destructive: var(--brand-red);
+  --border: var(--border-c);
+  --input: var(--border-c);
+  --ring: var(--brand-yellow);
 }
 
 @theme inline {
+  --color-brand: var(--brand);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -79,6 +169,37 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
+
+  /* Reference-repo tokens exposed directly as Tailwind utilities
+     (bg-field, text-icon, bg-pill-active-bg, ...) for components that need
+     a shade the shadcn alias set above doesn't cover. */
+  --color-page: var(--page);
+  --color-ink: var(--ink);
+  --color-soft: var(--soft);
+  --color-hair: var(--hair);
+  --color-divider: var(--divider);
+  --color-icon: var(--icon);
+  --color-icon-bg: var(--icon-bg);
+  --color-hover: var(--hover);
+  --color-row-hover: var(--row-hover);
+  --color-pill: var(--pill);
+  --color-pill-ink: var(--pill-ink);
+  --color-pill-icon-bg: var(--pill-icon-bg);
+  --color-pill-active-bg: var(--pill-active-bg);
+  --color-pill-active-fg: var(--pill-active-fg);
+  --color-pill-active-icon: var(--pill-active-icon);
+  --color-badge-bg: var(--badge-bg);
+  --color-badge-fg: var(--badge-fg);
+  --color-field: var(--field);
+  --color-chip: var(--chip);
+  --color-bar-track: var(--bar-track);
+  --color-urgent: var(--urgent);
+  --color-brand-green: var(--brand-green);
+  --color-brand-red: var(--brand-red);
+  --color-info-bg: var(--info-bg);
+  --color-info-border: var(--info-border);
+  --color-skel: var(--skel);
+  --color-skel2: var(--skel2);
 }
 
 @layer base {
@@ -91,4 +212,27 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Ported from the reference repo's index.css for loading-skeleton fidelity. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted2);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes shimmer {
+  0% { background-position: -420px 0; }
+  100% { background-position: 420px 0; }
+}
+
+.animate-shimmer {
+  background-size: 840px 100%;
+  animation: shimmer 1.25s linear infinite;
 }

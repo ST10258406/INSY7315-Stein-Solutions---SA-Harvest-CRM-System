@@ -1,11 +1,10 @@
 namespace CRM.Infrastructure.Persistence;
 
-using CRM.Application.Common.Interfaces;
 using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
 using Microsoft.EntityFrameworkCore;
 
-public class CrmDbContext : DbContext, IApplicationDbContext
+public class CrmDbContext : DbContext
 {
     public CrmDbContext(DbContextOptions<CrmDbContext> options) : base(options) { }
 
