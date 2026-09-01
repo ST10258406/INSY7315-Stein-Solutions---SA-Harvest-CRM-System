@@ -47,15 +47,15 @@ public class TasksController : ControllerBase
     [Authorize] // ANY authenticated user may complete a task — not restricted to the assignee
     public async Task<IActionResult> CompleteTask(Guid id)
     {
-        var result = await _mediator.Send(new CompleteTaskCommand { Id = id });
-        return Ok(new { data = result });
+        await _mediator.Send(new CompleteTaskCommand { Id = id });
+        return NoContent();
     }
 
     [HttpPost("{id:guid}/reopen")]
     [Authorize(Policy = "ProcurementOrAbove")] // asymmetric with complete — reopen is Procurement-only
     public async Task<IActionResult> ReopenTask(Guid id)
     {
-        var result = await _mediator.Send(new ReopenTaskCommand { Id = id });
-        return Ok(new { data = result });
+        await _mediator.Send(new ReopenTaskCommand { Id = id });
+        return NoContent();
     }
 }

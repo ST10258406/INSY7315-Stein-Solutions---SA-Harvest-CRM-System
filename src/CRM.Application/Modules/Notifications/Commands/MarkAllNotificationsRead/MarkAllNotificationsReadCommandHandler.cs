@@ -15,8 +15,11 @@ public class MarkAllNotificationsReadCommandHandler : IRequestHandler<MarkAllNot
         _currentUserService = currentUserService;
     }
 
-    public Task Handle(MarkAllNotificationsReadCommand request, CancellationToken cancellationToken)
-        // Single UPDATE, self-committing — no IUnitOfWork round trip needed.
-        => _notifications.MarkAllReadAsync(
+    public async Task Handle(MarkAllNotificationsReadCommand request, CancellationToken cancellationToken)
+    {
+        // Single UPDATE, self-committing — no IUnitOfWork round trip needed. The
+        // affected-row count is intentionally discarded (endpoint returns 204).
+        await _notifications.MarkAllReadAsync(
             _currentUserService.GetCurrentUserId(), DateTime.UtcNow, cancellationToken);
+    }
 }

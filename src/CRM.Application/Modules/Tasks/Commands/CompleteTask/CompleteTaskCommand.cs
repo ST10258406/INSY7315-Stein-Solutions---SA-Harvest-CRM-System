@@ -1,12 +1,14 @@
 namespace CRM.Application.Modules.Tasks.Commands.CompleteTask;
 
 using CRM.Application.Common.Interfaces;
-using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
 
-/// <summary>POST /api/v1/tasks/{id}/complete — any authenticated user, not just the assignee.</summary>
-public class CompleteTaskCommand : IRequest<TaskDto>, IAuditableCommand
+/// <summary>
+/// POST /api/v1/tasks/{id}/complete — any authenticated user, not just the assignee.
+/// Returns 204 No Content.
+/// </summary>
+public class CompleteTaskCommand : IRequest, IAuditableCommand
 {
     public Guid Id { get; set; }
 

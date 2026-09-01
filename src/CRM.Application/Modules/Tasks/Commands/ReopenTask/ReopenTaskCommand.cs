@@ -1,12 +1,14 @@
 namespace CRM.Application.Modules.Tasks.Commands.ReopenTask;
 
 using CRM.Application.Common.Interfaces;
-using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
 
-/// <summary>POST /api/v1/tasks/{id}/reopen — Procurement only (asymmetric with complete).</summary>
-public class ReopenTaskCommand : IRequest<TaskDto>, IAuditableCommand
+/// <summary>
+/// POST /api/v1/tasks/{id}/reopen — Procurement only (asymmetric with complete).
+/// Returns 204 No Content.
+/// </summary>
+public class ReopenTaskCommand : IRequest, IAuditableCommand
 {
     public Guid Id { get; set; }
 

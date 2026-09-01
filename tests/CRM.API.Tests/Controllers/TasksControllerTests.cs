@@ -418,14 +418,12 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
 
         var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyOpenTaskId}/complete", null);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var data = Body(response).GetProperty("data");
-        Assert.True(data.GetProperty("isCompleted").GetBoolean());
-        Assert.NotEqual(JsonValueKind.Null, data.GetProperty("completedAt").ValueKind);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var task = await context.DonorTasks.AsNoTracking().SingleAsync(t => t.Id == f.MyOpenTaskId);
+        Assert.True(task.IsCompleted);
         Assert.Equal(f.LoginUserId, task.CompletedByUserId);
         Assert.NotNull(task.CompletedAt);
     }
@@ -467,12 +465,12 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
 
         var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyCompletedTaskId}/reopen", null);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(Body(response).GetProperty("data").GetProperty("isCompleted").GetBoolean());
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var task = await context.DonorTasks.AsNoTracking().SingleAsync(t => t.Id == f.MyCompletedTaskId);
+        Assert.False(task.IsCompleted);
         Assert.Null(task.CompletedAt);
         Assert.Null(task.CompletedByUserId);
     }

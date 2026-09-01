@@ -1,7 +1,6 @@
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Tasks.Commands.CompleteTask;
 using CRM.Application.Modules.Tasks.Commands.ReopenTask;
-using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Domain.Entities;
 using NSubstitute;
 using AppValidationException = CRM.Application.Common.Exceptions.ValidationException;
@@ -22,8 +21,6 @@ public class CompleteAndReopenTaskCommandHandlerTests
     public CompleteAndReopenTaskCommandHandlerTests()
     {
         _currentUserMock.GetCurrentUserId().Returns(_currentUserId);
-        _tasksMock.GetDtoByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(ci => new TaskDto { Id = ci.ArgAt<Guid>(0) });
 
         _complete = new CompleteTaskCommandHandler(_tasksMock, _unitOfWorkMock, _currentUserMock);
         _reopen = new ReopenTaskCommandHandler(_tasksMock, _unitOfWorkMock);
