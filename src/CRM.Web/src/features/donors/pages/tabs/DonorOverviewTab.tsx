@@ -25,6 +25,13 @@ export function DonorOverviewTab({ donor }: { donor: DonorDetailDto }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div>
           <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Registered company name
+          </div>
+          <div className="text-sm font-semibold text-[var(--ink)]">{company.registeredCompanyName || '—'}</div>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
             Company type
           </div>
           <div className="text-sm font-semibold text-[var(--ink)]">{company.companyType.name}</div>
