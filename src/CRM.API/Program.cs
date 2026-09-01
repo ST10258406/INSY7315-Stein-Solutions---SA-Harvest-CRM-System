@@ -27,6 +27,8 @@ if (app.Environment.EnvironmentName != "Testing")
     }
 
     await DatabaseSeeder.SeedAsync(app.Services);
+
+    app.Services.RegisterCrmRecurringJobs();
 }
 
 app.UseApiMiddleware();

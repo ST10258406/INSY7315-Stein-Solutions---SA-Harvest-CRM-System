@@ -20,6 +20,7 @@ public class DonorTaskConfiguration : IEntityTypeConfiguration<DonorTask>
         builder.Property(x => x.Description).HasColumnName("description").HasColumnType("text");
         builder.Property(x => x.DueDate).HasColumnName("due_date");
         builder.Property(x => x.IsCompleted).HasColumnName("is_completed");
+        builder.Property(x => x.CompletedAt).HasColumnName("completed_at");
 
         builder.Property(x => x.AssignedToUserId).HasColumnName("assigned_to_user_id");
         builder.Property(x => x.CreatedByUserId).HasColumnName("created_by_user_id");

@@ -140,11 +140,12 @@ public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, Don
         {
             await _notificationService.CreateAsync(
                 adminUserId,
-                NotificationType.NewDonorPendingReview,
                 "New donor pending review",
                 $"{donor.CompanyName} was captured and is awaiting approval.",
+                NotificationType.NewDonorPendingReview,
                 donor.Id,
-                nameof(Donor));
+                nameof(Donor),
+                cancellationToken);
         }
 
         // Re-read through the same projection GetDonorByIdQueryHandler uses, rather
