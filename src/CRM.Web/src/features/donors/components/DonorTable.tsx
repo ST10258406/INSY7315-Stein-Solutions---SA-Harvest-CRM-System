@@ -35,7 +35,7 @@ const getStatusClasses = (status: string) => {
 };
 
 const formatStatusText = (status: string) => {
-  if (status === 'PendingReview') return 'Pending Review';
+  if (status === 'PendingReview') return 'Pending review';
   return status;
 };
 

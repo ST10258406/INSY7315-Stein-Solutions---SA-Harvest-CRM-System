@@ -67,7 +67,7 @@ describe('ForgotPasswordPage', () => {
   });
 
   it('Valid submit → mutation fires with correct payload', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { message: 'If this email address exists, a reset link has been sent.' } });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { message: 'If this email address exists, a reset link has been sent.' } });
 
     renderPage();
 
@@ -81,7 +81,7 @@ describe('ForgotPasswordPage', () => {
   });
 
   it('Successful submit → shows generic success message (regardless of whether the account exists)', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { message: 'If this email address exists, a reset link has been sent.' } });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { message: 'If this email address exists, a reset link has been sent.' } });
 
     renderPage();
 
@@ -94,7 +94,7 @@ describe('ForgotPasswordPage', () => {
   });
 
   it('Failed submit (network/server error) → shows generic error message, no success message', async () => {
-    (api.post as any).mockRejectedValueOnce(new Error('Network Error'));
+    vi.mocked(api.post).mockRejectedValueOnce(new Error('Network Error'));
 
     renderPage();
 
@@ -108,11 +108,11 @@ describe('ForgotPasswordPage', () => {
   });
 
   it('Submit button disabled and shows loading text while isPending', async () => {
-    let resolvePost: any;
+    let resolvePost!: (value?: unknown) => void;
     const postPromise = new Promise((resolve) => {
       resolvePost = resolve;
     });
-    (api.post as any).mockReturnValueOnce(postPromise);
+    vi.mocked(api.post).mockReturnValueOnce(postPromise);
 
     renderPage();
 

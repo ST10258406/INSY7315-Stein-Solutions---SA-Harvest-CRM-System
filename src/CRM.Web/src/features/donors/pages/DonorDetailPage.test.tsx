@@ -98,7 +98,7 @@ describe('DonorDetailPage', () => {
 
     renderPage();
 
-    expect(await screen.findByRole('heading', { name: 'Acme Co' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Acme Co/ })).toBeInTheDocument();
     expect(screen.getByText('Acme Co (Pty) Ltd')).toBeInTheDocument();
     expect(screen.getByText('Weekly')).toBeInTheDocument();
   });
@@ -108,9 +108,9 @@ describe('DonorDetailPage', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
 
-    await user.click(screen.getByRole('tab', { name: 'Contacts' }));
+    await user.click(screen.getByRole('tab', { name: /Contacts/ }));
 
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'jane@acme.example' })).toHaveAttribute('href', 'mailto:jane@acme.example');
@@ -122,11 +122,11 @@ describe('DonorDetailPage', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
 
     await user.click(screen.getByRole('tab', { name: 'Legal' }));
 
-    expect(screen.getByText('1 Main St')).toBeInTheDocument();
+    expect(screen.getByText('1 Main St', { exact: false })).toBeInTheDocument();
     expect(screen.getByText('Level 2')).toBeInTheDocument();
     expect(screen.getByText('No documents uploaded for this donor.')).toBeInTheDocument();
   });
@@ -155,7 +155,7 @@ describe('DonorDetailPage', () => {
     });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
     await user.click(screen.getByRole('tab', { name: 'Legal' }));
 
     expect(screen.getByText('bbbee-cert.pdf')).toBeInTheDocument();
@@ -194,7 +194,7 @@ describe('DonorDetailPage', () => {
     });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
     await user.click(screen.getByRole('tab', { name: 'Legal' }));
 
     expect(screen.getByText('bbbee-cert.pdf')).toBeInTheDocument();
@@ -210,7 +210,7 @@ describe('DonorDetailPage', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
 
     await user.click(screen.getByRole('tab', { name: 'CRM' }));
 
@@ -225,9 +225,9 @@ describe('DonorDetailPage', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
 
-    await user.click(screen.getByRole('tab', { name: 'Activity' }));
+    await user.click(screen.getByRole('tab', { name: /Activity/ }));
 
     expect(screen.getByText('Interaction history coming soon')).toBeInTheDocument();
   });
@@ -237,7 +237,7 @@ describe('DonorDetailPage', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
 
     renderPage();
-    await screen.findByRole('heading', { name: 'Acme Co' });
+    await screen.findByRole('heading', { name: /Acme Co/ });
 
     await user.click(screen.getByRole('link', { name: /edit/i }));
 
@@ -276,6 +276,6 @@ describe('DonorDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole('heading', { name: 'Acme Co' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Acme Co/ })).toBeInTheDocument();
   });
 });

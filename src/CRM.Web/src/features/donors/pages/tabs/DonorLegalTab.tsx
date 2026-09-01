@@ -1,7 +1,9 @@
-import { ShieldAlert, FileText, Download } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import type { DonorDetailDto } from '../../types';
-import { Button } from '@/components/ui/button';
-import { DOCUMENT_TYPE_META } from '../../lib/documentTypes';
+import { RoleGuard } from '@/features/auth/components/RoleGuard';
+import { ADMIN_ROLES } from '../../lib/documentTypes';
+import { DocumentList } from '../../components/DocumentList';
+import { DocumentUpload } from '../../components/DocumentUpload';
 
 export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
   const { company, legalAddress, compliance } = donor;
@@ -91,36 +93,17 @@ export function DonorLegalTab({ donor }: { donor: DonorDetailDto }) {
         )}
 
         <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mt-6 mb-2.25 uppercase">
-          B-BBEE DOCUMENTS
+          DOCUMENTS
         </div>
-        
-        {compliance.documents.length > 0 ? (
-          <div className="flex flex-col gap-2.5">
-            {compliance.documents.map((doc) => (
-              <div key={doc.id} className="flex items-center gap-3 p-3.5 rounded-xl bg-[var(--field)] border border-[var(--border)]">
-                <div className="w-9 h-9 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-center shrink-0">
-                  <FileText className="w-4.25 h-4.25 text-[var(--icon)]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-13 font-bold text-[var(--ink)] truncate">
-                    {doc.originalFileName}
-                  </div>
-                  <div className="text-[11.5px] font-medium text-[var(--muted2)] mt-0.5">
-                    {DOCUMENT_TYPE_META[doc.documentType]?.label ?? doc.documentType}
-                  </div>
-                </div>
-                <Button variant="secondary" size="sm" className="shrink-0">
-                  <Download className="w-3.5 h-3.5 stroke-[1.9]" />
-                  <span>Download</span>
-                </Button>
-              </div>
-            ))}
+
+        <DocumentList donorId={donor.id} documents={compliance.documents} />
+
+        <RoleGuard allowedRoles={ADMIN_ROLES}>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DocumentUpload donorId={donor.id} documentType="BBBEECertificate" />
+            <DocumentUpload donorId={donor.id} documentType="Signature" />
           </div>
-        ) : (
-          <div className="text-[13.5px] font-medium text-[var(--muted2)]">
-            No B-BBEE documents uploaded yet.
-          </div>
-        )}
+        </RoleGuard>
       </div>
     </section>
   );

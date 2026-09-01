@@ -46,7 +46,7 @@ export function DonorCrmTab({ donor }: { donor: DonorDetailDto }) {
               <>
                 <span className="inline-flex items-center gap-1.75 px-3 py-1.5 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[12.5px] font-bold">
                   <Check className="w-3.25 h-3.25 stroke-[2.8]" />
-                  <span>Granted</span>
+                  <span>Given</span>
                 </span>
                 <span className="text-xs font-medium text-[var(--muted-c)]">
                   {formatDate(crm.marketingConsentDate) || 'No date recorded'}

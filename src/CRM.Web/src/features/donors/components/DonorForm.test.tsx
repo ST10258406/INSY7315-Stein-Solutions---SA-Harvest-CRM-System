@@ -137,6 +137,9 @@ describe('DonorForm', () => {
   afterEach(cleanup);
 
   it('create mode: submits the filled form and redirects to the new donor detail page', async () => {
+    // Realistic per-keystroke typing across every required field, plus this
+    // is the first test in the file (pays jsdom/environment warm-up cost) —
+    // routinely takes ~10-15s, well past the default 5000ms timeout.
     const user = userEvent.setup();
     mockApi();
     vi.mocked(api.post).mockResolvedValue({ data: { data: donorDetail({ id: 'new-donor-id' }) } });
@@ -157,7 +160,7 @@ describe('DonorForm', () => {
     });
 
     expect(await screen.findByTestId('donor-detail')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('blocks submission and shows an error when the income tax number starts with 4', async () => {
     const user = userEvent.setup();

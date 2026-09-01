@@ -1,13 +1,14 @@
-import { Users, Clock, Database } from 'lucide-react';
+import { Users, Clock, Database, UserX } from 'lucide-react';
 import { useDonors } from '@/features/donors/hooks';
 
 export function DonorKpiCards() {
   const total = useDonors({ pageSize: 1 });
   const active = useDonors({ status: 'Active', pageSize: 1 });
   const pending = useDonors({ status: 'PendingReview', pageSize: 1 });
+  const lapsed = useDonors({ status: 'Lapsed', pageSize: 1 });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       {/* Card 1: Total Donors */}
       <div className="bg-[var(--card)] rounded-xl p-[18px_18px_0] shadow-[0_1px_3px_var(--shadow)]">
         <div className="flex items-center gap-2.25 mb-4">
@@ -23,7 +24,7 @@ export function DonorKpiCards() {
           {total.isPending ? (
             <div className="h-8.5 w-16 animate-pulse rounded-md bg-[var(--skel)]" aria-hidden />
           ) : total.isError ? (
-            <span className="text-[var(--muted-c)]">—</span>
+            <span className="text-[var(--muted-c)]" title="Couldn't load this count">—</span>
           ) : (
             total.data?.pagination.totalCount ?? 0
           )}
@@ -64,7 +65,7 @@ export function DonorKpiCards() {
           {active.isPending ? (
             <div className="h-8.5 w-16 animate-pulse rounded-md bg-[var(--skel)]" aria-hidden />
           ) : active.isError ? (
-            <span className="text-[var(--muted-c)]">—</span>
+            <span className="text-[var(--muted-c)]" title="Couldn't load this count">—</span>
           ) : (
             active.data?.pagination.totalCount ?? 0
           )}
@@ -105,7 +106,7 @@ export function DonorKpiCards() {
           {pending.isPending ? (
             <div className="h-8.5 w-16 animate-pulse rounded-md bg-brand/20" aria-hidden />
           ) : pending.isError ? (
-            <span className="text-white/50">—</span>
+            <span className="text-white/50" title="Couldn't load this count">—</span>
           ) : (
             pending.data?.pagination.totalCount ?? 0
           )}
@@ -123,6 +124,47 @@ export function DonorKpiCards() {
           />
           <path
             d="M0 40 L18 30 L36 38 L54 24 L72 32 L90 18 L108 28 L126 20 L144 30 L162 18 L180 26 L198 14 L220 22"
+            fill="none"
+            stroke="#FADF01"
+            strokeWidth="2.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+
+      {/* Card 4: Lapsed Donors */}
+      <div className="bg-[var(--card)] rounded-xl p-[18px_18px_0] shadow-[0_1px_3px_var(--shadow)]">
+        <div className="flex items-center gap-2.25 mb-4">
+          <div className="w-7.5 h-7.5 rounded-lg bg-[var(--icon-bg)] flex items-center justify-center text-[var(--ink)]">
+            <UserX className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-bold text-[var(--ink)]">Lapsed Donors</span>
+        </div>
+        <div className="flex items-center gap-1.25 mb-0.5">
+          <span className="text-xs font-bold text-[var(--muted-c)]">Needs follow-up</span>
+        </div>
+        <div className="text-[28px] font-extrabold tracking-tight mb-1.5 text-[var(--ink)]">
+          {lapsed.isPending ? (
+            <div className="h-8.5 w-16 animate-pulse rounded-md bg-[var(--skel)]" aria-hidden />
+          ) : lapsed.isError ? (
+            <span className="text-[var(--muted-c)]" title="Couldn't load this count">—</span>
+          ) : (
+            lapsed.data?.pagination.totalCount ?? 0
+          )}
+        </div>
+        <svg viewBox="0 0 220 62" preserveAspectRatio="none" className="block w-full h-[62px]">
+          <defs>
+            <linearGradient id="sparkD" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#FADF01" stopOpacity="0.55" />
+              <stop offset="1" stopColor="#FADF01" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0 20 L18 26 L36 18 L54 30 L72 22 L90 34 L108 26 L126 38 L144 30 L162 40 L180 34 L198 44 L220 38 L220 62 L0 62 Z"
+            fill="url(#sparkD)"
+          />
+          <path
+            d="M0 20 L18 26 L36 18 L54 30 L72 22 L90 34 L108 26 L126 38 L144 30 L162 40 L180 34 L198 44 L220 38"
             fill="none"
             stroke="#FADF01"
             strokeWidth="2.2"
