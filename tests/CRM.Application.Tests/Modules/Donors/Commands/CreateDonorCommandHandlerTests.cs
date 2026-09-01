@@ -110,8 +110,8 @@ public class CreateDonorCommandHandlerTests
         await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
 
         await _notificationServiceMock.Received(2).CreateAsync(
-            Arg.Any<Guid>(), NotificationType.NewDonorPendingReview, Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<Guid?>(), Arg.Any<string?>());
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), NotificationType.NewDonorPendingReview,
+            Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
 
         Assert.Equal("PendingReview", result.Status);
         Assert.Equal("ManualCapture", result.SubmissionSource);
@@ -162,8 +162,8 @@ public class CreateDonorCommandHandlerTests
         await _handler.Handle(command, CancellationToken.None);
 
         await _notificationServiceMock.DidNotReceive().CreateAsync(
-            Arg.Any<Guid>(), Arg.Any<NotificationType>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<Guid?>(), Arg.Any<string?>());
+            Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<NotificationType>(),
+            Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

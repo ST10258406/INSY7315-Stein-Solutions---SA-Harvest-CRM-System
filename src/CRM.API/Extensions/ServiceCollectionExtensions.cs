@@ -116,7 +116,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBlobStorageService, BlobStorageService>();
         services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
-        services.AddScoped<INotificationService, NotificationService>(); // skeleton
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }
