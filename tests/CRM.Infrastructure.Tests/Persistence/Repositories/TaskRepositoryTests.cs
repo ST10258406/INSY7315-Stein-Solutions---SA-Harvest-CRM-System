@@ -189,4 +189,47 @@ public class TaskRepositoryTests
         Assert.Equal(3, total);      // days 1..3
         Assert.Single(items);        // page 2 of size 2 over 3 rows
     }
+
+    [Fact]
+    public async Task AddAsync_StagesTask_CommittedByCallerSaveChanges()
+    {
+        using var context = await CreateSeededContextAsync();
+        var repo = new TaskRepository(context, _mapper);
+
+        var task = MakeTask(_donorId, _assigneeId, DateTime.UtcNow.Date.AddDays(4));
+        await repo.AddAsync(task);
+        await context.SaveChangesAsync();
+
+        using var verify = new CrmDbContext(_options);
+        Assert.True(await verify.DonorTasks.AsNoTracking().AnyAsync(t => t.Id == task.Id));
+    }
+
+    [Fact]
+    public async Task GetDtoByIdAsync_ProjectsNestedDonorAssigneeAndCreator()
+    {
+        using var context = await CreateSeededContextAsync();
+        var task = MakeTask(_donorId, _otherUserId, DateTime.UtcNow.Date.AddDays(2));
+        context.DonorTasks.Add(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new TaskRepository(context, _mapper);
+        var dto = await repo.GetDtoByIdAsync(task.Id);
+
+        Assert.NotNull(dto);
+        Assert.Equal(task.Id, dto!.Id);
+        Assert.Equal("Task Co", dto.Donor.CompanyName);
+        Assert.Equal("Otto Other", dto.AssignedTo.FullName);
+        Assert.Equal("Ann Assignee", dto.CreatedBy.FullName);
+        Assert.Null(dto.CompletedBy);
+    }
+
+    [Fact]
+    public async Task GetDtoByIdAsync_UnknownId_ReturnsNull()
+    {
+        using var context = await CreateSeededContextAsync();
+        var repo = new TaskRepository(context, _mapper);
+
+        Assert.Null(await repo.GetDtoByIdAsync(Guid.NewGuid()));
+    }
 }

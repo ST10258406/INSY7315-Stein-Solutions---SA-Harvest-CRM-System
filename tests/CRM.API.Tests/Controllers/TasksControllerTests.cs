@@ -243,4 +243,107 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    [Fact]
+    public async Task CreateDonorTask_Valid_Returns201AndAppearsInTheDonorFeed()
+    {
+        var f = await SetupAsync("Procurement");
+        var due = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(6);
+
+        var post = await f.Client.PostAsJsonAsync($"/api/v1/donors/{f.DonorId}/tasks", new
+        {
+            title = "Confirm August pickup",
+            description = "Call the warehouse manager",
+            assignedToUserId = f.OtherUserId,
+            dueDate = due.ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.Created, post.StatusCode);
+        var created = Body(post).GetProperty("data");
+        Assert.Equal("Confirm August pickup", created.GetProperty("title").GetString());
+        Assert.Equal(f.OtherUserId, created.GetProperty("assignedTo").GetProperty("id").GetGuid());
+        Assert.False(created.GetProperty("isCompleted").GetBoolean());
+
+        var list = Body(await f.Client.GetAsync($"/api/v1/donors/{f.DonorId}/tasks"));
+        Assert.Equal(4, list.GetProperty("pagination").GetProperty("totalCount").GetInt32()); // 3 seeded + 1 new
+    }
+
+    [Fact]
+    public async Task CreateDonorTask_NotifiesTheAssignee()
+    {
+        var f = await SetupAsync("Procurement");
+
+        await f.Client.PostAsJsonAsync($"/api/v1/donors/{f.DonorId}/tasks", new
+        {
+            title = "Ping assignee",
+            assignedToUserId = f.OtherUserId,
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2).ToString("yyyy-MM-dd")
+        });
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var notification = await context.Notifications.AsNoTracking().SingleAsync(n => n.UserId == f.OtherUserId);
+        Assert.Equal(NotificationType.TaskAssigned, notification.NotificationType);
+        Assert.Equal("DonorTask", notification.RelatedEntityType);
+    }
+
+    [Fact]
+    public async Task CreateDonorTask_PastDueDate_Returns400()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var post = await f.Client.PostAsJsonAsync($"/api/v1/donors/{f.DonorId}/tasks", new
+        {
+            title = "Too late",
+            assignedToUserId = f.OtherUserId,
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1).ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, post.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateDonorTask_UnknownDonor_Returns404()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var post = await f.Client.PostAsJsonAsync($"/api/v1/donors/{Guid.NewGuid()}/tasks", new
+        {
+            title = "x",
+            assignedToUserId = f.OtherUserId,
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2).ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, post.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateDonorTask_UnknownAssignedUser_Returns404()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var post = await f.Client.PostAsJsonAsync($"/api/v1/donors/{f.DonorId}/tasks", new
+        {
+            title = "x",
+            assignedToUserId = Guid.NewGuid(),
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2).ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, post.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateDonorTask_MarketingUser_Forbidden()
+    {
+        var f = await SetupAsync("Marketing");
+
+        var post = await f.Client.PostAsJsonAsync($"/api/v1/donors/{f.DonorId}/tasks", new
+        {
+            title = "x",
+            assignedToUserId = f.OtherUserId,
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2).ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+    }
 }

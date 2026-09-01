@@ -5,6 +5,7 @@ using AutoMapper.QueryableExtensions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Tasks.Dtos;
+using CRM.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 public class TaskRepository : ITaskRepository
@@ -47,4 +48,17 @@ public class TaskRepository : ITaskRepository
 
         return (items, totalCount);
     }
+
+    public Task AddAsync(DonorTask task, CancellationToken cancellationToken = default)
+    {
+        _context.DonorTasks.Add(task);
+        return Task.CompletedTask;
+    }
+
+    public Task<TaskDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.DonorTasks
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .ProjectTo<TaskDto>(_mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(cancellationToken);
 }

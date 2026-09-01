@@ -11,6 +11,8 @@ using CRM.Application.Modules.Donors.Queries.GetDonors;
 using CRM.Application.Modules.Interactions.Commands.LogInteraction;
 using CRM.Application.Modules.Interactions.Dtos;
 using CRM.Application.Modules.Interactions.Queries.GetDonorInteractions;
+using CRM.Application.Modules.Tasks.Commands.CreateTask;
+using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Application.Modules.Tasks.Queries.GetDonorTasks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -90,6 +92,21 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(query with { DonorId = id });
         return Ok(result);
+    }
+
+    [HttpPost("{id:guid}/tasks")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> CreateDonorTask(Guid id, [FromBody] CreateTaskRequest request)
+    {
+        var result = await _mediator.Send(new CreateTaskCommand
+        {
+            DonorId = id,
+            Title = request.Title,
+            Description = request.Description,
+            AssignedToUserId = request.AssignedToUserId,
+            DueDate = request.DueDate
+        });
+        return StatusCode(201, new { data = result });
     }
 
     [HttpPost("{id:guid}/documents")]
