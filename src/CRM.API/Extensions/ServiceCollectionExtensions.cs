@@ -6,6 +6,7 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Auth;
+using CRM.Infrastructure.Jobs;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
@@ -119,6 +120,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBlobStorageService, BlobStorageService>();
         services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Recurring background jobs
+        services.AddScoped<ITaskDueNotificationJob, TaskDueNotificationJob>();
 
         return services;
     }

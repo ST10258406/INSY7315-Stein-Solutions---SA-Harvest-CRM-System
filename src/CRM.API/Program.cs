@@ -1,6 +1,8 @@
 using CRM.API.Extensions;
+using CRM.Application.Common.Interfaces;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Seeders;
+using Hangfire;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +29,13 @@ if (app.Environment.EnvironmentName != "Testing")
     }
 
     await DatabaseSeeder.SeedAsync(app.Services);
+
+    // Daily 04:00 UTC = 06:00 SAST (UTC+2). AddOrUpdate is declarative — safe to
+    // call on every startup; it just keeps the schedule in sync.
+    RecurringJob.AddOrUpdate<ITaskDueNotificationJob>(
+        "task-due-notifications",
+        job => job.RunAsync(CancellationToken.None),
+        "0 4 * * *");
 }
 
 app.UseApiMiddleware();
