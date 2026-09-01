@@ -55,6 +55,10 @@ public class TaskRepository : ITaskRepository
         return Task.CompletedTask;
     }
 
+    public Task<DonorTask?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+        // Tracked (no AsNoTracking) — feeds a write.
+        => _context.DonorTasks.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
     public Task<TaskDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.DonorTasks
             .AsNoTracking()

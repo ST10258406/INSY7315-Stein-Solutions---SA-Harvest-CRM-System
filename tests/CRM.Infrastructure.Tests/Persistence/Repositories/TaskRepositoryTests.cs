@@ -232,4 +232,38 @@ public class TaskRepositoryTests
 
         Assert.Null(await repo.GetDtoByIdAsync(Guid.NewGuid()));
     }
+
+    [Fact]
+    public async Task GetForUpdateAsync_ReturnsTrackedEntity_ThatCommitsOnSave()
+    {
+        using var context = await CreateSeededContextAsync();
+        var task = MakeTask(_donorId, _assigneeId, DateTime.UtcNow.Date.AddDays(2));
+        context.DonorTasks.Add(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new TaskRepository(context, _mapper);
+        var tracked = await repo.GetForUpdateAsync(task.Id);
+        Assert.NotNull(tracked);
+
+        tracked!.IsCompleted = true;
+        tracked.CompletedAt = DateTime.UtcNow;
+        tracked.CompletedByUserId = _otherUserId;
+        await context.SaveChangesAsync();
+
+        using var verify = new CrmDbContext(_options);
+        var reloaded = await verify.DonorTasks.AsNoTracking().SingleAsync(t => t.Id == task.Id);
+        Assert.True(reloaded.IsCompleted);
+        Assert.NotNull(reloaded.CompletedAt);
+        Assert.Equal(_otherUserId, reloaded.CompletedByUserId);
+    }
+
+    [Fact]
+    public async Task GetForUpdateAsync_UnknownId_ReturnsNull()
+    {
+        using var context = await CreateSeededContextAsync();
+        var repo = new TaskRepository(context, _mapper);
+
+        Assert.Null(await repo.GetForUpdateAsync(Guid.NewGuid()));
+    }
 }

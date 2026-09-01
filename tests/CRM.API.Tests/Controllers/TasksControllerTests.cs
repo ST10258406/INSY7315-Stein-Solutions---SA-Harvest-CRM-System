@@ -51,7 +51,9 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
         });
     }
 
-    private sealed record Fixture(HttpClient Client, Guid LoginUserId, Guid OtherUserId, Guid DonorId, Guid OtherDonorId);
+    private sealed record Fixture(
+        HttpClient Client, Guid LoginUserId, Guid OtherUserId, Guid DonorId, Guid OtherDonorId,
+        Guid MyOpenTaskId, Guid MyCompletedTaskId);
 
     private async Task<Fixture> SetupAsync(string roleName)
     {
@@ -91,9 +93,11 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
         context.Donors.AddRange(donor, otherDonor);
 
         var today = DateTime.UtcNow.Date;
+        var myOpen = MakeTask(donor.Id, loginUser.Id, loginUser.Id, today.AddDays(2));                  // mine, open
+        var myCompleted = MakeTask(donor.Id, loginUser.Id, loginUser.Id, today.AddDays(10), completed: true); // mine, completed
         context.DonorTasks.AddRange(
-            MakeTask(donor.Id, loginUser.Id, loginUser.Id, today.AddDays(2)),                       // mine, open
-            MakeTask(donor.Id, loginUser.Id, loginUser.Id, today.AddDays(10), completed: true),     // mine, completed
+            myOpen,
+            myCompleted,
             MakeTask(donor.Id, otherUser.Id, loginUser.Id, today.AddDays(1)),                       // other's, open, same donor
             MakeTask(otherDonor.Id, loginUser.Id, loginUser.Id, today.AddDays(3)));                 // mine, open, other donor
 
@@ -104,7 +108,7 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
             await login.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
 
-        return new Fixture(client, loginUser.Id, otherUser.Id, donor.Id, otherDonor.Id);
+        return new Fixture(client, loginUser.Id, otherUser.Id, donor.Id, otherDonor.Id, myOpen.Id, myCompleted.Id);
     }
 
     private static Donor MakeDonor(string name, Guid creatorId) => new()
@@ -345,5 +349,151 @@ public class TasksControllerTests : IClassFixture<WebApplicationFactory<Program>
         });
 
         Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+    }
+
+    // ---- PATCH /tasks/{id} ---------------------------------------------------
+
+    [Fact]
+    public async Task PatchTask_PartialUpdate_ChangesOnlyProvidedFields()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var patch = await f.Client.PatchAsJsonAsync($"/api/v1/tasks/{f.MyOpenTaskId}", new { title = "Renamed task" });
+
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+        var data = Body(patch).GetProperty("data");
+        Assert.Equal("Renamed task", data.GetProperty("title").GetString());
+        Assert.False(data.GetProperty("isCompleted").GetBoolean());
+    }
+
+    [Fact]
+    public async Task PatchTask_ReassignToUnknownUser_Returns404()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var patch = await f.Client.PatchAsJsonAsync($"/api/v1/tasks/{f.MyOpenTaskId}", new { assignedToUserId = Guid.NewGuid() });
+
+        Assert.Equal(HttpStatusCode.NotFound, patch.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchTask_PastDueDate_Returns400()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var patch = await f.Client.PatchAsJsonAsync($"/api/v1/tasks/{f.MyOpenTaskId}", new
+        {
+            dueDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-2).ToString("yyyy-MM-dd")
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, patch.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchTask_UnknownTask_Returns404()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var patch = await f.Client.PatchAsJsonAsync($"/api/v1/tasks/{Guid.NewGuid()}", new { title = "x" });
+
+        Assert.Equal(HttpStatusCode.NotFound, patch.StatusCode);
+    }
+
+    [Fact]
+    public async Task PatchTask_MarketingUser_Forbidden()
+    {
+        var f = await SetupAsync("Marketing");
+
+        var patch = await f.Client.PatchAsJsonAsync($"/api/v1/tasks/{f.MyOpenTaskId}", new { title = "x" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, patch.StatusCode);
+    }
+
+    // ---- POST /tasks/{id}/complete ----------------------------------------
+
+    [Fact]
+    public async Task CompleteTask_OpenTask_AnyAuthenticatedUserCan_SetsCompletionFields()
+    {
+        var f = await SetupAsync("Marketing"); // deliberately the lowest role
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyOpenTaskId}/complete", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = Body(response).GetProperty("data");
+        Assert.True(data.GetProperty("isCompleted").GetBoolean());
+        Assert.NotEqual(JsonValueKind.Null, data.GetProperty("completedAt").ValueKind);
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var task = await context.DonorTasks.AsNoTracking().SingleAsync(t => t.Id == f.MyOpenTaskId);
+        Assert.Equal(f.LoginUserId, task.CompletedByUserId);
+        Assert.NotNull(task.CompletedAt);
+    }
+
+    [Fact]
+    public async Task CompleteTask_AlreadyComplete_Returns400()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyCompletedTaskId}/complete", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompleteTask_UnknownTask_Returns404()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{Guid.NewGuid()}/complete", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompleteTask_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient().PostAsync($"/api/v1/tasks/{Guid.NewGuid()}/complete", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ---- POST /tasks/{id}/reopen ----------------------------------------
+
+    [Fact]
+    public async Task ReopenTask_CompletedTask_Procurement_ClearsCompletion()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyCompletedTaskId}/reopen", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False(Body(response).GetProperty("data").GetProperty("isCompleted").GetBoolean());
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var task = await context.DonorTasks.AsNoTracking().SingleAsync(t => t.Id == f.MyCompletedTaskId);
+        Assert.Null(task.CompletedAt);
+        Assert.Null(task.CompletedByUserId);
+    }
+
+    [Fact]
+    public async Task ReopenTask_NotCompleted_Returns400()
+    {
+        var f = await SetupAsync("Procurement");
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyOpenTaskId}/reopen", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReopenTask_MarketingUser_Forbidden_EvenThoughCompleteIsOpenToAll()
+    {
+        var f = await SetupAsync("Marketing");
+
+        var response = await f.Client.PostAsync($"/api/v1/tasks/{f.MyCompletedTaskId}/reopen", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }

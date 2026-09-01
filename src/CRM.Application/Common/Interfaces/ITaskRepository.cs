@@ -16,6 +16,12 @@ public interface ITaskRepository
     /// <summary>Stages a new task for insert. Commit with <see cref="IUnitOfWork.SaveChangesAsync"/>.</summary>
     Task AddAsync(DonorTask task, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Tracked task by id (no includes), ready for mutation by the PATCH / complete / reopen
+    /// handlers. Null when no such task exists.
+    /// </summary>
+    Task<DonorTask?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>Single task projected to <see cref="TaskDto"/>, or null. Used to re-read after a write.</summary>
     Task<TaskDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }
