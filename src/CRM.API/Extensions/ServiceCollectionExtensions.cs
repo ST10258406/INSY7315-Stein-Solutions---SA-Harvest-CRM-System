@@ -68,6 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDonorDocumentRepository, DonorDocumentRepository>();
         services.AddScoped<IInteractionLogRepository, InteractionLogRepository>();
         services.AddScoped<ITaskRepository, TaskRepository>();
+        services.AddScoped<IApprovalRepository, ApprovalRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
