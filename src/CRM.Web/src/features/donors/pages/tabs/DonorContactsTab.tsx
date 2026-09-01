@@ -1,16 +1,16 @@
-import { Users, Phone, Mail, FileText, Plus } from 'lucide-react';
+import { Users, Phone, Mail, FileText, Plus, type LucideIcon } from 'lucide-react';
 import type { DonorContactDto, DonorDetailDto } from '../../types';
 import { Button } from '@/components/ui/button';
 
-function ContactCard({ 
-  title, 
-  contact, 
+function ContactCard({
+  title,
+  contact,
   icon: Icon,
-  isActive = true 
-}: { 
-  title: string; 
+  isActive = true
+}: {
+  title: string;
   contact: DonorContactDto | null;
-  icon: any;
+  icon: LucideIcon;
   isActive?: boolean;
 }) {
   if (!contact) {
@@ -25,7 +25,7 @@ function ContactCard({
           </span>
         </div>
         <div className="flex flex-col items-start gap-2 py-4 pb-5">
-          <div className="text-sm font-semibold text-[var(--muted2)]">Not provided</div>
+          <div className="text-sm font-semibold text-[var(--muted2)]">Not provided.</div>
           <p className="m-0 text-[12.5px] font-medium text-[var(--muted2)] leading-relaxed">
             This donor did not supply {title.toLowerCase()} details.
           </p>

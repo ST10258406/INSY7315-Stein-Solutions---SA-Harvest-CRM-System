@@ -83,7 +83,7 @@ describe('LoginPage', () => {
   });
 
   it('Valid submit → mutation fires with correct payload', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { user: { id: '1', email: 'test@saharvest.org' }, accessToken: 'token' } });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { user: { id: '1', email: 'test@saharvest.org' }, accessToken: 'token' } });
     
     renderLoginPage();
     
@@ -105,7 +105,7 @@ describe('LoginPage', () => {
 
   it('Successful login → authStore.login() called, navigates to dashboard', async () => {
     const mockData = { user: { id: '1', email: 'test@saharvest.org' }, accessToken: 'token' };
-    (api.post as any).mockResolvedValueOnce({ data: mockData });
+    vi.mocked(api.post).mockResolvedValueOnce({ data: mockData });
     
     renderLoginPage();
     
@@ -124,7 +124,7 @@ describe('LoginPage', () => {
   });
 
   it('Failed login (mock 401) → generic error message shown, no navigation happens', async () => {
-    (api.post as any).mockRejectedValueOnce({ response: { status: 401 } });
+    vi.mocked(api.post).mockRejectedValueOnce({ response: { status: 401 } });
     
     renderLoginPage();
     
@@ -144,9 +144,9 @@ describe('LoginPage', () => {
   });
 
   it('Submit button disabled and shows loading text while isPending', async () => {
-    let resolvePost: any;
+    let resolvePost!: (value?: unknown) => void;
     const postPromise = new Promise((resolve) => { resolvePost = resolve; });
-    (api.post as any).mockReturnValueOnce(postPromise);
+    vi.mocked(api.post).mockReturnValueOnce(postPromise);
     
     renderLoginPage();
     
