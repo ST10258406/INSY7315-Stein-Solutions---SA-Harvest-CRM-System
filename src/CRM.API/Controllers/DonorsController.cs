@@ -8,6 +8,9 @@ using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Donors.Queries.GetDocumentDownloadUrl;
 using CRM.Application.Modules.Donors.Queries.GetDonorById;
 using CRM.Application.Modules.Donors.Queries.GetDonors;
+using CRM.Application.Modules.Interactions.Commands.LogInteraction;
+using CRM.Application.Modules.Interactions.Dtos;
+using CRM.Application.Modules.Interactions.Queries.GetDonorInteractions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -55,6 +58,29 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(new UpdateDonorCommand { Id = id, Request = request });
         return Ok(new { data = result });
+    }
+
+    [HttpGet("{id:guid}/interactions")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> GetInteractions(Guid id, [FromQuery] GetDonorInteractionsQuery query)
+    {
+        var result = await _mediator.Send(query with { DonorId = id });
+        return Ok(result);
+    }
+
+    [HttpPost("{id:guid}/interactions")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    public async Task<IActionResult> LogInteraction(Guid id, [FromBody] LogInteractionRequest request)
+    {
+        var result = await _mediator.Send(new LogInteractionCommand
+        {
+            DonorId = id,
+            InteractionType = request.InteractionType,
+            Subject = request.Subject,
+            Body = request.Body,
+            FollowUpDate = request.FollowUpDate
+        });
+        return StatusCode(201, new { data = result });
     }
 
     [HttpPost("{id:guid}/documents")]
