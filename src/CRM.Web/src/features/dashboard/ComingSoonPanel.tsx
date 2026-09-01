@@ -13,10 +13,12 @@ interface ComingSoonPanelProps {
  */
 export function ComingSoonPanel({ icon: Icon, title, description }: ComingSoonPanelProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/60 px-6 py-10 text-center">
-      <Icon className="h-5 w-5 text-muted-foreground" />
-      <p className="text-sm font-medium text-muted-foreground">{title}</p>
-      <p className="text-xs text-muted-foreground">{description}</p>
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card/60 px-6 py-14 text-center">
+      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-icon-bg">
+        <Icon className="h-5 w-5 text-icon" />
+      </span>
+      <p className="m-0 text-sm font-bold tracking-tight text-foreground">{title}</p>
+      <p className="m-0 max-w-[280px] text-xs font-medium text-muted-foreground">{description}</p>
     </div>
   );
 }

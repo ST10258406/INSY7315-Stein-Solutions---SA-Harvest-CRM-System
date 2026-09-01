@@ -1,10 +1,9 @@
+import { ExternalLink } from 'lucide-react';
 import type { DonorDetailDto } from '../../types';
-import { DetailSectionCard, DetailField } from '../../components/DetailSectionCard';
-import { DonorStatusBadge } from '../../components/DonorStatusBadge';
-import { formatDateTime, joinOrDash } from '../../lib/donorFormatters';
 
 export function DonorOverviewTab({ donor }: { donor: DonorDetailDto }) {
   const { company, donations } = donor;
+  
   const safeWebsite = (() => {
     if (!company.website) return null;
     try {
@@ -15,43 +14,102 @@ export function DonorOverviewTab({ donor }: { donor: DonorDetailDto }) {
     }
   })();
 
+  const displayWebsite = safeWebsite ? safeWebsite.replace(/^https?:\/\//, '') : '';
+
   return (
-    <div className="flex flex-col gap-4">
-      <DetailSectionCard title="Company">
-        <DetailField label="Company name" value={company.companyName} />
-        <DetailField label="Company type" value={company.companyType.name} />
-        <DetailField label="Registered name" value={company.registeredCompanyName} />
-        <DetailField label="Trading name" value={company.tradingName} />
-        <DetailField label="Entity type" value={company.entityType.name} />
-        <DetailField label="Registration number" value={company.companyRegistrationNumber} />
-        <DetailField label="Income tax number" value={company.incomeTaxNumber} />
-        <DetailField
-          label="Website"
-          value={
-            safeWebsite ? (
-              <a href={safeWebsite} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
-                {company.website}
-              </a>
-            ) : undefined
-          }
-        />
-      </DetailSectionCard>
+    <section className="bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-[0_1px_3px_var(--shadow)] p-6.5">
+      <h2 className="m-0 mb-5 text-15 font-extrabold tracking-tight text-[var(--ink)]">
+        Company & donation profile
+      </h2>
 
-      <DetailSectionCard title="Donations">
-        <DetailField label="Frequency" value={donations.frequency.name} />
-        <DetailField label="Donation types" value={joinOrDash(donations.types.map((t) => t.name))} />
-        <DetailField label="Operational regions" value={joinOrDash(donations.operationalRegions.map((r) => r.name))} />
-        <DetailField label="Collection address" value={donations.collectionAddress} fullWidth />
-        <DetailField label="Operations / logistics details" value={donations.operationsLogisticsDetails} fullWidth />
-      </DetailSectionCard>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Company type
+          </div>
+          <div className="text-sm font-semibold text-[var(--ink)]">{company.companyType.name}</div>
+        </div>
 
-      <DetailSectionCard title="Record">
-        <DetailField label="Status" value={<DonorStatusBadge status={donor.status} />} />
-        <DetailField label="Submission source" value={donor.submissionSource} />
-        <DetailField label="FoodSpace company ID" value={donor.foodspaceCompanyId} />
-        <DetailField label="Created" value={formatDateTime(donor.createdAt)} />
-        <DetailField label="Last updated" value={formatDateTime(donor.updatedAt)} />
-      </DetailSectionCard>
-    </div>
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Website
+          </div>
+          {safeWebsite ? (
+            <a
+              href={safeWebsite}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--ink)] border-b-[1.5px] border-brand hover:text-brand"
+            >
+              <span>{displayWebsite}</span>
+              <ExternalLink className="w-3.25 h-3.25" />
+            </a>
+          ) : (
+            <div className="text-sm font-semibold text-[var(--muted2)]">—</div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Donation frequency
+          </div>
+          <div className="text-sm font-semibold text-[var(--ink)]">{donations.frequency.name}</div>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Operational regions
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {donations.operationalRegions.map((reg) => (
+              <span
+                key={reg.id}
+                className="px-2.5 py-1 rounded-lg bg-[var(--chip)] text-[11.5px] font-bold text-[var(--ink)]"
+              >
+                {reg.name}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-1.75 uppercase">
+            Donation types
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {donations.types.map((dt) => (
+              <span
+                key={dt.id}
+                className="px-2.5 py-1 rounded-lg bg-[var(--chip)] text-[11.5px] font-bold text-[var(--ink)]"
+              >
+                {dt.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="h-px bg-[var(--divider)] my-6" />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-2.25 uppercase">
+            Collection / pickup address
+          </div>
+          <div className="text-[13.5px] font-medium leading-relaxed text-[var(--ink)] whitespace-pre-line">
+            {donations.collectionAddress || '—'}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[11px] font-bold tracking-wider text-[var(--muted2)] mb-2.25 uppercase">
+            Operations / logistics details
+          </div>
+          <p className="m-0 text-[13.5px] font-medium leading-relaxed text-[var(--ink)] whitespace-pre-line">
+            {donations.operationsLogisticsDetails || '—'}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

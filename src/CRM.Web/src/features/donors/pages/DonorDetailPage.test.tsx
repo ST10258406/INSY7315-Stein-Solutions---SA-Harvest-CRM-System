@@ -214,7 +214,8 @@ describe('DonorDetailPage', () => {
 
     await user.click(screen.getByRole('tab', { name: 'CRM' }));
 
-    expect(screen.getByText('Sam RM')).toBeInTheDocument();
+    // "Sam RM" now also appears in the header's relationship-manager badge.
+    expect(screen.getAllByText('Sam RM').length).toBeGreaterThan(0);
     expect(screen.getByText('Given')).toBeInTheDocument();
     expect(screen.getByText('Prefers morning calls.')).toBeInTheDocument();
   });

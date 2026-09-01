@@ -1,9 +1,54 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, Inbox, TriangleAlert } from 'lucide-react';
+import { 
+  ArrowDown, ArrowUp, ArrowUpDown, FilterX, TriangleAlert, 
+  MoreHorizontal, Eye, Edit3, Phone, Mail, Users 
+} from 'lucide-react';
 import { paths } from '@/routes/paths';
 import type { ApiError, DonorListItemDto, DonorSortField } from '../types';
-import { DonorStatusBadge } from './DonorStatusBadge';
-import { formatDate, isOverdue, joinOrDash } from '../lib/donorFormatters';
+import { formatDate, isOverdue } from '../lib/donorFormatters';
+import { Button } from '@/components/ui/button';
+
+function getInitials(name: string) {
+  if (!name) return '??';
+  const parts = name.split(' ');
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
+
+const MANAGER_PALETTE = [
+  '#3F5D46', '#4B5267', '#6A4C3D', '#544766', '#59604C', '#684551', '#425A63'
+];
+
+const getStatusClasses = (status: string) => {
+  switch (status) {
+    case 'Pending Review':
+    case 'PendingReview':
+      return { text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' };
+    case 'Active':
+      return { text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' };
+    case 'Lapsed':
+      return { text: 'text-rose-700 dark:text-rose-400', dot: 'bg-rose-500' };
+    default:
+      return { text: 'text-muted-foreground', dot: 'bg-muted-foreground' };
+  }
+};
+
+const formatStatusText = (status: string) => {
+  if (status === 'PendingReview') return 'Pending Review';
+  return status;
+};
+
+const renderLastInteractionIcon = (type: string | undefined | null) => {
+  switch (type?.toLowerCase()) {
+    case 'email':
+      return <Mail className="w-3.75 h-3.75 text-muted-foreground" />;
+    case 'meeting':
+      return <Users className="w-3.75 h-3.75 text-muted-foreground" />;
+    default:
+      return <Phone className="w-3.75 h-3.75 text-muted-foreground" />;
+  }
+};
 
 interface Column {
   key: string;
@@ -13,13 +58,14 @@ interface Column {
 }
 
 const COLUMNS: Column[] = [
-  { key: 'company', label: 'Company', sortField: 'companyName' },
-  { key: 'status', label: 'Status' },
-  { key: 'region', label: 'Region' },
-  { key: 'frequency', label: 'Donation frequency' },
-  { key: 'rm', label: 'Relationship manager' },
-  { key: 'followUp', label: 'Follow-up date', sortField: 'followUpDate' },
-  { key: 'lastInteraction', label: 'Last interaction', sortField: 'lastInteractionDate' },
+  { key: 'company', label: 'COMPANY NAME', sortField: 'companyName', className: 'text-left py-3.75 pr-3.5 pl-5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'type', label: 'COMPANY TYPE', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'status', label: 'STATUS', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'rm', label: 'RELATIONSHIP MANAGER', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'region', label: 'REGIONS', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'frequency', label: 'DONATION FREQUENCY', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'lastInteraction', label: 'LAST INTERACTION', sortField: 'lastInteractionDate', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
+  { key: 'followUp', label: 'FOLLOW-UP DATE', sortField: 'followUpDate', className: 'text-left py-3.75 px-3.5 text-[11.5px] font-bold tracking-wider text-[var(--muted2)]' },
 ];
 
 interface DonorTableProps {
@@ -48,107 +94,225 @@ export function DonorTable({
   onRetry,
 }: DonorTableProps) {
   const navigate = useNavigate();
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   return (
-    <div
-      className={`overflow-x-auto rounded-2xl border border-border bg-card transition-opacity ${
-        isFetching && !isPending ? 'opacity-60' : ''
-      }`}
-    >
-      <table className="w-full min-w-[900px] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            {COLUMNS.map((column) => (
-              <th key={column.key} className="px-4 py-3 text-left">
-                {column.sortField ? (
-                  <button
-                    type="button"
-                    onClick={() => onSort(column.sortField!)}
-                    className="flex items-center gap-1 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
-                  >
-                    {column.label}
-                    <SortIcon active={sortBy === column.sortField} dir={sortDir} />
-                  </button>
-                ) : (
-                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{column.label}</span>
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {isPending ? (
-            <SkeletonRows />
-          ) : isError ? (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-4 py-12">
-                <div className="flex flex-col items-center justify-center gap-2 text-center">
-                  <TriangleAlert className="h-5 w-5 text-muted-foreground" />
-                  <p className="text-sm font-medium text-muted-foreground">Couldn't load donors</p>
-                  <p className="text-xs text-muted-foreground">{error?.response?.data?.message ?? 'Something went wrong.'}</p>
-                  <button
-                    type="button"
-                    onClick={onRetry}
-                    className="mt-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-foreground/60"
-                  >
-                    Retry
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ) : donors.length === 0 ? (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-4 py-12">
-                <div className="flex flex-col items-center justify-center gap-2 text-center">
-                  <Inbox className="h-5 w-5 text-muted-foreground" />
-                  <p className="text-sm font-medium text-muted-foreground">No donors found</p>
-                  <p className="text-xs text-muted-foreground">
-                    {hasActiveFilters ? 'Try adjusting or clearing your filters.' : 'Donors will appear here once added.'}
-                  </p>
-                </div>
-              </td>
-            </tr>
-          ) : (
-            donors.map((donor) => (
-              <tr
-                key={donor.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(paths.donorDetail(donor.id))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigate(paths.donorDetail(donor.id));
-                  }
-                }}
-                className="cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-secondary"
-              >
-                <td className="px-4 py-3">
-                  <div className="font-medium text-foreground">{donor.companyName}</div>
-                  <div className="text-xs text-muted-foreground">{donor.companyType}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <DonorStatusBadge status={donor.status} />
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{joinOrDash(donor.operationalRegions)}</td>
-                <td className="px-4 py-3 text-muted-foreground">{donor.donationFrequency ?? '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">{donor.relationshipManager?.fullName ?? 'Unassigned'}</td>
-                <td className="px-4 py-3">
-                  <span className={isOverdue(donor.followUpDate) ? 'font-medium text-rose-400' : 'text-muted-foreground'}>
-                    {formatDate(donor.followUpDate)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {formatDate(donor.lastInteractionDate)}
-                  {donor.lastInteractionType && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">({donor.lastInteractionType})</span>
+    <div className={`bg-[var(--card)] rounded-xl shadow-[0_1px_3px_var(--shadow)] overflow-visible ${isFetching && !isPending ? 'opacity-60' : ''}`}>
+      <div className="overflow-x-auto overflow-y-visible pb-16 -mb-16">
+        <table className="w-full border-collapse min-w-[1180px]">
+          <thead>
+            <tr className="bg-[var(--hair)]">
+              {COLUMNS.map((column) => (
+                <th key={column.key} className={column.className}>
+                  {column.sortField ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(column.sortField!)}
+                      className="flex items-center gap-1 font-bold uppercase transition-colors hover:text-[var(--ink)]"
+                    >
+                      {column.label}
+                      <SortIcon active={sortBy === column.sortField} dir={sortDir} />
+                    </button>
+                  ) : (
+                    <span className="font-bold uppercase">
+                      {column.label}
+                    </span>
                   )}
+                </th>
+              ))}
+              <th className="w-14 py-3.75 pr-4 pl-2 bg-[var(--hair)]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {isPending ? (
+              <SkeletonRows />
+            ) : isError ? (
+              <tr>
+                <td colSpan={COLUMNS.length + 1} className="px-4 py-16">
+                  <div className="flex flex-col items-center justify-center gap-2 text-center">
+                    <TriangleAlert className="h-5 w-5 text-[var(--muted-c)]" />
+                    <p className="m-0 text-sm font-medium text-[var(--ink)]">Couldn't load donors</p>
+                    <p className="m-0 text-xs text-[var(--muted-c)]">
+                      {error?.response?.data?.message ?? 'Something went wrong.'}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onRetry}
+                      className="mt-1 border-[var(--border)] text-[var(--ink)] hover:border-[var(--ink)]"
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : donors.length === 0 ? (
+              <tr>
+                <td colSpan={COLUMNS.length + 1} className="px-4 py-16">
+                  <div className="flex flex-col items-center text-center py-4 px-6">
+                    <div className="w-14.5 h-14.5 rounded-2xl bg-[var(--icon-bg)] flex items-center justify-center mb-4.5">
+                      <FilterX className="w-6.5 h-6.5 text-[var(--icon)]" />
+                    </div>
+                    <h3 className="m-0 mb-1.75 text-lg font-extrabold tracking-tight text-[var(--ink)]">
+                      No donors found
+                    </h3>
+                    <p className="m-0 max-w-[340px] text-[13.5px] font-medium text-[var(--muted-c)]">
+                      {hasActiveFilters
+                        ? 'No donor records match the filters you have applied. Try widening your search.'
+                        : 'Donors will appear here once added.'}
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              donors.map((donor, idx) => {
+                const s = getStatusClasses(donor.status);
+                const rmName = donor.relationshipManager?.fullName ?? 'Unassigned';
+                const initials = getInitials(rmName);
+                const avatarBg = rmName !== 'Unassigned' ? MANAGER_PALETTE[idx % MANAGER_PALETTE.length] : '#3B4A40';
+                
+                const shownRegions = donor.operationalRegions.slice(0, 2);
+                const extraRegions = donor.operationalRegions.length - shownRegions.length;
+
+                return (
+                  <tr
+                    key={donor.id}
+                    onClick={() => navigate(paths.donorDetail(donor.id))}
+                    className="border-t border-[var(--hair)] cursor-pointer hover:bg-[var(--row-hover)] transition-colors"
+                  >
+                    <td className="py-3.75 pr-3.5 pl-5">
+                      <span className="text-[13.5px] font-bold text-[var(--ink)] hover:text-brand whitespace-nowrap">
+                        {donor.companyName}
+                      </span>
+                    </td>
+
+                    <td className="py-3.75 px-3.5 text-13 text-[var(--muted-c)] font-medium whitespace-nowrap">
+                      {donor.companyType}
+                    </td>
+
+                    <td className="py-3.75 px-3.5">
+                      <span
+                        className={`inline-flex items-center gap-1.75 text-[12.5px] font-bold whitespace-nowrap ${s.text}`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${s.dot}`}
+                        />
+                        <span>{formatStatusText(donor.status)}</span>
+                      </span>
+                    </td>
+
+                    <td className="py-3.75 px-3.5">
+                      <div className="flex items-center gap-2.25">
+                        {rmName !== 'Unassigned' ? (
+                          <>
+                            <div
+                              className="shrink-0 w-7 h-7 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                              style={{ backgroundColor: avatarBg }}
+                            >
+                              {initials}
+                            </div>
+                            <span className="text-13 font-semibold text-[var(--ink)] whitespace-nowrap">
+                              {rmName}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-13 text-[var(--muted-c)] whitespace-nowrap">—</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-3.75 px-3.5">
+                      <div className="flex items-center gap-1.25">
+                        {shownRegions.map((region) => (
+                          <span
+                            key={region}
+                            className="px-2.25 py-1 rounded-lg bg-[var(--chip)] text-[var(--ink)] text-[11px] font-bold tracking-tight whitespace-nowrap"
+                          >
+                            {region}
+                          </span>
+                        ))}
+                        {extraRegions > 0 && (
+                          <span className="px-2 py-1 text-[11px] font-semibold text-[var(--muted2)] whitespace-nowrap">
+                            +{extraRegions} more
+                          </span>
+                        )}
+                        {shownRegions.length === 0 && <span className="text-[13px] text-[var(--muted-c)]">—</span>}
+                      </div>
+                    </td>
+
+                    <td className="py-3.75 px-3.5 text-13 text-[var(--muted-c)] font-medium whitespace-nowrap">
+                      {donor.donationFrequency ?? '—'}
+                    </td>
+
+                    <td className="py-3.75 px-3.5">
+                      {donor.lastInteractionDate ? (
+                        <div className="flex items-center gap-1.75 whitespace-nowrap">
+                          {renderLastInteractionIcon(donor.lastInteractionType)}
+                          <span className="text-13 text-[var(--muted-c)] font-medium">
+                            {formatDate(donor.lastInteractionDate)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[13px] text-[var(--muted-c)]">—</span>
+                      )}
+                    </td>
+
+                    <td className="py-3.75 px-3.5 text-13 font-semibold whitespace-nowrap">
+                      <span className={isOverdue(donor.followUpDate) ? 'text-destructive' : 'text-[var(--ink)]'}>
+                        {donor.followUpDate ? formatDate(donor.followUpDate) : '—'}
+                      </span>
+                    </td>
+
+                    {/* Row Action Menu */}
+                    <td className="py-3.75 pr-4 pl-2 text-right relative bg-[var(--card)] z-[5]">
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === donor.id ? null : donor.id);
+                        }}
+                        title="Row actions"
+                        className="ml-auto hover:bg-[var(--hover)]"
+                      >
+                        <MoreHorizontal className="w-4 h-4 text-[var(--icon)]" />
+                      </Button>
+
+                      {openMenuId === donor.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-[46px] right-3.5 z-20 w-52 p-1.5 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[0_12px_28px_rgba(20,20,15,0.16)] flex flex-col gap-0.5 text-left"
+                        >
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate(paths.donorDetail(donor.id));
+                            }}
+                            className="flex items-center gap-2.5 h-9 px-3 border-none rounded-lg bg-transparent text-13 font-semibold text-[var(--ink)] cursor-pointer hover:bg-[var(--hover)] whitespace-nowrap"
+                          >
+                            <Eye className="w-3.75 h-3.75 text-[var(--icon)] shrink-0" />
+                            <span>View Profile</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              navigate(paths.donorEdit(donor.id));
+                            }}
+                            className="flex items-center gap-2.5 h-9 px-3 border-none rounded-lg bg-transparent text-13 font-semibold text-[var(--ink)] cursor-pointer hover:bg-[var(--hover)] whitespace-nowrap"
+                          >
+                            <Edit3 className="w-3.75 h-3.75 text-[var(--icon)] shrink-0" />
+                            <span>Edit Donor</span>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -162,12 +326,35 @@ function SkeletonRows() {
   return (
     <>
       {Array.from({ length: 8 }, (_, i) => (
-        <tr key={i} className="border-b border-border last:border-b-0">
-          {COLUMNS.map((column) => (
-            <td key={column.key} className="px-4 py-3.5">
-              <div className="h-4 w-full max-w-32 animate-pulse rounded-md bg-muted" aria-hidden />
-            </td>
-          ))}
+        <tr key={i} className="border-t border-[var(--hair)]">
+          <td className="py-4 pr-3.5 pl-5">
+            <div className="w-[158px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[92px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[86px] h-5.5 rounded-full bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+              <div className="w-[102px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+            </div>
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[70px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[74px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[88px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 px-3.5">
+            <div className="w-[84px] h-3 rounded-md bg-gradient-to-r from-[var(--skel)] via-[var(--skel2)] to-[var(--skel)] animate-shimmer" />
+          </td>
+          <td className="py-4 pr-4 pl-2" />
         </tr>
       ))}
     </>
