@@ -27,6 +27,9 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+// `adminOnly` items (Approvals — Issue #113 — and Users) are hidden from every
+// non-Admin role. This is cosmetic only: the routes are `ProtectedRoute`-guarded
+// and the APIs enforce `AdminOrAbove` server-side regardless of the nav.
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: paths.dashboard, icon: LayoutDashboard },
   { label: 'Donors', path: paths.donors, icon: Users },
