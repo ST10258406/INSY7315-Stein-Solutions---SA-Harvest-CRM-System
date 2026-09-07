@@ -222,25 +222,30 @@ describe('DonorDetailPage', () => {
 
   it('switches to the Activity tab and shows the real interaction timeline', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get)
-      .mockResolvedValueOnce({ data: { data: donorDetail() } })
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              id: 'int-1',
-              donorId: 'donor-1',
-              interactionType: 'Call',
-              subject: 'Surplus volume forecast',
-              body: 'Confirmed weekly chilled surplus through September.',
-              emailAttachmentUrl: null,
-              createdAt: '2026-02-20T09:00:00Z',
-              createdBy: { id: 'user-1', fullName: 'Sam RM' },
-            },
-          ],
-          pagination: { page: 1, pageSize: 20, totalCount: 1, totalPages: 1 },
-        },
-      });
+    const emptyPage = { data: [], pagination: { page: 1, pageSize: 20, totalCount: 0, totalPages: 0 } };
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.endsWith('/interactions')) {
+        return Promise.resolve({
+          data: {
+            data: [
+              {
+                id: 'int-1',
+                donorId: 'donor-1',
+                interactionType: 'Call',
+                subject: 'Surplus volume forecast',
+                body: 'Confirmed weekly chilled surplus through September.',
+                emailAttachmentUrl: null,
+                createdAt: '2026-02-20T09:00:00Z',
+                createdBy: { id: 'user-1', fullName: 'Sam RM' },
+              },
+            ],
+            pagination: { page: 1, pageSize: 20, totalCount: 1, totalPages: 1 },
+          },
+        });
+      }
+      if (url.endsWith('/tasks')) return Promise.resolve({ data: emptyPage });
+      return Promise.resolve({ data: { data: donorDetail() } });
+    });
 
     renderPage();
     await screen.findByRole('heading', { name: /Acme Co/ });
