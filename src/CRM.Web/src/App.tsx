@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LandingPage from './features/landing/LandingPage';
 import DashboardPage from './features/dashboard/DashboardPage';
-import ApprovalsPage from './components/pages/ApprovalsPage';
+import { ApprovalsPage } from './features/approvals';
 import DonorListPage from './features/donors/DonorListPage';
 import NewDonorPage from './components/pages/NewDonorPage';
 import EditDonorPage from './components/pages/EditDonorPage';
