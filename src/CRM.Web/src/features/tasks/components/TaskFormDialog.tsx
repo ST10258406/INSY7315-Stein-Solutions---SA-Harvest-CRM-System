@@ -58,7 +58,7 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
         }
       : emptyTaskFormValues(props.fixedDonorId ?? '', assignee.id);
 
-  const createTask = useCreateTask(mode === 'create' ? props.fixedDonorId ?? '' : '');
+  const createTask = useCreateTask();
   const updateTask = useUpdateTask(mode === 'edit' ? props.task.id : '');
 
   const {
@@ -91,7 +91,10 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
     setGeneralError(null);
     try {
       if (mode === 'create') {
-        await createTask.mutateAsync(taskFormValuesToCreateRequest(values));
+        await createTask.mutateAsync({
+          donorId: values.donorId,
+          request: taskFormValuesToCreateRequest(values),
+        });
       } else {
         const patch = taskFormValuesToUpdateRequest(values, {
           title: props.task.title,

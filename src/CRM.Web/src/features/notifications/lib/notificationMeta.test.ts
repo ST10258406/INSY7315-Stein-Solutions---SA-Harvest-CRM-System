@@ -29,6 +29,15 @@ describe('resolveNotificationHref', () => {
     expect(resolveNotificationHref(notif({ relatedEntityType: 'DonorTask' }))).toBe('/tasks');
   });
 
+  it('routes a DonorTask notification to /tasks even though its type string contains "donor"', () => {
+    // relatedEntityId here is a TASK id — must NOT be treated as a donor id.
+    expect(
+      resolveNotificationHref(
+        notif({ notificationType: 'TaskAssigned', relatedEntityType: 'DonorTask', relatedEntityId: 'task-7' }),
+      ),
+    ).toBe('/tasks');
+  });
+
   it('sends approval notifications without a donor id to the approvals page', () => {
     expect(resolveNotificationHref(notif({ notificationType: 'NewDonorPendingReview' }))).toBe('/approvals');
   });

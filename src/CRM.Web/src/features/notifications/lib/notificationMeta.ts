@@ -16,17 +16,19 @@ export function notificationTypeLabel(type: string): string {
 
 /**
  * Where clicking a notification should take the user. `relatedEntityType` is a
- * loose string set by whichever handler created the row; only a donor has a
- * deep link, so tasks/approvals fall back to their list pages.
+ * loose string set by whichever handler created the row (e.g. "Donor",
+ * "DonorTask") and `relatedEntityId` is that entity's own id. Only a donor has a
+ * deep link; tasks/approvals fall back to their list pages.
  */
 export function resolveNotificationHref(notification: NotificationDto): string | null {
   const entity = notification.relatedEntityType?.toLowerCase() ?? '';
   const id = notification.relatedEntityId;
 
-  if (entity === 'donor' && id) return paths.donorDetail(id);
-  if (entity.includes('donor') && id) return paths.donorDetail(id);
+  // Order matters: "DonorTask" contains "donor" but its id is a task id, so the
+  // task check has to win before the loose donor-substring fallback.
   if (entity.includes('task')) return paths.tasks;
   if (entity.includes('approval')) return paths.approvals;
+  if (entity.includes('donor') && id) return paths.donorDetail(id);
 
   // Fall back on the notification type when no entity type was recorded.
   switch (notification.notificationType) {

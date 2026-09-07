@@ -81,9 +81,12 @@ describe('task hooks', () => {
 
     const { wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useCreateTask('donor-1'), { wrapper });
+    const { result } = renderHook(() => useCreateTask(), { wrapper });
 
-    result.current.mutate({ title: 'New task', assignedToUserId: 'user-1', dueDate: '2026-09-10' });
+    result.current.mutate({
+      donorId: 'donor-1',
+      request: { title: 'New task', assignedToUserId: 'user-1', dueDate: '2026-09-10' },
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(api.post).toHaveBeenCalledWith('/api/v1/donors/donor-1/tasks', {
