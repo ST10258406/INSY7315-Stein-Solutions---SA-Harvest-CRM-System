@@ -4,6 +4,7 @@ import { Filter, Download, Plus, SlidersHorizontal, ChevronDown } from 'lucide-r
 import { useAuthStore } from '@/store/authStore';
 import { DonorKpiCards } from './DonorKpiCards';
 import { OverdueFollowUpsWidget } from './OverdueFollowUpsWidget';
+import { PendingApprovalsBanner } from './PendingApprovalsBanner';
 import { paths } from '@/routes/paths';
 import { Button, buttonVariants } from '@/components/ui/button';
 
@@ -73,6 +74,9 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Admin-only, shown only when pending approvals exist (Issue #112) */}
+      <PendingApprovalsBanner />
 
       {/* Top Stat Cards Section */}
       <section className="bg-[var(--soft)] border border-[var(--border)] rounded-2xl p-5 mb-5">
