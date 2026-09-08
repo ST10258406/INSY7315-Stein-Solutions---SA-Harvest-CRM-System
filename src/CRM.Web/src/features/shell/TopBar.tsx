@@ -14,6 +14,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
+import { NotificationBell } from '@/features/notifications';
 import { paths } from '@/routes/paths';
 import logoImg from '@/assets/sa-harvest-logo.png';
 
@@ -26,6 +27,9 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+// `adminOnly` items (Approvals — Issue #113 — and Users) are hidden from every
+// non-Admin role. This is cosmetic only: the routes are `ProtectedRoute`-guarded
+// and the APIs enforce `AdminOrAbove` server-side regardless of the nav.
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: paths.dashboard, icon: LayoutDashboard },
   { label: 'Donors', path: paths.donors, icon: Users },
@@ -108,6 +112,8 @@ export function TopBar() {
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
+
+        <NotificationBell />
 
         <div className="flex items-center gap-2.5 pl-1.5">
           <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full border-2 border-border bg-secondary text-xs font-bold text-foreground">

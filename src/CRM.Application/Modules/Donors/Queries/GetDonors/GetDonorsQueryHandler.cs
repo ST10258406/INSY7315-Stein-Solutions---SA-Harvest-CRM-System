@@ -32,8 +32,10 @@ public class GetDonorsQueryHandler : IRequestHandler<GetDonorsQuery, PaginatedRe
             DonationTypeId = request.DonationTypeId,
             DonationFrequencyId = request.DonationFrequencyId,
             RelationshipManagerId = request.RelationshipManagerId,
-            // Inclusive of the whole requested day.
-            FollowUpBefore = request.FollowUpBefore?.ToDateTime(TimeOnly.MaxValue),
+            // Inclusive of the whole requested day. Kind must be UTC: the column is
+            // `timestamptz` and Npgsql rejects an Unspecified-kind DateTime (which is
+            // what DateOnly.ToDateTime(TimeOnly) produces by default).
+            FollowUpBefore = request.FollowUpBefore?.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc),
             SortBy = request.SortBy,
             SortDir = request.SortDir,
             Page = request.Page,

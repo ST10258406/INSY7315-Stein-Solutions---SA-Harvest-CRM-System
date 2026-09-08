@@ -1,17 +1,16 @@
-import { History } from 'lucide-react';
-import { ComingSoonPanel } from '@/features/dashboard/ComingSoonPanel';
+import { InteractionFeed } from '@/features/interactions';
+import { DonorTasksPanel } from '@/features/tasks';
+import type { DonorDetailDto } from '../../types';
 
 /**
- * Interaction timeline + tasks depend on the Interactions/Tasks endpoints,
- * which don't ship until Sprint 4 — same placeholder rule as the Dashboard
- * ticket (Issue 39). Shown explicitly rather than hiding the tab, per design.
+ * Activity tab: the interaction timeline (Issue #107) alongside the donor's
+ * task list (Issue #108), matching the Claude design's two-column Activity view.
  */
-export function DonorActivityTab() {
+export function DonorActivityTab({ donor }: { donor: DonorDetailDto }) {
   return (
-    <ComingSoonPanel
-      icon={History}
-      title="Interaction history coming soon"
-      description="Timeline of calls, visits, and tasks will appear here once the Interactions API ships."
-    />
+    <section className="grid grid-cols-1 items-start gap-4.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <InteractionFeed donorId={donor.id} />
+      <DonorTasksPanel donorId={donor.id} donorName={donor.company.companyName} />
+    </section>
   );
 }

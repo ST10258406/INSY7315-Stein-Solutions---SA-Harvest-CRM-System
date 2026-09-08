@@ -33,8 +33,7 @@ export function DonorTabs({ donor, children }: DonorTabsProps) {
         {children}
         <TabsList className={TAB_LIST_CLASSES}>
           {TABS.map((tab) => {
-            const badgeCount =
-              tab.value === 'activity' ? '2' : tab.value === 'contacts' ? '2' : null;
+            const badgeCount = tab.value === 'contacts' ? '2' : null;
               
             return (
               <TabsTab 
@@ -70,7 +69,7 @@ export function DonorTabs({ donor, children }: DonorTabsProps) {
           <DonorCrmTab donor={donor} />
         </TabsPanel>
         <TabsPanel value="activity">
-          <DonorActivityTab />
+          <DonorActivityTab donor={donor} />
         </TabsPanel>
       </div>
     </Tabs>

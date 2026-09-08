@@ -2,12 +2,12 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LandingPage from './features/landing/LandingPage';
 import DashboardPage from './features/dashboard/DashboardPage';
-import ApprovalsPage from './components/pages/ApprovalsPage';
+import { ApprovalsPage } from './features/approvals';
 import DonorListPage from './features/donors/DonorListPage';
 import NewDonorPage from './components/pages/NewDonorPage';
 import EditDonorPage from './components/pages/EditDonorPage';
 import DonorDetailPage from './features/donors/pages/DonorDetailPage';
-import TasksPage from './components/pages/TasksPage';
+import { MyTasksPage } from './features/tasks';
 import ReportsPage from './components/pages/ReportsPage';
 import UsersPage from './components/pages/UsersPage';
 import LoginPage from './features/auth/pages/LoginPage';
@@ -60,7 +60,7 @@ function App() {
               <Route path={paths.donorNew} element={<NewDonorPage />} />
               <Route path={paths.donorEditPattern} element={<EditDonorPage />} />
               <Route path={paths.donorDetailPattern} element={<DonorDetailPage />} />
-              <Route path={paths.tasks} element={<TasksPage />} />
+              <Route path={paths.tasks} element={<MyTasksPage />} />
               <Route path={paths.reports} element={<ReportsPage />} />
 
               <Route
