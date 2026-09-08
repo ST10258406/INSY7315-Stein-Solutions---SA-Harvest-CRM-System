@@ -13,6 +13,9 @@ public class DonorTask : BaseEntity
     public DateTime DueDate { get; set; }
     public bool IsCompleted { get; set; }
 
+    /// <summary>Set when <see cref="IsCompleted"/> flips to true; cleared on reopen.</summary>
+    public DateTime? CompletedAt { get; set; }
+
     public Guid AssignedToUserId { get; set; }
     public User AssignedToUser { get; set; } = null!;
 

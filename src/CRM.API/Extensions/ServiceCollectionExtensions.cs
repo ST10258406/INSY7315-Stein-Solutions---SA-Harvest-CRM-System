@@ -6,6 +6,7 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Auth;
+using CRM.Infrastructure.Jobs;
 using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
@@ -65,6 +66,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IDonorRepository, DonorRepository>();
         services.AddScoped<IDonorDocumentRepository, DonorDocumentRepository>();
+        services.AddScoped<IInteractionLogRepository, InteractionLogRepository>();
+        services.AddScoped<ITaskRepository, TaskRepository>();
+        services.AddScoped<IApprovalRepository, ApprovalRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -116,7 +121,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBlobStorageService, BlobStorageService>();
         services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
-        services.AddScoped<INotificationService, NotificationService>(); // skeleton
+        services.AddScoped<INotificationService, NotificationService>();
+
+        // Recurring background jobs
+        services.AddScoped<ITaskDueNotificationJob, TaskDueNotificationJob>();
 
         return services;
     }

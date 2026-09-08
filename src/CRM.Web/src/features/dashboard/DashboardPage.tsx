@@ -3,22 +3,10 @@ import { Link } from 'react-router-dom';
 import { Filter, Download, Plus, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { DonorKpiCards } from './DonorKpiCards';
-import { useDonors } from '@/features/donors/hooks';
+import { OverdueFollowUpsWidget } from './OverdueFollowUpsWidget';
+import { PendingApprovalsBanner } from './PendingApprovalsBanner';
 import { paths } from '@/routes/paths';
 import { Button, buttonVariants } from '@/components/ui/button';
-
-// Simple helper for initials like in Demo UI
-function getInitials(name: string) {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.substring(0, 2).toUpperCase();
-}
-
-// Simple palette like in Demo UI
-const MANAGER_PALETTE = [
-  '#3F5D46', '#4B5267', '#6A4C3D', '#544766', '#59604C', '#684551', '#425A63'
-];
 
 const DASHBOARD_CHARTS_DATA = {
   Weekly: [
@@ -39,33 +27,9 @@ const DASHBOARD_CHARTS_DATA = {
   ],
 };
 
-const getStatusClasses = (status: string) => {
-  switch (status) {
-    case 'Pending Review':
-    case 'PendingReview':
-      return { text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' };
-    case 'Active':
-      return { text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' };
-    case 'Lapsed':
-      return { text: 'text-rose-700 dark:text-rose-400', dot: 'bg-rose-500' };
-    default:
-      return { text: 'text-muted-foreground', dot: 'bg-muted-foreground' };
-  }
-};
-
-const formatStatusText = (status: string) => {
-  if (status === 'PendingReview') return 'Pending Review';
-  return status;
-};
-
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [period, setPeriod] = useState<'Weekly' | 'Monthly'>('Weekly');
-  
-  // Use a standard query for the table as a placeholder since we don't have a specific "overdue" endpoint yet,
-  // but we can pass followUpBefore if the API supports it, or just use default.
-  // The Demo UI used a static OVERDUE_FOLLOWUPS list. We'll use the real query data.
-  const { data: overdueData, isPending } = useDonors({ pageSize: 5 });
 
   const chartItems = DASHBOARD_CHARTS_DATA[period];
   const maxVal = Math.max(...chartItems.map((d) => d.value));
@@ -110,6 +74,9 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Admin-only, shown only when pending approvals exist (Issue #112) */}
+      <PendingApprovalsBanner />
 
       {/* Top Stat Cards Section */}
       <section className="bg-[var(--soft)] border border-[var(--border)] rounded-2xl p-5 mb-5">
@@ -200,100 +167,8 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Right Section: Overdue Follow-Ups Table */}
-        <section className="bg-[var(--soft)] border border-[var(--border)] rounded-2xl p-5 min-w-0">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h2 className="m-0 mb-1 text-base font-bold tracking-tight text-[var(--ink)]">
-                Overdue Follow-Ups
-              </h2>
-              <p className="m-0 text-xs font-medium text-[var(--muted-c)]">
-                Recent donors that may require attention.
-              </p>
-            </div>
-            <Button variant="secondary" size="icon">
-              <SlidersHorizontal className="w-4 h-4" />
-            </Button>
-          </div>
-
-          <div className="bg-[var(--card)] rounded-xl p-[6px_18px_10px] shadow-[0_1px_3px_var(--shadow)] overflow-x-auto">
-            <table className="w-full border-collapse min-w-[560px]">
-              <thead>
-                <tr>
-                  <th className="text-left py-3.5 pr-2 pl-0 text-[11.5px] font-semibold text-[var(--muted2)]">
-                    Donor
-                  </th>
-                  <th className="text-left py-3.5 pr-2 pl-0 text-[11.5px] font-semibold text-[var(--muted2)]">
-                    Reference
-                  </th>
-                  <th className="text-left py-3.5 pr-2 pl-0 text-[11.5px] font-semibold text-[var(--muted2)]">
-                    Status
-                  </th>
-                  <th className="text-left py-3.5 pr-2 pl-0 text-[11.5px] font-semibold text-[var(--muted2)]">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {isPending ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-sm text-[var(--muted-c)] text-center">Loading...</td>
-                  </tr>
-                ) : overdueData?.data && overdueData.data.length > 0 ? (
-                  overdueData.data.map((row, idx) => {
-                    const s = getStatusClasses(row.status);
-                    const name = row.companyName || 'Unknown';
-                    const initials = getInitials(name);
-                    const avatarBg = MANAGER_PALETTE[idx % MANAGER_PALETTE.length];
-                    
-                    return (
-                      <tr key={row.id} className="border-t border-[var(--hair)] hover:bg-[var(--row-hover)] transition-colors">
-                        <td className="py-3.25 pr-2 pl-0">
-                          <div className="flex items-center gap-2.5">
-                            <div
-                              className="shrink-0 w-8 h-8 rounded-full text-white text-[11px] font-bold flex items-center justify-center"
-                              style={{ backgroundColor: avatarBg }}
-                            >
-                              {initials}
-                            </div>
-                            <span className="text-[13.5px] font-semibold text-[var(--ink)] whitespace-nowrap">
-                              {name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3.25 pr-2 pl-0 text-13 text-[var(--muted-c)] font-medium whitespace-nowrap">
-                          {row.id.substring(0, 8)}
-                        </td>
-                        <td className="py-3.25 pr-2 pl-0">
-                          <span
-                            className={`inline-flex items-center gap-1.75 text-[12.5px] font-bold whitespace-nowrap ${s.text}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${s.dot}`}
-                            />
-                            <span>{formatStatusText(row.status)}</span>
-                          </span>
-                        </td>
-                        <td className="py-3.25 pr-0 pl-2 text-left whitespace-nowrap">
-                          <Link
-                            to={paths.donorDetail(row.id)}
-                            className="text-13 font-bold text-[var(--ink)] border-b-[1.5px] border-brand pb-0.25 hover:text-brand cursor-pointer transition-colors"
-                          >
-                            View donor
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-sm text-[var(--muted-c)] text-center">No recent donors found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        {/* Right Section: Overdue Follow-Ups (Issue #111) */}
+        <OverdueFollowUpsWidget />
       </div>
     </main>
   );

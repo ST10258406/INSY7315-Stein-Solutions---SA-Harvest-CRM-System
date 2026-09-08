@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, SearchX, TriangleAlert, Building2, FileText } from 'lucide-react';
 import { paths } from '@/routes/paths';
+import { LogInteractionDialog } from '@/features/interactions';
 import { useDonor } from '../hooks';
 import { DonorStatusBadge } from '../components/DonorStatusBadge';
 import { getInitials, getAvatarColor } from '../lib/avatar';
@@ -10,6 +12,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 export default function DonorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: donor, isPending, isError, error, refetch } = useDonor(id);
+  const [logOpen, setLogOpen] = useState(false);
 
   if (isPending) {
     return (
@@ -123,13 +126,15 @@ export default function DonorDetailPage() {
               <span>Send Email</span>
             </Button>
 
-            <Button variant="default" size="sm">
+            <Button variant="default" size="sm" onClick={() => setLogOpen(true)}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square w-4 h-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               <span>Log Interaction</span>
             </Button>
           </div>
         </div>
       </DonorTabs>
+
+      <LogInteractionDialog donorId={donor.id} open={logOpen} onOpenChange={setLogOpen} />
     </div>
   );
 }

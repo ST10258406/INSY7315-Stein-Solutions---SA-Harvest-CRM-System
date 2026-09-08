@@ -500,6 +500,10 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("assigned_to_user_id");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
                     b.Property<Guid?>("CompletedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("completed_by_user_id");
@@ -912,19 +916,27 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("title");
 
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("CreatedAt")
+                        .IsDescending()
+                        .HasDatabaseName("idx_notifications_created_at");
 
-                    b.ToTable("notifications", (string)null);
+                    b.HasIndex("IsRead")
+                        .HasDatabaseName("idx_notifications_unread")
+                        .HasFilter("is_read = false");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_notifications_user_id");
+
+                    b.ToTable("notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_notifications_type", "notification_type IN ('FollowUpReminder', 'NewDonorPendingReview', 'TaskDue', 'TaskAssigned', 'DonorApproved', 'DonorRejected')");
+                        });
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.RefreshToken", b =>
