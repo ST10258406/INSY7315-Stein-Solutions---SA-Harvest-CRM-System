@@ -21,4 +21,12 @@ public interface IReportsRepository
         DateTime endUtc,
         Guid? relationshipManagerId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Current donor count per active operational region. Sourced from
+    /// <c>lookup_operational_regions</c> (not from donors that happen to exist), so a region
+    /// with no donors still appears with a count of 0. A donor operating in more than one
+    /// region is counted once per region via <c>donor_operational_regions</c>.
+    /// </summary>
+    Task<List<DonorsByRegionDto>> GetDonorsByRegionAsync(CancellationToken cancellationToken = default);
 }

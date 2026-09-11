@@ -62,4 +62,21 @@ public class ReportsRepository : IReportsRepository
 
         return (totalDonorsContacted, byManager);
     }
+
+    public async Task<List<DonorsByRegionDto>> GetDonorsByRegionAsync(CancellationToken cancellationToken = default)
+    {
+        // Driven from the region lookup (LEFT JOIN via the count subquery below), not from
+        // donor_operational_regions, so a region with zero donors still appears with count 0.
+        return await _context.LookupOperationalRegions
+            .AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .Select(r => new DonorsByRegionDto
+            {
+                Region = r.Code,
+                RegionName = r.Name,
+                DonorCount = _context.DonorOperationalRegions.Count(d => d.OperationalRegionId == r.Id)
+            })
+            .ToListAsync(cancellationToken);
+    }
 }

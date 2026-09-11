@@ -250,4 +250,93 @@ public class ReportsControllerTests : IClassFixture<WebApplicationFactory<Progra
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    private async Task<HttpClient> SetupForRegionsAsync(string roleName)
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var role = new Role { Id = Guid.NewGuid(), Name = roleName };
+        context.Roles.Add(role);
+
+        const string password = "TestPassword123";
+        var hasher = new PasswordHasher<User>();
+        var loginUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"test-regions-{roleName.ToLower()}@example.com",
+            FirstName = roleName,
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
+        };
+        loginUser.UserRoles.Add(new UserRole { RoleId = role.Id, UserId = loginUser.Id, Role = role, User = loginUser });
+        context.Users.Add(loginUser);
+
+        context.LookupCompanyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true });
+        context.LookupEntityTypes.Add(new LookupEntityType { Id = 1, Name = "Pty Ltd", IsActive = true });
+        context.LookupDonationFrequencies.Add(new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true });
+
+        var jhb = new LookupOperationalRegion { Id = 1, Code = "JHB", Name = "Johannesburg", IsActive = true, SortOrder = 1 };
+        var cpt = new LookupOperationalRegion { Id = 2, Code = "CPT", Name = "Cape Town", IsActive = true, SortOrder = 2 };
+        context.LookupOperationalRegions.AddRange(jhb, cpt);
+
+        var donorInJhb = MakeDonor("Donor In JHB", loginUser.Id, null);
+        var otherDonorInJhb = MakeDonor("Other Donor In JHB", loginUser.Id, null);
+        context.Donors.AddRange(donorInJhb, otherDonorInJhb);
+        await context.SaveChangesAsync();
+
+        context.DonorOperationalRegions.Add(new DonorOperationalRegion { DonorId = donorInJhb.Id, OperationalRegionId = jhb.Id });
+        context.DonorOperationalRegions.Add(new DonorOperationalRegion { DonorId = otherDonorInJhb.Id, OperationalRegionId = jhb.Id });
+        await context.SaveChangesAsync();
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginCommand(loginUser.Email, password));
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(
+            await login.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        return client;
+    }
+
+    [Fact]
+    public async Task GetDonorsByRegion_ReturnsCountsIncludingZeroForEmptyRegions()
+    {
+        var client = await SetupForRegionsAsync("Admin");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-region");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = Body(response).GetProperty("data").EnumerateArray().ToList();
+
+        Assert.Equal(2, data.Count);
+
+        var jhb = data.Single(r => r.GetProperty("region").GetString() == "JHB");
+        Assert.Equal("Johannesburg", jhb.GetProperty("regionName").GetString());
+        Assert.Equal(2, jhb.GetProperty("donorCount").GetInt32());
+
+        var cpt = data.Single(r => r.GetProperty("region").GetString() == "CPT");
+        Assert.Equal(0, cpt.GetProperty("donorCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetDonorsByRegion_NonAdminUser_Forbidden()
+    {
+        var client = await SetupForRegionsAsync("Procurement");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-region");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetDonorsByRegion_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient().GetAsync("/api/v1/reports/donors-by-region");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

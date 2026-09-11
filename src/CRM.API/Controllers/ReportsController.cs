@@ -1,3 +1,4 @@
+using CRM.Application.Modules.Reports.Queries.GetDonorsByRegionReport;
 using CRM.Application.Modules.Reports.Queries.GetDonorsContactedReport;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,13 @@ public class ReportsController : ControllerBase
     public async Task<IActionResult> GetDonorsContacted([FromQuery] GetDonorsContactedReportQuery query)
     {
         var result = await _mediator.Send(query);
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("donors-by-region")]
+    public async Task<IActionResult> GetDonorsByRegion()
+    {
+        var result = await _mediator.Send(new GetDonorsByRegionReportQuery());
         return Ok(new { data = result });
     }
 }
