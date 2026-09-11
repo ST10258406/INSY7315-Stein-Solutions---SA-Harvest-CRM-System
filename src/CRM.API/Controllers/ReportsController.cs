@@ -1,3 +1,5 @@
+using CRM.Application.Modules.Reports.Commands.ExportReport;
+using CRM.Application.Modules.Reports.Dtos;
 using CRM.Application.Modules.Reports.Queries.GetDonorsByRegionReport;
 using CRM.Application.Modules.Reports.Queries.GetDonorsByStatusReport;
 using CRM.Application.Modules.Reports.Queries.GetDonorsByTypeReport;
@@ -45,6 +47,18 @@ public class ReportsController : ControllerBase
     public async Task<IActionResult> GetDonorsByStatus()
     {
         var result = await _mediator.Send(new GetDonorsByStatusReportQuery());
+        return Ok(new { data = result });
+    }
+
+    [HttpPost("export")]
+    public async Task<IActionResult> Export([FromBody] ExportReportRequest request)
+    {
+        var result = await _mediator.Send(new ExportReportCommand
+        {
+            ReportType = request.ReportType,
+            Format = request.Format,
+            Filters = request.Filters
+        });
         return Ok(new { data = result });
     }
 }
