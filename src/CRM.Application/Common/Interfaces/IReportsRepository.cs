@@ -37,4 +37,14 @@ public interface IReportsRepository
     /// donation type is counted once per type via <c>donor_donation_types</c>.
     /// </summary>
     Task<List<DonorsByTypeDto>> GetDonorsByTypeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Current donor count per <see cref="CRM.Domain.Enums.DonorStatus"/> value. Iterates over
+    /// every enum value (not just statuses with existing rows), so a status with no donors
+    /// still appears with a count of 0. donor_status is a single-value column on donors, so
+    /// unlike region/type there is no join table and no dedup concern — counts sum to the
+    /// total donor count. Returned in a fixed display order (Active, PendingReview, Lapsed,
+    /// Rejected) so a pie chart's color/slice assignment stays stable between requests.
+    /// </summary>
+    Task<List<DonorsByStatusDto>> GetDonorsByStatusAsync(CancellationToken cancellationToken = default);
 }

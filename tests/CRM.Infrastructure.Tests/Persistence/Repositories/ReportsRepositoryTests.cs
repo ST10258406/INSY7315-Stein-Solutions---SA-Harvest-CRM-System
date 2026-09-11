@@ -399,4 +399,92 @@ public class ReportsRepositoryTests
 
         Assert.DoesNotContain(result, t => t.DonationType == "Discontinued");
     }
+
+    private async Task<CrmDbContext> CreateSeededContextForStatusAsync()
+    {
+        var context = new CrmDbContext(_options);
+        await context.Database.EnsureCreatedAsync();
+
+        context.Donors.RemoveRange(context.Donors);
+        context.Users.RemoveRange(context.Users);
+        await context.SaveChangesAsync();
+
+        if (!await context.LookupCompanyTypes.AnyAsync(l => l.Id == 1))
+            context.LookupCompanyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true, SortOrder = 1 });
+        if (!await context.LookupEntityTypes.AnyAsync(l => l.Id == 1))
+            context.LookupEntityTypes.Add(new LookupEntityType { Id = 1, Name = "Private Company", IsActive = true, SortOrder = 1 });
+        if (!await context.LookupDonationFrequencies.AnyAsync(l => l.Id == 1))
+            context.LookupDonationFrequencies.Add(new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true, SortOrder = 1 });
+        await context.SaveChangesAsync();
+
+        var creator = new User { Id = Guid.NewGuid(), Email = "status-fixture@example.com", FirstName = "Case", LastName = "Worker", PasswordHash = "hash", IsActive = true };
+        context.Users.Add(creator);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+        return context;
+    }
+
+    private static Donor MakeDonorWithStatus(string name, Guid creatorId, DonorStatus status) => new()
+    {
+        Id = Guid.NewGuid(),
+        CompanyName = name,
+        CompanyTypeId = 1,
+        EntityTypeId = 1,
+        DonationFrequencyId = 1,
+        RegisteredCompanyName = name + " (Pty) Ltd",
+        IncomeTaxNumber = "9012345678",
+        Status = status,
+        SubmissionSource = SubmissionSource.ManualCapture,
+        CreatedByUserId = creatorId
+    };
+
+    [Fact]
+    public async Task GetDonorsByStatusAsync_StatusWithNoDonors_StillAppearsWithZeroCount()
+    {
+        using var context = await CreateSeededContextForStatusAsync();
+
+        var repo = new ReportsRepository(context);
+        var result = await repo.GetDonorsByStatusAsync();
+
+        Assert.Equal(4, result.Count);
+        Assert.All(result, r => Assert.Equal(0, r.DonorCount));
+    }
+
+    [Fact]
+    public async Task GetDonorsByStatusAsync_CountsDonorsPerStatus()
+    {
+        using var context = await CreateSeededContextForStatusAsync();
+        var creatorId = context.Users.Single().Id;
+
+        context.Donors.AddRange(
+            MakeDonorWithStatus("Active Donor 1", creatorId, DonorStatus.Active),
+            MakeDonorWithStatus("Active Donor 2", creatorId, DonorStatus.Active),
+            MakeDonorWithStatus("Pending Donor", creatorId, DonorStatus.PendingReview),
+            MakeDonorWithStatus("Rejected Donor", creatorId, DonorStatus.Rejected));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new ReportsRepository(context);
+        var result = await repo.GetDonorsByStatusAsync();
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal(2, result.Single(r => r.Status == "Active").DonorCount);
+        Assert.Equal(1, result.Single(r => r.Status == "PendingReview").DonorCount);
+        Assert.Equal(0, result.Single(r => r.Status == "Lapsed").DonorCount);
+        Assert.Equal(1, result.Single(r => r.Status == "Rejected").DonorCount);
+    }
+
+    [Fact]
+    public async Task GetDonorsByStatusAsync_ReturnsFixedDisplayOrder()
+    {
+        using var context = await CreateSeededContextForStatusAsync();
+
+        var repo = new ReportsRepository(context);
+        var result = await repo.GetDonorsByStatusAsync();
+
+        Assert.Equal(
+            new[] { "Active", "PendingReview", "Lapsed", "Rejected" },
+            result.Select(r => r.Status));
+    }
 }

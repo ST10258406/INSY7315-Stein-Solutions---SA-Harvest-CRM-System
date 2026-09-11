@@ -1,4 +1,5 @@
 using CRM.Application.Modules.Reports.Queries.GetDonorsByRegionReport;
+using CRM.Application.Modules.Reports.Queries.GetDonorsByStatusReport;
 using CRM.Application.Modules.Reports.Queries.GetDonorsByTypeReport;
 using CRM.Application.Modules.Reports.Queries.GetDonorsContactedReport;
 using MediatR;
@@ -37,6 +38,13 @@ public class ReportsController : ControllerBase
     public async Task<IActionResult> GetDonorsByType()
     {
         var result = await _mediator.Send(new GetDonorsByTypeReportQuery());
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("donors-by-status")]
+    public async Task<IActionResult> GetDonorsByStatus()
+    {
+        var result = await _mediator.Send(new GetDonorsByStatusReportQuery());
         return Ok(new { data = result });
     }
 }

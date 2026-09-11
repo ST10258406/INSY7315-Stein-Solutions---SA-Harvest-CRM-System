@@ -2,10 +2,21 @@ namespace CRM.Infrastructure.Persistence.Repositories;
 
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Reports.Dtos;
+using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 public class ReportsRepository : IReportsRepository
 {
+    // Pie-chart display order per the design doc — fixed regardless of enum declaration
+    // order so slice/color assignment doesn't jump between requests.
+    private static readonly DonorStatus[] StatusDisplayOrder =
+    {
+        DonorStatus.Active,
+        DonorStatus.PendingReview,
+        DonorStatus.Lapsed,
+        DonorStatus.Rejected
+    };
+
     private readonly CrmDbContext _context;
 
     public ReportsRepository(CrmDbContext context)
@@ -94,5 +105,24 @@ public class ReportsRepository : IReportsRepository
                 DonorCount = _context.DonorDonationTypes.Count(d => d.DonationTypeId == t.Id)
             })
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<DonorsByStatusDto>> GetDonorsByStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var counts = await _context.Donors
+            .AsNoTracking()
+            .GroupBy(d => d.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
+
+        // Iterate over every enum value — not just statuses with existing rows — so a status
+        // with zero donors still appears in the response instead of silently vanishing.
+        return StatusDisplayOrder
+            .Select(status => new DonorsByStatusDto
+            {
+                Status = status.ToString(),
+                DonorCount = counts.GetValueOrDefault(status)
+            })
+            .ToList();
     }
 }

@@ -427,4 +427,95 @@ public class ReportsControllerTests : IClassFixture<WebApplicationFactory<Progra
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    private async Task<HttpClient> SetupForStatusAsync(string roleName)
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var role = new Role { Id = Guid.NewGuid(), Name = roleName };
+        context.Roles.Add(role);
+
+        const string password = "TestPassword123";
+        var hasher = new PasswordHasher<User>();
+        var loginUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"test-status-{roleName.ToLower()}@example.com",
+            FirstName = roleName,
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
+        };
+        loginUser.UserRoles.Add(new UserRole { RoleId = role.Id, UserId = loginUser.Id, Role = role, User = loginUser });
+        context.Users.Add(loginUser);
+
+        context.LookupCompanyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true });
+        context.LookupEntityTypes.Add(new LookupEntityType { Id = 1, Name = "Pty Ltd", IsActive = true });
+        context.LookupDonationFrequencies.Add(new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true });
+
+        var activeDonor = MakeDonor("Active Donor", loginUser.Id, null);
+        var otherActiveDonor = MakeDonor("Other Active Donor", loginUser.Id, null);
+        var pendingDonor = MakeDonor("Pending Donor", loginUser.Id, null);
+        pendingDonor.Status = DonorStatus.PendingReview;
+        context.Donors.AddRange(activeDonor, otherActiveDonor, pendingDonor);
+        await context.SaveChangesAsync();
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginCommand(loginUser.Email, password));
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(
+            await login.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        return client;
+    }
+
+    [Fact]
+    public async Task GetDonorsByStatus_ReturnsCountsForAllFourStatusesInFixedOrder()
+    {
+        var client = await SetupForStatusAsync("Admin");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-status");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = Body(response).GetProperty("data").EnumerateArray().ToList();
+
+        Assert.Equal(4, data.Count);
+        Assert.Equal(
+            new[] { "Active", "PendingReview", "Lapsed", "Rejected" },
+            data.Select(d => d.GetProperty("status").GetString()));
+
+        var active = data.Single(s => s.GetProperty("status").GetString() == "Active");
+        Assert.Equal(2, active.GetProperty("donorCount").GetInt32());
+
+        var pending = data.Single(s => s.GetProperty("status").GetString() == "PendingReview");
+        Assert.Equal(1, pending.GetProperty("donorCount").GetInt32());
+
+        var lapsed = data.Single(s => s.GetProperty("status").GetString() == "Lapsed");
+        Assert.Equal(0, lapsed.GetProperty("donorCount").GetInt32());
+
+        var rejected = data.Single(s => s.GetProperty("status").GetString() == "Rejected");
+        Assert.Equal(0, rejected.GetProperty("donorCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetDonorsByStatus_NonAdminUser_Forbidden()
+    {
+        var client = await SetupForStatusAsync("Procurement");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-status");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetDonorsByStatus_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient().GetAsync("/api/v1/reports/donors-by-status");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
