@@ -79,4 +79,20 @@ public class ReportsRepository : IReportsRepository
             })
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<List<DonorsByTypeDto>> GetDonorsByTypeAsync(CancellationToken cancellationToken = default)
+    {
+        // Driven from the donation type lookup (LEFT JOIN via the count subquery below), not
+        // from donor_donation_types, so a type with zero donors still appears with count 0.
+        return await _context.LookupDonationTypes
+            .AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .Select(t => new DonorsByTypeDto
+            {
+                DonationType = t.Name,
+                DonorCount = _context.DonorDonationTypes.Count(d => d.DonationTypeId == t.Id)
+            })
+            .ToListAsync(cancellationToken);
+    }
 }

@@ -29,4 +29,12 @@ public interface IReportsRepository
     /// region is counted once per region via <c>donor_operational_regions</c>.
     /// </summary>
     Task<List<DonorsByRegionDto>> GetDonorsByRegionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Current donor count per active donation type. Sourced from
+    /// <c>lookup_donation_types</c> (not from donors that happen to exist), so a donation
+    /// type with no donors still appears with a count of 0. A donor offering more than one
+    /// donation type is counted once per type via <c>donor_donation_types</c>.
+    /// </summary>
+    Task<List<DonorsByTypeDto>> GetDonorsByTypeAsync(CancellationToken cancellationToken = default);
 }

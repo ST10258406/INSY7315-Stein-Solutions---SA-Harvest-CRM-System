@@ -339,4 +339,92 @@ public class ReportsControllerTests : IClassFixture<WebApplicationFactory<Progra
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    private async Task<HttpClient> SetupForTypesAsync(string roleName)
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var role = new Role { Id = Guid.NewGuid(), Name = roleName };
+        context.Roles.Add(role);
+
+        const string password = "TestPassword123";
+        var hasher = new PasswordHasher<User>();
+        var loginUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"test-types-{roleName.ToLower()}@example.com",
+            FirstName = roleName,
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
+        };
+        loginUser.UserRoles.Add(new UserRole { RoleId = role.Id, UserId = loginUser.Id, Role = role, User = loginUser });
+        context.Users.Add(loginUser);
+
+        context.LookupCompanyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true });
+        context.LookupEntityTypes.Add(new LookupEntityType { Id = 1, Name = "Pty Ltd", IsActive = true });
+        context.LookupDonationFrequencies.Add(new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true });
+
+        var meat = new LookupDonationType { Id = 1, Name = "Meat", IsActive = true, SortOrder = 1 };
+        var dairy = new LookupDonationType { Id = 2, Name = "Dairy", IsActive = true, SortOrder = 2 };
+        context.LookupDonationTypes.AddRange(meat, dairy);
+
+        var donorWithMeat = MakeDonor("Donor With Meat", loginUser.Id, null);
+        var otherDonorWithMeat = MakeDonor("Other Donor With Meat", loginUser.Id, null);
+        context.Donors.AddRange(donorWithMeat, otherDonorWithMeat);
+        await context.SaveChangesAsync();
+
+        context.DonorDonationTypes.Add(new DonorDonationType { DonorId = donorWithMeat.Id, DonationTypeId = meat.Id });
+        context.DonorDonationTypes.Add(new DonorDonationType { DonorId = otherDonorWithMeat.Id, DonationTypeId = meat.Id });
+        await context.SaveChangesAsync();
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginCommand(loginUser.Email, password));
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(
+            await login.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        return client;
+    }
+
+    [Fact]
+    public async Task GetDonorsByType_ReturnsCountsIncludingZeroForEmptyTypes()
+    {
+        var client = await SetupForTypesAsync("Admin");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-type");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = Body(response).GetProperty("data").EnumerateArray().ToList();
+
+        Assert.Equal(2, data.Count);
+
+        var meat = data.Single(t => t.GetProperty("donationType").GetString() == "Meat");
+        Assert.Equal(2, meat.GetProperty("donorCount").GetInt32());
+
+        var dairy = data.Single(t => t.GetProperty("donationType").GetString() == "Dairy");
+        Assert.Equal(0, dairy.GetProperty("donorCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetDonorsByType_NonAdminUser_Forbidden()
+    {
+        var client = await SetupForTypesAsync("Procurement");
+
+        var response = await client.GetAsync("/api/v1/reports/donors-by-type");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetDonorsByType_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient().GetAsync("/api/v1/reports/donors-by-type");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

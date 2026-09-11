@@ -316,4 +316,87 @@ public class ReportsRepositoryTests
         var jhb = result.Single(r => r.Region == "JHB");
         Assert.Equal("Johannesburg", jhb.RegionName);
     }
+
+    private async Task<(CrmDbContext Context, short MeatId, short DairyId)> CreateSeededContextForTypesAsync()
+    {
+        var context = new CrmDbContext(_options);
+        await context.Database.EnsureCreatedAsync();
+
+        context.DonorDonationTypes.RemoveRange(context.DonorDonationTypes);
+        context.Donors.RemoveRange(context.Donors);
+        context.Users.RemoveRange(context.Users);
+        context.LookupDonationTypes.RemoveRange(context.LookupDonationTypes);
+        await context.SaveChangesAsync();
+
+        if (!await context.LookupCompanyTypes.AnyAsync(l => l.Id == 1))
+            context.LookupCompanyTypes.Add(new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true, SortOrder = 1 });
+        if (!await context.LookupEntityTypes.AnyAsync(l => l.Id == 1))
+            context.LookupEntityTypes.Add(new LookupEntityType { Id = 1, Name = "Private Company", IsActive = true, SortOrder = 1 });
+        if (!await context.LookupDonationFrequencies.AnyAsync(l => l.Id == 1))
+            context.LookupDonationFrequencies.Add(new LookupDonationFrequency { Id = 1, Name = "Monthly", IsActive = true, SortOrder = 1 });
+        await context.SaveChangesAsync();
+
+        var meat = new LookupDonationType { Id = 1, Name = "Meat", IsActive = true, SortOrder = 1 };
+        var dairy = new LookupDonationType { Id = 2, Name = "Dairy", IsActive = true, SortOrder = 2 };
+        var inactive = new LookupDonationType { Id = 3, Name = "Discontinued", IsActive = false, SortOrder = 3 };
+        context.LookupDonationTypes.AddRange(meat, dairy, inactive);
+
+        var creator = new User { Id = Guid.NewGuid(), Email = "types-fixture@example.com", FirstName = "Case", LastName = "Worker", PasswordHash = "hash", IsActive = true };
+        context.Users.Add(creator);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+        return (context, meat.Id, dairy.Id);
+    }
+
+    [Fact]
+    public async Task GetDonorsByTypeAsync_TypeWithNoDonors_StillAppearsWithZeroCount()
+    {
+        var (context, _, _) = await CreateSeededContextForTypesAsync();
+        using var ctx = context;
+
+        var repo = new ReportsRepository(ctx);
+        var result = await repo.GetDonorsByTypeAsync();
+
+        Assert.Equal(2, result.Count); // active types only: Meat, Dairy
+        Assert.All(result, t => Assert.Equal(0, t.DonorCount));
+    }
+
+    [Fact]
+    public async Task GetDonorsByTypeAsync_DonorWithTwoTypes_CountsOnceInEachType()
+    {
+        var (context, meatId, dairyId) = await CreateSeededContextForTypesAsync();
+        using var ctx = context;
+
+        var creatorId = ctx.Users.Single().Id;
+        var donor = MakeDonor("Multi Type Donor", creatorId, null);
+        ctx.Donors.Add(donor);
+        await ctx.SaveChangesAsync();
+
+        ctx.DonorDonationTypes.AddRange(
+            new DonorDonationType { DonorId = donor.Id, DonationTypeId = meatId },
+            new DonorDonationType { DonorId = donor.Id, DonationTypeId = dairyId });
+        await ctx.SaveChangesAsync();
+        ctx.ChangeTracker.Clear();
+
+        var repo = new ReportsRepository(ctx);
+        var result = await repo.GetDonorsByTypeAsync();
+
+        var meat = result.Single(t => t.DonationType == "Meat");
+        var dairy = result.Single(t => t.DonationType == "Dairy");
+        Assert.Equal(1, meat.DonorCount);
+        Assert.Equal(1, dairy.DonorCount);
+    }
+
+    [Fact]
+    public async Task GetDonorsByTypeAsync_ExcludesInactiveTypes()
+    {
+        var (context, _, _) = await CreateSeededContextForTypesAsync();
+        using var ctx = context;
+
+        var repo = new ReportsRepository(ctx);
+        var result = await repo.GetDonorsByTypeAsync();
+
+        Assert.DoesNotContain(result, t => t.DonationType == "Discontinued");
+    }
 }
