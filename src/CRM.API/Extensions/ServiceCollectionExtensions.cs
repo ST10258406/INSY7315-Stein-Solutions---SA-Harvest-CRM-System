@@ -70,6 +70,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IReportsRepository, ReportsRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -120,6 +122,7 @@ public static class ServiceCollectionExtensions
         // Service implementations
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBlobStorageService, BlobStorageService>();
+        services.AddScoped<IReportExportService, ReportExportService>(); // QuestPDF + ClosedXML, synchronous for now
         services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
         services.AddScoped<INotificationService, NotificationService>();
 
