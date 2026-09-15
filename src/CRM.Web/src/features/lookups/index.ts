@@ -7,6 +7,7 @@ export {
   useDonationFrequencies,
   useProvinces,
   useBbbeeStatuses,
+  useRelationshipManagers,
   useDonorLookups,
   type DonorLookups,
 } from './useLookups';

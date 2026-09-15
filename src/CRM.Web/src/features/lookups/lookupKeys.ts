@@ -7,4 +7,5 @@ export const lookupKeys = {
   donationFrequencies: () => [...lookupKeys.all, 'donation-frequencies'] as const,
   provinces: () => [...lookupKeys.all, 'provinces'] as const,
   bbbeeStatuses: () => [...lookupKeys.all, 'bbbee-statuses'] as const,
+  relationshipManagers: () => [...lookupKeys.all, 'relationship-managers'] as const,
 };

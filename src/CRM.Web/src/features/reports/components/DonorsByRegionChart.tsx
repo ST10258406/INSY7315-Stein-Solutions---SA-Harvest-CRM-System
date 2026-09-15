@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useDonorsByRegionReport } from '../hooks/useDonorsByRegionReport';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
+import { ExportReportButton } from './ExportReportButton';
 
 /** Horizontal bars: region names are longer than a Y-axis count needs to be legible on. */
 export function DonorsByRegionChart() {
@@ -19,6 +20,7 @@ export function DonorsByRegionChart() {
       emptyTitle="No donors yet"
       emptyMessage="Once donors are added, you'll see how they're spread across regions."
       onRetry={() => refetch()}
+      actions={<ExportReportButton reportType="donors-by-region" />}
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>

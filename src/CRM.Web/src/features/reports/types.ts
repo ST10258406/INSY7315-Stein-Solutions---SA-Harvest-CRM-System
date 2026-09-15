@@ -1,9 +1,14 @@
+import type { AxiosError } from 'axios';
+import type { ApiErrorEnvelope } from '@/lib/apiError';
 import type { DonorStatus } from '@/features/donors/types';
 
 // Mirrors the backend DTOs in CRM.Application/Modules/Reports/Dtos exactly —
 // keep these in sync with that project. Every endpoint is wrapped in the
 // standard `{ data: ... }` envelope by ReportsController, which the hooks
 // below unwrap.
+
+/** Error shape thrown by every report hook — matches the backend's standard envelope. */
+export type ApiError = AxiosError<ApiErrorEnvelope>;
 
 export interface ReportPeriod {
   startDate: string; // yyyy-MM-dd (DateOnly)
@@ -54,4 +59,21 @@ export interface DonorsByType {
 export interface DonorsByStatus {
   status: DonorStatus;
   donorCount: number;
+}
+
+// Mirrors CRM.Application.Modules.Reports.Export.ReportTypes / ReportExportFormats and
+// POST /api/v1/reports/export's request/response DTOs.
+
+export type ReportType = 'donors-contacted' | 'donors-by-region' | 'donors-by-type' | 'donors-by-status';
+
+export type ExportFormat = 'pdf' | 'excel';
+
+/** Only meaningful for the donors-contacted export — every other report type ignores it. */
+export type ExportReportFilters = DonorsContactedFilters;
+
+export interface ReportExportResult {
+  downloadUrl: string;
+  expiresAt: string;
+  fileName: string;
+  fileSizeBytes: number;
 }

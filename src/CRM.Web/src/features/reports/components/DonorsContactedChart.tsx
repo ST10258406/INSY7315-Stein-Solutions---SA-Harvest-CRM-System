@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useDonorsContactedReport, defaultDonorsContactedFilters } from '../hooks/useDonorsContactedReport';
 import type { DonorsContactedFilters, ManagerContacted } from '../types';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
+import { ExportReportButton } from './ExportReportButton';
 
 interface DonorsContactedChartProps {
   /** Supplied by ReportFilters (next issue). Defaults to the last 30 days until then. */
@@ -45,14 +46,17 @@ export function DonorsContactedChart({ filters = defaultDonorsContactedFilters()
       emptyMessage="No relationship manager has logged a donor interaction in this period."
       onRetry={() => refetch()}
       actions={
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setSort((s) => (s === 'count' ? 'name' : 'count'))}
-          aria-label={sort === 'count' ? 'Sort by name' : 'Sort by most contacted'}
-        >
-          {sort === 'count' ? 'Most contacted' : 'Name A–Z'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setSort((s) => (s === 'count' ? 'name' : 'count'))}
+            aria-label={sort === 'count' ? 'Sort by name' : 'Sort by most contacted'}
+          >
+            {sort === 'count' ? 'Most contacted' : 'Name A–Z'}
+          </Button>
+          <ExportReportButton reportType="donors-contacted" filters={filters} />
+        </div>
       }
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>

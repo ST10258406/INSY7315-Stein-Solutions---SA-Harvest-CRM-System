@@ -1,15 +1,22 @@
+import { useState } from 'react';
 import {
   DonorsByRegionChart,
   DonorsByStatusChart,
   DonorsByTypeChart,
   DonorsContactedChart,
+  ReportFilters,
 } from '@/features/reports/components';
+import { defaultDonorsContactedFilters } from '@/features/reports/hooks';
+import type { DonorsContactedFilters } from '@/features/reports/types';
 
-// TODO(next issue — ReportFilters): render the date-range control above the
-// grid and pass its value as `filters` to DonorsContactedChart. The other
-// three charts are always all-time, per the design doc — don't wire a date
-// picker into them.
 export default function ReportsPage() {
+  // Owned here (not inside DonorsContactedChart) so ReportFilters and the chart it filters
+  // share one source of truth — changing a filter re-renders only this section, leaving the
+  // other three (always all-time, unfiltered) charts untouched.
+  const [donorsContactedFilters, setDonorsContactedFilters] = useState<DonorsContactedFilters>(
+    defaultDonorsContactedFilters,
+  );
+
   return (
     <main className="flex-1 min-w-0 overflow-y-auto p-[26px_30px_34px]">
       <div className="mb-6">
@@ -20,7 +27,10 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-        <DonorsContactedChart />
+        <div>
+          <ReportFilters value={donorsContactedFilters} onChange={setDonorsContactedFilters} />
+          <DonorsContactedChart filters={donorsContactedFilters} />
+        </div>
         <DonorsByStatusChart />
         <DonorsByRegionChart />
         <DonorsByTypeChart />

@@ -1,5 +1,6 @@
 using CRM.Application.Modules.Lookups.Queries.GetCodedLookup;
 using CRM.Application.Modules.Lookups.Queries.GetLookup;
+using CRM.Application.Modules.Lookups.Queries.GetRelationshipManagers;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,4 +46,8 @@ public class LookupsController : ControllerBase
     [HttpGet("provinces")]
     public async Task<IActionResult> GetProvinces()
         => Ok(new { data = await _mediator.Send(new GetCodedLookupQuery(CodedLookupType.Provinces)) });
+
+    [HttpGet("relationship-managers")]
+    public async Task<IActionResult> GetRelationshipManagers()
+        => Ok(new { data = await _mediator.Send(new GetRelationshipManagersQuery()) });
 }
