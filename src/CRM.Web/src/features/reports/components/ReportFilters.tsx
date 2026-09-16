@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CalendarBlank } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,15 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
   const startDate = fromYmd(value.startDate);
   const endDate = fromYmd(value.endDate);
 
+  // Base UI's <Select.Value> shows the raw value string unless Root's `items` gives it a
+  // value→label lookup — without this it would render the manager's GUID (or "all") verbatim
+  // instead of their name.
+  const managerItems = useMemo(() => {
+    const items: Record<string, string> = { [ALL_MANAGERS_VALUE]: 'All managers' };
+    for (const manager of managers.data ?? []) items[manager.id] = manager.fullName;
+    return items;
+  }, [managers.data]);
+
   function handleStartSelect(date: Date | undefined) {
     if (!date || !endDate || date > endDate) return;
     onChange({ ...value, startDate: toYmd(date) });
@@ -50,12 +60,14 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
       <div className="flex flex-col gap-1.5">
         <Label className="text-[11.5px] font-semibold text-[var(--muted-c)]">Start date</Label>
         <Popover>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
-              <CalendarBlank className="h-3.5 w-3.5" />
-              {formatDate(value.startDate)}
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
+                <CalendarBlank className="h-3.5 w-3.5" />
+                {formatDate(value.startDate)}
+              </Button>
+            }
+          />
           <PopoverContent className="w-auto p-0">
             <Calendar mode="single" selected={startDate} onSelect={handleStartSelect} disabled={{ after: endDate }} />
           </PopoverContent>
@@ -65,12 +77,14 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
       <div className="flex flex-col gap-1.5">
         <Label className="text-[11.5px] font-semibold text-[var(--muted-c)]">End date</Label>
         <Popover>
-          <PopoverTrigger asChild>
-            <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
-              <CalendarBlank className="h-3.5 w-3.5" />
-              {formatDate(value.endDate)}
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
+                <CalendarBlank className="h-3.5 w-3.5" />
+                {formatDate(value.endDate)}
+              </Button>
+            }
+          />
           <PopoverContent className="w-auto p-0">
             <Calendar mode="single" selected={endDate} onSelect={handleEndSelect} disabled={{ before: startDate }} />
           </PopoverContent>
@@ -79,7 +93,11 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
 
       <div className="flex flex-col gap-1.5">
         <Label className="text-[11.5px] font-semibold text-[var(--muted-c)]">Relationship manager</Label>
-        <Select value={value.relationshipManagerId ?? ALL_MANAGERS_VALUE} onValueChange={handleManagerChange}>
+        <Select
+          items={managerItems}
+          value={value.relationshipManagerId ?? ALL_MANAGERS_VALUE}
+          onValueChange={handleManagerChange}
+        >
           <SelectTrigger size="sm" className="min-w-[180px]">
             <SelectValue />
           </SelectTrigger>

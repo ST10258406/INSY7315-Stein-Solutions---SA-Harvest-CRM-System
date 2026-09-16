@@ -1,7 +1,6 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useDonorsByTypeReport } from '../hooks/useDonorsByTypeReport';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
-import { ExportReportButton } from './ExportReportButton';
 
 export function DonorsByTypeChart() {
   const { data, isPending, isError, refetch } = useDonorsByTypeReport();
@@ -19,7 +18,6 @@ export function DonorsByTypeChart() {
       emptyTitle="No donors yet"
       emptyMessage="Once donors are added, you'll see which donation types they give."
       onRetry={() => refetch()}
-      actions={<ExportReportButton reportType="donors-by-type" />}
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: angled ? 48 : 0 }}>

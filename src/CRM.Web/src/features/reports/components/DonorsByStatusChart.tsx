@@ -3,7 +3,6 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recha
 import { useDonorsByStatusReport } from '../hooks/useDonorsByStatusReport';
 import { sortByStatusOrder, statusColor, statusLabel } from '../lib/statusColors';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
-import { ExportReportButton } from './ExportReportButton';
 
 export function DonorsByStatusChart() {
   const { data, isPending, isError, refetch } = useDonorsByStatusReport();
@@ -26,7 +25,6 @@ export function DonorsByStatusChart() {
       emptyTitle="No donors yet"
       emptyMessage="Once donors are added, you'll see how many are active, pending, lapsed or rejected."
       onRetry={() => refetch()}
-      actions={<ExportReportButton reportType="donors-by-status" />}
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <PieChart>

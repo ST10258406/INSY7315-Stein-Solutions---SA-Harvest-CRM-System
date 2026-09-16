@@ -18,6 +18,7 @@ import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { useHydrateAuth } from '@/features/auth/hooks/useHydrateAuth';
 import { useAuthStore } from '@/store/authStore';
 import { AppLayout } from '@/features/shell/AppLayout';
+import { Toaster } from '@/components/ui/sonner';
 import { paths } from '@/routes/paths';
 import '@/store/themeStore';
 import './App.css';
@@ -82,6 +83,7 @@ function App() {
             </Route>
           </Routes>
         </div>
+        <Toaster />
       </Router>
     </QueryClientProvider>
   );
