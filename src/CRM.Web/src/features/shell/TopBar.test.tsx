@@ -27,32 +27,34 @@ function signInAs(roles: string[]) {
   });
 }
 
-describe('TopBar nav — Approvals link RoleGuard (Issue #113)', () => {
+describe('TopBar nav — Approvals/Reports link RoleGuard (Issues #113, #73)', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(cleanup);
 
-  it('hides Approvals (and Users) from a non-admin role', () => {
+  it('hides Approvals, Reports, and Users from a non-admin role', () => {
     signInAs(['Procurement']);
     renderTopBar();
 
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /donors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /tasks/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
 
     expect(screen.queryByRole('link', { name: /approvals/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /reports/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /users/i })).not.toBeInTheDocument();
   });
 
-  it('shows Approvals to an Admin', () => {
+  it('shows Approvals and Reports to an Admin', () => {
     signInAs(['Admin']);
     renderTopBar();
     expect(screen.getByRole('link', { name: /approvals/i })).toHaveAttribute('href', '/approvals');
+    expect(screen.getByRole('link', { name: /reports/i })).toHaveAttribute('href', '/reports');
   });
 
-  it('shows Approvals to a SuperAdmin', () => {
+  it('shows Approvals and Reports to a SuperAdmin', () => {
     signInAs(['SuperAdmin']);
     renderTopBar();
     expect(screen.getByRole('link', { name: /approvals/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
   });
 });

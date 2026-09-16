@@ -1,5 +1,6 @@
 namespace CRM.Application.Common.Interfaces;
 
+using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
 
 /// <summary>
@@ -20,6 +21,12 @@ public interface IUserRepository
 
     /// <summary>Ids of every active user holding the named role. Used for admin notification fan-out.</summary>
     Task<List<Guid>> GetActiveUserIdsByRoleAsync(string roleName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Active users holding the named role, ordered by name. Used to populate the
+    /// "relationship manager" dropdown (GET /api/v1/lookups/relationship-managers).
+    /// </summary>
+    Task<List<RelationshipManagerDto>> GetActiveByRoleAsync(string roleName, CancellationToken cancellationToken = default);
 
     /// <summary>True when a user with this id exists and is active.</summary>
     Task<bool> ExistsAndActiveAsync(Guid userId, CancellationToken cancellationToken = default);
