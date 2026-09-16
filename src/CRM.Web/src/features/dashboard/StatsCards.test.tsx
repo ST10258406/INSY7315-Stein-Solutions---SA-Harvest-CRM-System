@@ -50,6 +50,52 @@ describe('StatsCards', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('Donors Contacted This Month')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
+    // thisMonth 12 vs lastMonth 9 → up, (12-9)/9*100 = 33.33% rounded to 33%.
+    expect(screen.getByText('33% vs last month')).toBeInTheDocument();
+  });
+
+  it('shows a down trend when donorsContactedThisMonth is below last month', async () => {
+    setRoles(['Admin']);
+    vi.mocked(api.get).mockResolvedValue({
+      data: { data: { ...STATS, donorsContactedThisMonth: 9, donorsContactedLastMonth: 12 } },
+    });
+
+    renderCards();
+
+    // (9-12)/12*100 = -25%, absolute value shown, direction conveyed by the arrow icon/color.
+    expect(await screen.findByText('25% vs last month')).toBeInTheDocument();
+  });
+
+  it('shows a neutral "no change" trend, not an up or down arrow, when the two months are equal', async () => {
+    setRoles(['Admin']);
+    vi.mocked(api.get).mockResolvedValue({
+      data: { data: { ...STATS, donorsContactedThisMonth: 10, donorsContactedLastMonth: 10 } },
+    });
+
+    renderCards();
+
+    expect(await screen.findByText('No change vs last month')).toBeInTheDocument();
+  });
+
+  it('falls back to an absolute difference (not a percentage) when donorsContactedLastMonth is 0', async () => {
+    setRoles(['Admin']);
+    vi.mocked(api.get).mockResolvedValue({
+      data: { data: { ...STATS, donorsContactedThisMonth: 6, donorsContactedLastMonth: 0 } },
+    });
+
+    renderCards();
+
+    expect(await screen.findByText('6 donors vs last month')).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it('does not show a trend while stats are still loading', () => {
+    setRoles(['Admin']);
+    vi.mocked(api.get).mockReturnValue(new Promise(() => {}));
+
+    renderCards();
+
+    expect(screen.queryByText(/vs last month/)).not.toBeInTheDocument();
   });
 
   it('hides the Pending Approvals card entirely for a non-Admin, even though the field is present as 0', async () => {

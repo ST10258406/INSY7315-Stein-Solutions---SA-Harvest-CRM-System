@@ -2,6 +2,7 @@ import { ClipboardCheck, ListTodo, CalendarClock, PhoneCall } from 'lucide-react
 import { RoleGuard } from '@/features/auth/components/RoleGuard';
 import { useDashboardStats } from './hooks';
 import { StatsCard } from './StatsCard';
+import { getMonthlyTrend } from './lib/trend';
 
 const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
 
@@ -13,6 +14,10 @@ const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
  */
 export function StatsCards() {
   const { data, isPending, isError } = useDashboardStats();
+  // Undefined while data hasn't loaded yet — StatsCard only renders a trend once it has one.
+  const contactedTrend = data
+    ? getMonthlyTrend(data.donorsContactedThisMonth, data.donorsContactedLastMonth)
+    : undefined;
 
   return (
     <div className="flex flex-wrap gap-4">
@@ -50,6 +55,7 @@ export function StatsCards() {
         value={data?.donorsContactedThisMonth}
         isLoading={isPending}
         isError={isError}
+        trend={contactedTrend}
       />
     </div>
   );
