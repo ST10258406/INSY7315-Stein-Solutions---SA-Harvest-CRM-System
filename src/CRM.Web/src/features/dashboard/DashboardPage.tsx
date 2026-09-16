@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Filter, Download, Plus, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { DonorKpiCards } from './DonorKpiCards';
+import { StatsCards } from './StatsCards';
 import { OverdueFollowUpsWidget } from './OverdueFollowUpsWidget';
 import { PendingApprovalsBanner } from './PendingApprovalsBanner';
 import { paths } from '@/routes/paths';
@@ -97,6 +98,20 @@ export default function DashboardPage() {
         </div>
 
         <DonorKpiCards />
+      </section>
+
+      {/* Your Work Section (Issue #71): tasks, follow-ups, approvals, contacted-donor counts */}
+      <section className="bg-[var(--soft)] border border-[var(--border)] rounded-2xl p-5 mb-5">
+        <div className="mb-4">
+          <h2 className="m-0 mb-1 text-base font-bold tracking-tight text-[var(--ink)]">
+            Your work
+          </h2>
+          <p className="m-0 text-xs font-medium text-[var(--muted-c)]">
+            Tasks, follow-ups, and approvals that need your attention.
+          </p>
+        </div>
+
+        <StatsCards />
       </section>
 
       {/* Main Grid: Summary Chart + Overdue Table */}
