@@ -62,13 +62,20 @@ function App() {
               <Route path={paths.donorEditPattern} element={<EditDonorPage />} />
               <Route path={paths.donorDetailPattern} element={<DonorDetailPage />} />
               <Route path={paths.tasks} element={<MyTasksPage />} />
-              <Route path={paths.reports} element={<ReportsPage />} />
 
               <Route
                 path={paths.approvals}
                 element={
                   <ProtectedRoute allowedRoles={["Admin", "SuperAdmin"]}>
                     <ApprovalsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path={paths.reports}
+                element={
+                  <ProtectedRoute allowedRoles={["Admin", "SuperAdmin"]}>
+                    <ReportsPage />
                   </ProtectedRoute>
                 }
               />
