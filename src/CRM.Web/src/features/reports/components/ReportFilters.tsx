@@ -51,8 +51,11 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
     onChange({ ...value, endDate: toYmd(date) });
   }
 
-  function handleManagerChange(managerId: string) {
-    onChange({ ...value, relationshipManagerId: managerId === ALL_MANAGERS_VALUE ? undefined : managerId });
+  function handleManagerChange(managerId: string | null) {
+    onChange({
+      ...value,
+      relationshipManagerId: !managerId || managerId === ALL_MANAGERS_VALUE ? undefined : managerId,
+    });
   }
 
   return (
