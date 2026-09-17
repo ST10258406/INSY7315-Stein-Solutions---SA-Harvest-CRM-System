@@ -45,6 +45,12 @@ public class DonorRepository : IDonorRepository
             .Include(d => d.DonationTypes)
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
+    public Task<Donor?> GetBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default)
+        // Tracked (no AsNoTracking) — SubmitPublicDonorDocumentCommandHandler burns
+        // the token on success, which needs EF to track the mutation.
+        => _context.Donors
+            .FirstOrDefaultAsync(d => d.SubmissionToken == submissionToken, cancellationToken);
+
     public async Task<(List<DonorListItemDto> Items, int TotalCount)> SearchAsync(
         DonorSearchCriteria criteria, CancellationToken cancellationToken = default)
     {

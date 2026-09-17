@@ -41,4 +41,13 @@ public interface IDonorRepository
     /// duplicates are not.
     /// </summary>
     Task<string> GetNextReferenceNumberAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Tracked donor lookup by its one-time public SubmissionToken (see
+    /// Donor.SubmissionToken remarks) — used by SubmitPublicDonorDocument to resolve
+    /// the follow-up BBBEE-certificate upload back to the right donor without the
+    /// public client ever handling the donor's real Id. Tracked, not read-only,
+    /// because the caller burns the token (single-use) on success.
+    /// </summary>
+    Task<Donor?> GetBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default);
 }
