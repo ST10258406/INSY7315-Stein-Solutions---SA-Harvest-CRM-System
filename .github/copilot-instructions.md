@@ -273,9 +273,13 @@ explicitly — do not let them pass because the code otherwise looks clean.
   `AuditBehaviour` does this automatically for any command
   implementing `IAuditableCommand`.
   If a handler contains `context.AuditLogs.Add(...)`, flag it.
-  The one deliberate exception is the public donor form submission
-  handler, which writes its own audit entry manually since there is
-  no authenticated `user_id` to attach via the normal pipeline.
+  The deliberate exceptions are the two unauthenticated public-form
+  handlers — `SubmitPublicDonorCommandHandler` and
+  `SubmitPublicDonorDocumentCommandHandler` — both of which write their
+  own audit entry manually (via `IAuditLogRepository.AddAsync`, still
+  going through `IUnitOfWork.SaveChangesAsync`, never a direct
+  `context.AuditLogs.Add(...)`) since there is no authenticated
+  `user_id` to attach via the normal `IAuditableCommand` pipeline.
 
 - Handlers must NOT call `INotificationService` for follow-up reminders
   unless the handler is `LogInteractionCommandHandler` — that is the

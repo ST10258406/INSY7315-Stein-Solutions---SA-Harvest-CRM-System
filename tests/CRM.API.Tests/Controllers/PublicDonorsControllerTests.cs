@@ -294,4 +294,219 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
             .GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true).Any();
         Assert.True(controllerAllowsAnonymous);
     }
+
+    [Fact]
+    public void SubmitDocumentAction_CarriesThePublicSubmitRateLimitPolicy_SameBucketAsSubmit()
+    {
+        // Issue's recommendation: submit and submit/document share one bucket
+        // (10/hour/IP) since a legitimate donor only calls each once per attempt.
+        var method = typeof(PublicDonorsController).GetMethod(nameof(PublicDonorsController.SubmitDocument))!;
+
+        var rateLimitAttribute = method.GetCustomAttributes(typeof(EnableRateLimitingAttribute), inherit: true)
+            .Cast<EnableRateLimitingAttribute>().SingleOrDefault();
+        Assert.NotNull(rateLimitAttribute);
+        Assert.Equal(RateLimitingExtensions.PublicSubmitPolicy, rateLimitAttribute!.PolicyName);
+    }
+
+    private static MultipartFormDataContent MakeDocumentUploadForm(
+        string sessionToken, string documentType, byte[]? fileBytes = null, string contentType = "application/pdf", string fileName = "cert.pdf")
+    {
+        var content = new MultipartFormDataContent
+        {
+            { new StringContent(sessionToken), "sessionToken" },
+            { new StringContent(documentType), "documentType" }
+        };
+
+        var fileContent = new ByteArrayContent(fileBytes ?? [1, 2, 3, 4]);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(fileContent, "file", fileName);
+
+        return content;
+    }
+
+    private async Task<(CrmDbContext Context, Donor Donor)> SeedPendingDonorWithTokenAsync(
+        string token, DateTimeOffset? expiresAt = null)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        var donor = new Donor
+        {
+            Id = Guid.NewGuid(),
+            CompanyName = "Doc Test Pty Ltd",
+            RegisteredCompanyName = "Doc Test Pty Ltd",
+            ReferenceNumber = $"DON-{DateTime.UtcNow.Year}-{Random.Shared.Next(1, 99999):D5}",
+            CompanyTypeId = 1,
+            EntityTypeId = 1,
+            DonationFrequencyId = 1,
+            CollectionAddress = "Gate 1",
+            Status = DonorStatus.PendingReview,
+            SubmissionSource = SubmissionSource.PublicForm,
+            SubmissionToken = token,
+            SubmissionTokenExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30),
+            CreatedByUserId = (await context.Users.FirstAsync()).Id
+        };
+        context.Donors.Add(donor);
+        await context.SaveChangesAsync();
+
+        return (context, donor);
+    }
+
+    [Fact]
+    public async Task SubmitDocument_ValidToken_Returns201AndCreatesBbbeeCertificateDocument()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        var (_, donor) = await SeedPendingDonorWithTokenAsync("valid-doc-token");
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("valid-doc-token", "BBBEECertificate"));
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var root = JsonDocument.Parse(body).RootElement;
+        Assert.Equal("Document uploaded successfully.", root.GetProperty("message").GetString());
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var document = await verifyContext.DonorDocuments.SingleAsync(d => d.DonorId == donor.Id);
+        Assert.Equal(DocumentType.BBBEECertificate, document.DocumentType);
+        Assert.Null(document.UploadedByUserId);
+    }
+
+    [Fact]
+    public async Task SubmitDocument_TokenReused_SecondCallReturns400()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        await SeedPendingDonorWithTokenAsync("reuse-me-token");
+
+        var first = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("reuse-me-token", "BBBEECertificate"));
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("reuse-me-token", "BBBEECertificate"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+        var root = JsonDocument.Parse(await second.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("VALIDATION_ERROR", root.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SubmitDocument_ExpiredToken_Returns400()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        await SeedPendingDonorWithTokenAsync("expired-token", DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("expired-token", "BBBEECertificate"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitDocument_UnknownToken_Returns400()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("never-issued-token", "BBBEECertificate"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitDocument_WrongDocumentType_Returns400()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        await SeedPendingDonorWithTokenAsync("wrong-type-token");
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("wrong-type-token", "Signature"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitDocument_UnsupportedMimeType_Returns400()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        await SeedPendingDonorWithTokenAsync("bad-mime-token");
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("bad-mime-token", "BBBEECertificate", contentType: "application/zip", fileName: "cert.zip"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitThenSubmitDocument_EndToEndChain_LinksDocumentToTheSubmittedDonor()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+
+        var submitResponse = await client.PostAsJsonAsync("/api/v1/public/donors/submit", MakeValidPayload());
+        Assert.Equal(HttpStatusCode.Created, submitResponse.StatusCode);
+        var submitRoot = JsonDocument.Parse(await submitResponse.Content.ReadAsStringAsync()).RootElement;
+        var sessionToken = submitRoot.GetProperty("submissionToken").GetString()!;
+
+        var docResponse = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm(sessionToken, "BBBEECertificate"));
+
+        Assert.Equal(HttpStatusCode.Created, docResponse.StatusCode);
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var donor = await verifyContext.Donors.SingleAsync();
+        Assert.True(await verifyContext.DonorDocuments.AnyAsync(
+            d => d.DonorId == donor.Id && d.DocumentType == DocumentType.BBBEECertificate));
+        Assert.Null(donor.SubmissionToken); // burned after the successful upload
+    }
 }

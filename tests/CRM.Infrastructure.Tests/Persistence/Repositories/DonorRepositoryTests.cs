@@ -399,6 +399,61 @@ public class DonorRepositoryTests
     }
 
     [Fact]
+    public async Task GetBySubmissionTokenAsync_MatchingToken_ReturnsTrackedDonor()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var donor = MakeDonor("Doc Test Pty Ltd", _creatorId);
+        donor.SubmissionToken = "matching-token";
+        donor.SubmissionTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        context.Donors.Add(donor);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        var found = await repository.GetBySubmissionTokenAsync("matching-token");
+
+        Assert.NotNull(found);
+        Assert.Equal(donor.Id, found!.Id);
+
+        // Tracked — a mutation is picked up by SaveChangesAsync without an explicit Update call.
+        found.SubmissionToken = null;
+        found.SubmissionTokenExpiresAt = null;
+        await new UnitOfWork(context).SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        Assert.Null((await context.Donors.FindAsync(donor.Id))!.SubmissionToken);
+    }
+
+    [Fact]
+    public async Task GetBySubmissionTokenAsync_NoMatch_ReturnsNull()
+    {
+        using var context = await CreateSeededContextAsync();
+        var repository = new DonorRepository(context, _mapper);
+
+        Assert.Null(await repository.GetBySubmissionTokenAsync("does-not-exist"));
+    }
+
+    [Fact]
+    public async Task GetBySubmissionTokenAsync_TokenAlreadyBurnedToNull_NeverMatchesByNull()
+    {
+        // Two donors both with a null SubmissionToken (the common case once a token
+        // has been consumed, or before one was ever issued) must never both match
+        // an empty/null lookup — this confirms the query compares against the real
+        // token string, not an accidental "IS NULL" match.
+        using var context = await CreateSeededContextAsync();
+        context.Donors.AddRange(
+            MakeDonor("Donor A", _creatorId),
+            MakeDonor("Donor B", _creatorId));
+        await context.SaveChangesAsync();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        Assert.Null(await repository.GetBySubmissionTokenAsync(string.Empty));
+    }
+
+    [Fact]
     public async Task AddAsync_AndAddApprovalAsync_CommitInOneUnitOfWorkCall()
     {
         using var context = await CreateSeededContextAsync();
