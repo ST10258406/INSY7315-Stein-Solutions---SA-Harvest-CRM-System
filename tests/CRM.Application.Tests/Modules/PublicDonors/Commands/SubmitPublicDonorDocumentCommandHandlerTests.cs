@@ -35,15 +35,6 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
             NullLogger<SubmitPublicDonorDocumentCommandHandler>.Instance);
     }
 
-    private static Donor MakePendingDonor(string token, DateTimeOffset? expiresAt = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        CompanyName = "Doc Test Pty Ltd",
-        ReferenceNumber = "DON-2026-00001",
-        SubmissionToken = token,
-        SubmissionTokenExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30)
-    };
-
     private static SubmitPublicDonorDocumentCommand MakeCommand(string token) => new()
     {
         SessionToken = token,
@@ -57,15 +48,15 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
     };
 
     [Fact]
-    public async Task Handle_ValidToken_UploadsAndCreatesDocumentLinkedToTheResolvedDonor()
+    public async Task Handle_ValidToken_ClaimsItAndCreatesDocumentLinkedToTheResolvedDonor()
     {
-        var donor = MakePendingDonor("valid-token");
-        _donorsMock.GetBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donor);
+        var donorId = Guid.NewGuid();
+        _donorsMock.ClaimBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donorId);
 
         var result = await _handler.Handle(MakeCommand("valid-token"), CancellationToken.None);
 
         var document = Assert.Single(_documents);
-        Assert.Equal(donor.Id, document.DonorId);
+        Assert.Equal(donorId, document.DonorId);
         Assert.Equal(DocumentType.BBBEECertificate, document.DocumentType);
         Assert.Null(document.UploadedByUserId); // anonymous uploader
         Assert.True(document.IsActive);
@@ -75,21 +66,12 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ValidToken_BurnsTheTokenSoItCannotBeReplayed()
+    public async Task Handle_ClaimReturnsNull_ThrowsValidationExceptionAndUploadsNothing()
     {
-        var donor = MakePendingDonor("valid-token");
-        _donorsMock.GetBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donor);
-
-        await _handler.Handle(MakeCommand("valid-token"), CancellationToken.None);
-
-        Assert.Null(donor.SubmissionToken);
-        Assert.Null(donor.SubmissionTokenExpiresAt);
-    }
-
-    [Fact]
-    public async Task Handle_UnknownToken_ThrowsValidationExceptionAndUploadsNothing()
-    {
-        _donorsMock.GetBySubmissionTokenAsync("bogus-token", Arg.Any<CancellationToken>()).Returns((Donor?)null);
+        // Covers unknown, expired, and already-consumed tokens alike — the
+        // repository collapses all three into "no row claimed" (null), so the
+        // handler has nothing further to distinguish here.
+        _donorsMock.ClaimBySubmissionTokenAsync("bogus-token", Arg.Any<CancellationToken>()).Returns((Guid?)null);
 
         await Assert.ThrowsAsync<ValidationException>(
             () => _handler.Handle(MakeCommand("bogus-token"), CancellationToken.None));
@@ -100,41 +82,10 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ExpiredToken_ThrowsValidationException()
-    {
-        var donor = MakePendingDonor("expired-token", DateTimeOffset.UtcNow.AddMinutes(-1));
-        _donorsMock.GetBySubmissionTokenAsync("expired-token", Arg.Any<CancellationToken>()).Returns(donor);
-
-        await Assert.ThrowsAsync<ValidationException>(
-            () => _handler.Handle(MakeCommand("expired-token"), CancellationToken.None));
-
-        Assert.Empty(_documents);
-    }
-
-    [Fact]
-    public async Task Handle_AlreadyConsumedToken_ThrowsValidationException()
-    {
-        // Simulates replay: the token was already burned by a prior successful
-        // call, so SubmissionTokenExpiresAt is now null — same as a token that
-        // never existed, from this handler's point of view.
-        var donor = MakePendingDonor("used-token");
-        donor.SubmissionToken = null;
-        donor.SubmissionTokenExpiresAt = null;
-
-        // A burned token no longer matches any donor via GetBySubmissionTokenAsync
-        // in the real repository (the column is now null), so the lookup itself
-        // returns null for a replayed token.
-        _donorsMock.GetBySubmissionTokenAsync("used-token", Arg.Any<CancellationToken>()).Returns((Donor?)null);
-
-        await Assert.ThrowsAsync<ValidationException>(
-            () => _handler.Handle(MakeCommand("used-token"), CancellationToken.None));
-    }
-
-    [Fact]
     public async Task Handle_ValidToken_WritesManualAuditLogWithDonorIdButResponseNeverContainsIt()
     {
-        var donor = MakePendingDonor("valid-token");
-        _donorsMock.GetBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donor);
+        var donorId = Guid.NewGuid();
+        _donorsMock.ClaimBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donorId);
 
         var result = await _handler.Handle(MakeCommand("valid-token"), CancellationToken.None);
 
@@ -142,7 +93,7 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
         var auditLog = Assert.Single(_auditLogs);
         Assert.Null(auditLog.UserId);
         Assert.Equal(AuditAction.Created, auditLog.Action);
-        Assert.Contains(donor.Id.ToString(), auditLog.NewValues);
+        Assert.Contains(donorId.ToString(), auditLog.NewValues);
 
         // The response DTO structurally has no Id-shaped property at all.
         var properties = result.GetType().GetProperties();
@@ -150,10 +101,17 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_BlobUploadFailure_DoesNotInsertDocumentOrBurnToken()
+    public async Task Handle_BlobUploadFailsAfterTokenAlreadyClaimed_PropagatesAndDoesNotInsertDocument()
     {
-        var donor = MakePendingDonor("valid-token");
-        _donorsMock.GetBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donor);
+        // The claim is a separate, already-committed statement (see
+        // IDonorRepository.ClaimBySubmissionTokenAsync remarks) — by the time
+        // this runs, the token is unrecoverably burned even though the request
+        // as a whole still fails. That's a deliberate trade-off documented on
+        // the handler; this test locks in that a failure here still surfaces
+        // as an exception rather than a false-success response, and that no
+        // document/audit row is left half-written.
+        var donorId = Guid.NewGuid();
+        _donorsMock.ClaimBySubmissionTokenAsync("valid-token", Arg.Any<CancellationToken>()).Returns(donorId);
         _blobStorageMock.UploadAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>())
             .ThrowsAsync(new InvalidOperationException("blob storage unavailable"));
 
@@ -161,7 +119,6 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
             () => _handler.Handle(MakeCommand("valid-token"), CancellationToken.None));
 
         Assert.Empty(_documents);
-        Assert.NotNull(donor.SubmissionToken); // not burned — nothing actually succeeded
         await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

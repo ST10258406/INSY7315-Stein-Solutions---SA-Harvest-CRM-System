@@ -32,45 +32,23 @@ namespace CRM.Infrastructure.Migrations
                 type: "timestamp with time zone",
                 nullable: true);
 
-            // Data backfill, not a schema change: reference_number defaults to ''
-            // above so existing rows satisfy the NOT NULL constraint being added,
-            // but the unique index right after this would fail immediately if two
-            // or more pre-existing donors were both left at ''. This assigns each
-            // existing donor a real "DON-{year}-{5-digit sequence}" number (ordered
-            // by created_at, per year), then creates/advances that year's sequence
-            // to continue right after the highest backfilled number — so the next
-            // donor created via IDonorRepository.GetNextReferenceNumberAsync can't
-            // collide with one just assigned here. On a fresh database (no existing
-            // donors) this is a no-op.
-            migrationBuilder.Sql(@"
-                DO $$
-                DECLARE
-                    r RECORD;
-                    seq_name TEXT;
-                BEGIN
-                    WITH numbered AS (
-                        SELECT id,
-                               EXTRACT(YEAR FROM created_at)::int AS yr,
-                               ROW_NUMBER() OVER (PARTITION BY EXTRACT(YEAR FROM created_at) ORDER BY created_at) AS seq
-                        FROM donors
-                        WHERE reference_number = ''
-                    )
-                    UPDATE donors d
-                    SET reference_number = 'DON-' || n.yr || '-' || LPAD(n.seq::text, 5, '0')
-                    FROM numbered n
-                    WHERE d.id = n.id;
-
-                    FOR r IN
-                        SELECT EXTRACT(YEAR FROM created_at)::int AS yr, COUNT(*) AS cnt
-                        FROM donors
-                        GROUP BY EXTRACT(YEAR FROM created_at)
-                    LOOP
-                        seq_name := 'donor_reference_seq_' || r.yr;
-                        EXECUTE format('CREATE SEQUENCE IF NOT EXISTS %I START 1', seq_name);
-                        EXECUTE format('SELECT setval(%L, %s)', seq_name, r.cnt);
-                    END LOOP;
-                END $$;
-            ");
+            // The bare minimum non-generated statement this schema change needs to
+            // be applicable at all: reference_number defaults to '' above so
+            // existing rows satisfy the incoming NOT NULL constraint, but the
+            // unique index right after this would fail immediately if two or more
+            // pre-existing donors were both left at ''. This gives every
+            // pre-existing row a distinct placeholder derived from its own
+            // (already-unique) id, so the index below can be created. It does
+            // NOT attempt the "nice" DON-{year}-NNNNN format or touch the
+            // donor_reference_seq_* sequences — that data backfill lives in
+            // DonorReferenceNumberBackfillSeeder (CRM.Infrastructure/Persistence/
+            // Seeders), run as ordinary idempotent app code at startup instead of
+            // migration SQL, so it stays testable/regenerable/reviewable like the
+            // rest of the seeders rather than living in a migration's Up(). On a
+            // fresh database (no existing donors) this UPDATE matches zero rows.
+            migrationBuilder.Sql(
+                "UPDATE donors SET reference_number = 'DON-LEGACY-' || substr(md5(id::text), 1, 8) " +
+                "WHERE reference_number = '';");
 
             migrationBuilder.CreateIndex(
                 name: "idx_donors_reference_number",

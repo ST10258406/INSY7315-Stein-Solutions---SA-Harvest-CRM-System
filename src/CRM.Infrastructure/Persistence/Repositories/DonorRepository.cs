@@ -45,11 +45,49 @@ public class DonorRepository : IDonorRepository
             .Include(d => d.DonationTypes)
             .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
-    public Task<Donor?> GetBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default)
-        // Tracked (no AsNoTracking) — SubmitPublicDonorDocumentCommandHandler burns
-        // the token on success, which needs EF to track the mutation.
-        => _context.Donors
-            .FirstOrDefaultAsync(d => d.SubmissionToken == submissionToken, cancellationToken);
+    public async Task<Guid?> ClaimBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default)
+    {
+        // The InMemory provider used by CRM.API.Tests can't execute raw SQL — same
+        // constraint as GetNextReferenceNumberAsync below. This fallback is a
+        // plain read-then-write and is NOT safe under concurrency; it must never
+        // run against Postgres. It exists solely so those tests can exercise the
+        // public document-upload flow end-to-end without a real database.
+        // Production always uses Npgsql, where the UPDATE ... RETURNING below
+        // claims the token as a single atomic statement instead — see this
+        // method's interface remarks for why a separate read-then-null step is
+        // unsafe under concurrent requests for the same token.
+        if (!_context.Database.IsNpgsql())
+        {
+            var donor = await _context.Donors
+                .FirstOrDefaultAsync(d => d.SubmissionToken == submissionToken, cancellationToken);
+
+            if (donor is null || donor.SubmissionTokenExpiresAt is null || donor.SubmissionTokenExpiresAt < DateTimeOffset.UtcNow)
+                return null;
+
+            donor.SubmissionToken = null;
+            donor.SubmissionTokenExpiresAt = null;
+            await _context.SaveChangesAsync(cancellationToken);
+            return donor.Id;
+        }
+
+        // A single UPDATE ... RETURNING claims and reads atomically: Postgres
+        // takes a row-level lock on the matching donor for the duration of this
+        // statement, so a second concurrent caller for the same token blocks
+        // until the first commits, then re-evaluates the WHERE clause against
+        // the now-already-nulled token and matches zero rows. submission_token
+        // is also uniquely indexed (see AddDonorReferenceNumberAndSubmissionToken
+        // migration), so at most one row can ever match.
+        var claimedIds = await _context.Database
+            .SqlQuery<Guid>($@"
+                UPDATE donors
+                SET submission_token = NULL, submission_token_expires_at = NULL
+                WHERE submission_token = {submissionToken}
+                  AND submission_token_expires_at > now()
+                RETURNING id AS ""Value""")
+            .ToListAsync(cancellationToken);
+
+        return claimedIds.Count == 1 ? claimedIds[0] : null;
+    }
 
     public async Task<(List<DonorListItemDto> Items, int TotalCount)> SearchAsync(
         DonorSearchCriteria criteria, CancellationToken cancellationToken = default)

@@ -41,16 +41,17 @@ public class SubmitPublicDonorDocumentCommandHandler
     public async Task<SubmitPublicDonorDocumentResponseDto> Handle(
         SubmitPublicDonorDocumentCommand command, CancellationToken cancellationToken)
     {
-        // Tracked lookup — we burn the token on success below. A donor whose
-        // token doesn't match, has expired, or was already consumed (burned to
-        // null by a prior successful call) is indistinguishable here from an
-        // outright invalid token — all three collapse to the same generic 400,
-        // same discipline as ResetPasswordCommandHandler's token check.
-        var donor = await _donors.GetBySubmissionTokenAsync(command.SessionToken, cancellationToken);
+        // Atomically claims the token (nulls it in the same DB statement that
+        // reads it) and returns the donor Id, or null if no donor has that token
+        // unexpired. A token that doesn't match, has expired, or was already
+        // consumed by a prior successful call is indistinguishable here from an
+        // outright invalid token — all collapse to the same generic 400, same
+        // discipline as ResetPasswordCommandHandler's token check. See
+        // IDonorRepository.ClaimBySubmissionTokenAsync's remarks for why this
+        // must be a single atomic claim rather than a separate read-then-null.
+        var donorId = await _donors.ClaimBySubmissionTokenAsync(command.SessionToken, cancellationToken);
 
-        if (donor is null
-            || donor.SubmissionTokenExpiresAt is null
-            || donor.SubmissionTokenExpiresAt < DateTimeOffset.UtcNow)
+        if (donorId is null)
         {
             throw new ValidationException(new[]
             {
@@ -63,65 +64,79 @@ public class SubmitPublicDonorDocumentCommandHandler
         // other value, so no Enum.TryParse fallback is needed here.
         const DocumentType documentType = DocumentType.BBBEECertificate;
 
-        // Upload before inserting the DonorDocument row — if the upload fails,
-        // we don't want a DB record pointing at a blob that was never written.
-        // An orphaned blob from a subsequent failed SaveChanges is an accepted,
-        // cheap failure mode (mirrors UploadDonorDocumentCommandHandler).
-        var blobPath = $"donors/{donor.Id}/{documentType}/{Guid.NewGuid()}_{command.OriginalFileName}";
-        await _blobStorage.UploadAsync(command.FileStream, blobPath, command.ContentType);
-
-        var document = new DonorDocument
+        // The token is already claimed/burned at this point — it cannot be
+        // un-burned if anything below fails. That's a deliberate trade-off: a
+        // stranded donor (rare — a transient blob/DB failure) has to restart the
+        // two-step flow with a fresh token from a new /submit call, which is far
+        // preferable to leaving any window where the same token could be
+        // replayed. Logged loudly here specifically so an operator can see when
+        // that trade-off actually bit someone.
+        try
         {
-            Id = Guid.NewGuid(),
-            DonorId = donor.Id,
-            DocumentType = documentType,
-            FileName = command.OriginalFileName,
-            BlobStoragePath = blobPath,
-            FileSizeBytes = command.FileSizeBytes,
-            MimeType = command.ContentType,
-            // Null, not the system user — DonorDocument.UploadedByUserId is
-            // nullable specifically for an anonymous uploader like this one.
-            UploadedByUserId = null,
-            IsActive = true
-        };
-        await _documents.AddAsync(document, cancellationToken);
+            // Upload before inserting the DonorDocument row — if the upload fails,
+            // we don't want a DB record pointing at a blob that was never written.
+            // An orphaned blob from a subsequent failed SaveChanges is an accepted,
+            // cheap failure mode (mirrors UploadDonorDocumentCommandHandler).
+            var blobPath = $"donors/{donorId}/{documentType}/{Guid.NewGuid()}_{command.OriginalFileName}";
+            await _blobStorage.UploadAsync(command.FileStream, blobPath, command.ContentType);
 
-        // Single-use: burn the token immediately so a leaked token can't be
-        // replayed to upload garbage files to this donor's record later.
-        donor.SubmissionToken = null;
-        donor.SubmissionTokenExpiresAt = null;
-
-        // Manual audit_logs write — this command deliberately does not implement
-        // IAuditableCommand (see SubmitPublicDonorDocumentCommand's remarks), so
-        // AuditBehaviour never runs for it. The donor id is recorded here (server
-        // side only) but never appears anywhere in the response sent back to the
-        // public client.
-        var auditLog = new AuditLog
-        {
-            Id = Guid.NewGuid(),
-            UserId = null,
-            EntityType = nameof(DonorDocument),
-            EntityId = document.Id,
-            Action = AuditAction.Created,
-            NewValues = JsonSerializer.Serialize(new
+            var document = new DonorDocument
             {
-                document.Id,
-                DonorId = donor.Id,
-                document.DocumentType,
-                document.FileName
-            }),
-            IpAddress = command.IpAddress,
-            UserAgent = command.UserAgent,
-            CreatedAt = DateTime.UtcNow
-        };
-        await _auditLogs.AddAsync(auditLog, cancellationToken);
+                Id = Guid.NewGuid(),
+                DonorId = donorId.Value,
+                DocumentType = documentType,
+                FileName = command.OriginalFileName,
+                BlobStoragePath = blobPath,
+                FileSizeBytes = command.FileSizeBytes,
+                MimeType = command.ContentType,
+                // Null, not the system user — DonorDocument.UploadedByUserId is
+                // nullable specifically for an anonymous uploader like this one.
+                UploadedByUserId = null,
+                IsActive = true
+            };
+            await _documents.AddAsync(document, cancellationToken);
 
-        // One SaveChangesAsync call — the new document, the token burn on the
-        // donor, and the audit log all commit together or not at all.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            // Manual audit_logs write — this command deliberately does not
+            // implement IAuditableCommand (see SubmitPublicDonorDocumentCommand's
+            // remarks), so AuditBehaviour never runs for it. The donor id is
+            // recorded here (server side only) but never appears anywhere in the
+            // response sent back to the public client.
+            var auditLog = new AuditLog
+            {
+                Id = Guid.NewGuid(),
+                UserId = null,
+                EntityType = nameof(DonorDocument),
+                EntityId = document.Id,
+                Action = AuditAction.Created,
+                NewValues = JsonSerializer.Serialize(new
+                {
+                    document.Id,
+                    DonorId = donorId.Value,
+                    document.DocumentType,
+                    document.FileName
+                }),
+                IpAddress = command.IpAddress,
+                UserAgent = command.UserAgent,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _auditLogs.AddAsync(auditLog, cancellationToken);
+
+            // One SaveChangesAsync call — the new document and the audit log
+            // commit together or not at all. The token claim already committed
+            // separately above (see the atomicity remarks on ClaimBySubmissionTokenAsync).
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Donor {DonorId}'s BBBEE certificate submission session token was claimed but the upload " +
+                "failed partway through — the token cannot be reused; the donor must restart the two-step " +
+                "submission flow to get a new one.", donorId);
+            throw;
+        }
 
         _logger.LogInformation(
-            "BBBEE certificate uploaded for donor {DonorId} via public submission session.", donor.Id);
+            "BBBEE certificate uploaded for donor {DonorId} via public submission session.", donorId);
 
         return new SubmitPublicDonorDocumentResponseDto
         {

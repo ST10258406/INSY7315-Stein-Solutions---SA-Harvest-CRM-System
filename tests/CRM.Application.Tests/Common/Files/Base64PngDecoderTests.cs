@@ -77,6 +77,54 @@ public class Base64PngDecoderTests
     }
 
     [Fact]
+    public void TryDecode_CorrectMagicBytesButGarbageAfterThem_ReturnsFalse()
+    {
+        // Exactly the gap a magic-bytes-only check misses: real PNG signature,
+        // followed by arbitrary bytes shaped enough to look like a chunk header
+        // (a length + "IHDR" + 13 bytes) but with content that isn't genuinely
+        // IHDR data, so its CRC-32 can't possibly match. This is the case the
+        // structural/CRC check exists specifically to catch.
+        var signature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var fakeChunk = new byte[] { 0x00, 0x00, 0x00, 0x0D }; // length = 13, correct for IHDR
+        var fakeType = "IHDR"u8.ToArray();
+        var fakeData = new byte[13]; // all zero — not a real IHDR payload
+        var fakeCrc = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF }; // deliberately wrong CRC
+
+        var bytes = signature.Concat(fakeChunk).Concat(fakeType).Concat(fakeData).Concat(fakeCrc).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+
+        Assert.False(Base64PngDecoder.TryDecode($"data:image/png;base64,{base64}", out _));
+    }
+
+    [Fact]
+    public void TryDecode_TruncatedAfterSignature_ReturnsFalse()
+    {
+        // Just the 8-byte signature with nothing else — not even a full chunk
+        // header, let alone valid IHDR data.
+        var signature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var base64 = Convert.ToBase64String(signature);
+
+        Assert.False(Base64PngDecoder.TryDecode($"data:image/png;base64,{base64}", out _));
+    }
+
+    [Fact]
+    public void TryDecode_FirstChunkNotIhdr_ReturnsFalse()
+    {
+        // Correct signature, correct chunk length, but the chunk type isn't
+        // "IHDR" — every valid PNG's first chunk must be IHDR.
+        var signature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var length = new byte[] { 0x00, 0x00, 0x00, 0x0D };
+        var wrongType = "IDAT"u8.ToArray();
+        var data = new byte[13];
+        var crc = new byte[4];
+
+        var bytes = signature.Concat(length).Concat(wrongType).Concat(data).Concat(crc).ToArray();
+        var base64 = Convert.ToBase64String(bytes);
+
+        Assert.False(Base64PngDecoder.TryDecode($"data:image/png;base64,{base64}", out _));
+    }
+
+    [Fact]
     public void TryDecode_OversizedPayload_ReturnsFalse()
     {
         var oversized = new byte[Base64PngDecoder.MaxDecodedSizeBytes + 1];

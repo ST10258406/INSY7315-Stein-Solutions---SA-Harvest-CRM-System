@@ -43,11 +43,19 @@ public interface IDonorRepository
     Task<string> GetNextReferenceNumberAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Tracked donor lookup by its one-time public SubmissionToken (see
-    /// Donor.SubmissionToken remarks) — used by SubmitPublicDonorDocument to resolve
-    /// the follow-up BBBEE-certificate upload back to the right donor without the
-    /// public client ever handling the donor's real Id. Tracked, not read-only,
-    /// because the caller burns the token (single-use) on success.
+    /// Atomically claims a donor's one-time public SubmissionToken (see
+    /// Donor.SubmissionToken remarks) and returns its Id, or null if no donor has
+    /// that token unexpired — used by SubmitPublicDonorDocument to resolve the
+    /// follow-up BBBEE-certificate upload back to the right donor without the
+    /// public client ever handling the donor's real Id.
+    ///
+    /// Deliberately NOT a separate "read the donor, check expiry, null the token,
+    /// SaveChanges" sequence — that read-then-write pattern has a race: two
+    /// concurrent requests for the same token could both read it as still valid
+    /// before either write lands, and both would then proceed to upload a
+    /// document. This claims (nulls the token) in the same statement that reads
+    /// it, so only the request that actually wins the underlying row lock ever
+    /// sees a non-null result; the loser's WHERE clause simply matches nothing.
     /// </summary>
-    Task<Donor?> GetBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default);
+    Task<Guid?> ClaimBySubmissionTokenAsync(string submissionToken, CancellationToken cancellationToken = default);
 }

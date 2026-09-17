@@ -8,15 +8,18 @@ using System.Threading.Tasks;
 public static class DatabaseSeeder
 {
     /// <summary>
-    /// Runs all seeders in dependency order: Roles → Lookups → AdminUser →
-    /// SystemUser → (Development only) dev convenience data. AdminUserSeeder
-    /// needs the SuperAdmin role to already exist. SystemUserSeeder MUST run
-    /// after AdminUserSeeder, not before — AdminUserSeeder's own idempotency
-    /// guard is "does any user exist at all", so seeding the system user first
-    /// would make it wrongly skip creating the SuperAdmin account. DevDataSeeder
-    /// needs the admin user and lookups to already exist. Each individual
-    /// seeder has its own idempotent guard, so calling this on every startup
-    /// is safe.
+    /// Runs all seeders in dependency order: Roles → Lookups → donor reference
+    /// number backfill → AdminUser → SystemUser → (Development only) dev
+    /// convenience data. AdminUserSeeder needs the SuperAdmin role to already
+    /// exist. SystemUserSeeder MUST run after AdminUserSeeder, not before —
+    /// AdminUserSeeder's own idempotency guard is "does any user exist at all",
+    /// so seeding the system user first would make it wrongly skip creating the
+    /// SuperAdmin account. DevDataSeeder needs the admin user and lookups to
+    /// already exist. The reference number backfill only touches pre-existing
+    /// donor rows (see its own remarks), so its position relative to the others
+    /// doesn't matter beyond running once schema migrations have applied. Each
+    /// individual seeder has its own idempotent guard, so calling this on every
+    /// startup is safe.
     /// </summary>
     public static async Task SeedAsync(IServiceProvider services, bool isDevelopment)
     {
@@ -26,6 +29,7 @@ public static class DatabaseSeeder
 
         await RoleSeeder.SeedAsync(context);
         await LookupSeeder.SeedAsync(context);
+        await DonorReferenceNumberBackfillSeeder.SeedAsync(context);
         await AdminUserSeeder.SeedAsync(context, configuration);
         await SystemUserSeeder.SeedAsync(context);
 
