@@ -1,5 +1,6 @@
 namespace CRM.Infrastructure.Persistence.Seeders;
 
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -15,10 +16,16 @@ using Microsoft.EntityFrameworkCore;
 /// Reassigns each placeholder row a real "DON-{year}-{5-digit sequence}" number
 /// (grouped and ordered by the donor's own CreatedAt, per year, so a backfilled
 /// number reads like a genuine historical reference rather than one issued
-/// today), then advances that year's real Postgres sequence past the highest
-/// number just assigned — so the next donor created via
-/// IDonorRepository.GetNextReferenceNumberAsync can never collide with one
-/// assigned here.
+/// today). Numbering for each year continues after whatever the HIGHEST
+/// already-issued number for that year is — not just "how many legacy rows are
+/// in this batch" — because a real "DON-{year}-NNNNN" number can already exist
+/// for that year (an earlier real submission, an import, or a prior partial
+/// run of this seeder) even while other rows for the same year are still
+/// legacy placeholders. Numbering purely from the batch size would either
+/// collide with one of those existing numbers (unique index violation) or,
+/// worse, leave the sequence set BELOW a number that's already in use. The
+/// sequence itself is only ever advanced via GREATEST(current, target), never
+/// set backwards, for the same reason.
 ///
 /// Idempotent: only rows still carrying the "DON-LEGACY-" placeholder are
 /// touched, so — like the other seeders — this is safe to run on every startup.
@@ -27,6 +34,9 @@ using Microsoft.EntityFrameworkCore;
 public static class DonorReferenceNumberBackfillSeeder
 {
     private const string LegacyPrefix = "DON-LEGACY-";
+
+    private static readonly Regex RealReferenceNumberPattern =
+        new(@"^DON-(?<year>\d{4})-(?<sequence>\d{5})$", RegexOptions.Compiled);
 
     public static async Task SeedAsync(CrmDbContext context)
     {
@@ -38,15 +48,33 @@ public static class DonorReferenceNumberBackfillSeeder
         if (pending.Count == 0)
             return;
 
+        // Every already-real (non-legacy) reference number in the table, so the
+        // numbers this pass assigns — and the sequence value it leaves behind —
+        // can never collide with or regress behind one that already exists for
+        // the same year, from any source.
+        var existingRealNumbers = await context.Donors
+            .Where(d => !d.ReferenceNumber.StartsWith(LegacyPrefix))
+            .Select(d => d.ReferenceNumber)
+            .ToListAsync();
+
+        var maxSequenceByYear = existingRealNumbers
+            .Select(n => RealReferenceNumberPattern.Match(n))
+            .Where(m => m.Success)
+            .GroupBy(m => int.Parse(m.Groups["year"].Value))
+            .ToDictionary(g => g.Key, g => g.Max(m => int.Parse(m.Groups["sequence"].Value)));
+
         foreach (var yearGroup in pending.GroupBy(d => d.CreatedAt.Year).OrderBy(g => g.Key))
         {
             var year = yearGroup.Key;
             var ordered = yearGroup.OrderBy(d => d.CreatedAt).ToList();
 
-            for (var i = 0; i < ordered.Count; i++)
+            var nextSequence = maxSequenceByYear.GetValueOrDefault(year, 0) + 1;
+            foreach (var donor in ordered)
             {
-                ordered[i].ReferenceNumber = $"DON-{year}-{(i + 1):D5}";
+                donor.ReferenceNumber = $"DON-{year}-{nextSequence:D5}";
+                nextSequence++;
             }
+            var highestAssigned = nextSequence - 1;
 
             // The InMemory provider (CRM.API.Tests) can't execute raw SQL — same
             // constraint as IDonorRepository.GetNextReferenceNumberAsync/
@@ -57,22 +85,29 @@ public static class DonorReferenceNumberBackfillSeeder
             {
                 var sequenceName = $"donor_reference_seq_{year}";
 
-                // Identifiers can't be bound SQL parameters in any dialect, so this
-                // one statement needs raw interpolation — safe here because
-                // sequenceName is built only from an int (the donor's own
-                // CreatedAt.Year), never user input. Mirrors
-                // GetNextReferenceNumberAsync's identical lazy-create pattern.
+                // Identifiers can't be bound SQL parameters in any dialect, so
+                // this needs raw interpolation — safe here because sequenceName
+                // is built only from an int (the donor's own CreatedAt.Year),
+                // never user input. Mirrors GetNextReferenceNumberAsync's
+                // identical lazy-create pattern.
 #pragma warning disable EF1002
                 await context.Database.ExecuteSqlRawAsync(
                     $"CREATE SEQUENCE IF NOT EXISTS {sequenceName} START 1");
-#pragma warning restore EF1002
 
-                // setval()'s first argument is a regclass, which (like nextval())
-                // accepts a plain text value, so — unlike CREATE SEQUENCE above —
-                // this can go through proper parameterization instead of raw
-                // interpolation.
-                await context.Database.ExecuteSqlInterpolatedAsync(
-                    $"SELECT setval({sequenceName}, {ordered.Count})");
+                // GREATEST(last_value, highestAssigned) — never move the
+                // sequence backward. If real submissions already advanced it
+                // past highestAssigned (e.g. this year's sequence already
+                // issued numbers ahead of what a small legacy batch computes),
+                // setting it down to highestAssigned would let a future
+                // nextval() reissue an already-used number. last_value reads
+                // the sequence's own current position directly and works even
+                // if nextval() was never called in this session (unlike
+                // currval()). highestAssigned is computed only from ints
+                // above, so raw interpolation for both values here is safe —
+                // same justification as CREATE SEQUENCE above.
+                await context.Database.ExecuteSqlRawAsync(
+                    $"SELECT setval('{sequenceName}', GREATEST((SELECT last_value FROM {sequenceName}), {highestAssigned}))");
+#pragma warning restore EF1002
             }
         }
 

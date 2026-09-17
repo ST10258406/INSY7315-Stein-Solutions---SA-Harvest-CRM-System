@@ -154,6 +154,73 @@ public class DonorReferenceNumberBackfillSeederTests
     }
 
     [Fact]
+    public async Task SeedAsync_LegacyRowSharesAYearWithAnAlreadyRealNumber_ContinuesAfterItInsteadOfColliding()
+    {
+        // Regression test: numbering legacy rows purely from "how many are in
+        // this batch" (starting back at 00001) would either violate the unique
+        // index against an already-real DON-2025-NNNNN row for the same year,
+        // or — if it happened not to collide outright — could still leave the
+        // sequence set too low. This proves the legacy row is numbered to
+        // continue AFTER the highest already-real number for that year.
+        // Uses a year no other test in this file touches — the underlying
+        // Postgres sequence for a year isn't reset between tests (only the
+        // Donors rows are), so reusing one across tests is its own hazard.
+        using var context = await CreateSeededContextAsync();
+
+        var alreadyReal = MakeLegacyDonor("real", new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        alreadyReal.ReferenceNumber = "DON-2025-00005"; // not a legacy placeholder
+        var legacy = MakeLegacyDonor("gggggggg", new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc));
+        context.Donors.AddRange(alreadyReal, legacy);
+        await context.SaveChangesAsync();
+
+#pragma warning disable EF1002
+        await context.Database.ExecuteSqlRawAsync("DROP SEQUENCE IF EXISTS donor_reference_seq_2025");
+#pragma warning restore EF1002
+
+        await DonorReferenceNumberBackfillSeeder.SeedAsync(context);
+        context.ChangeTracker.Clear();
+
+        var reloadedLegacy = await context.Donors.SingleAsync(d => d.Id == legacy.Id);
+        Assert.Equal("DON-2025-00006", reloadedLegacy.ReferenceNumber); // continues after 00005, not 00001
+
+        var sequenceName = "donor_reference_seq_2025";
+        var next = await context.Database
+            .SqlQuery<long>($"SELECT nextval({sequenceName}) AS \"Value\"")
+            .SingleAsync();
+        Assert.Equal(7, next); // sequence left at 6 (the highest assigned), so nextval() = 7
+    }
+
+    [Fact]
+    public async Task SeedAsync_SequenceAlreadyAheadOfTheLegacyBatch_NeverMovesItBackward()
+    {
+        // Regression test for the sequence-regression half of the same class of
+        // bug: if the real per-year sequence was already advanced past what
+        // this (small) legacy batch computes, setval must never move it back
+        // down — doing so would let a future real submission reissue an
+        // already-used number.
+        using var context = await CreateSeededContextAsync();
+
+        var year = 2020;
+        var sequenceName = $"donor_reference_seq_{year}";
+#pragma warning disable EF1002
+        await context.Database.ExecuteSqlRawAsync($"DROP SEQUENCE IF EXISTS {sequenceName}");
+        await context.Database.ExecuteSqlRawAsync($"CREATE SEQUENCE {sequenceName} START 1");
+        await context.Database.ExecuteSqlRawAsync($"SELECT setval('{sequenceName}', 50)"); // already well ahead
+#pragma warning restore EF1002
+
+        var legacy = MakeLegacyDonor("hhhhhhhh", new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        context.Donors.Add(legacy);
+        await context.SaveChangesAsync();
+
+        await DonorReferenceNumberBackfillSeeder.SeedAsync(context);
+
+        var next = await context.Database
+            .SqlQuery<long>($"SELECT nextval({sequenceName}) AS \"Value\"")
+            .SingleAsync();
+        Assert.Equal(51, next); // unchanged by the small legacy batch — still continues from 50, not from 1
+    }
+
+    [Fact]
     public async Task SeedAsync_RunTwice_IsIdempotent()
     {
         using var context = await CreateSeededContextAsync();

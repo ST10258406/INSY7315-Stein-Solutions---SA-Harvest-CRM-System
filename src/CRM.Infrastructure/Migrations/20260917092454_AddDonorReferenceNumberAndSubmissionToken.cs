@@ -11,13 +11,43 @@ namespace CRM.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // reference_number is added NOT NULL with a per-row computed
+            // DEFAULT so every pre-existing donor row gets a distinct,
+            // non-colliding placeholder as part of this single ALTER TABLE —
+            // Postgres rewrites the table and evaluates a volatile DEFAULT
+            // expression separately for each existing row (it cannot reference
+            // another column such as id, so gen_random_uuid() stands in for
+            // "give me something unique per row" instead). The AlterColumn
+            // right after this drops that default again so it only ever
+            // applied to the rows that existed at migration time — every donor
+            // created afterward must supply a real value (there is deliberately
+            // no lingering fallback default for new inserts to silently rely
+            // on). Both calls are ordinary generated-shape MigrationBuilder
+            // operations; nothing here is a hand-written migrationBuilder.Sql()
+            // statement. The placeholder itself ("DON-LEGACY-{8 hex chars}") is
+            // not the final "DON-{year}-NNNNN" format — DonorReferenceNumberBackfillSeeder
+            // (CRM.Infrastructure/Persistence/Seeders) finishes that as ordinary,
+            // idempotent, testable application code at startup instead of migration
+            // SQL. On a fresh database (no existing donors) the DEFAULT never
+            // actually executes for any row.
             migrationBuilder.AddColumn<string>(
                 name: "reference_number",
                 table: "donors",
                 type: "character varying(20)",
                 maxLength: 20,
                 nullable: false,
-                defaultValue: "");
+                defaultValueSql: "('DON-LEGACY-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))");
+
+            migrationBuilder.AlterColumn<string>(
+                name: "reference_number",
+                table: "donors",
+                type: "character varying(20)",
+                maxLength: 20,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(20)",
+                oldMaxLength: 20,
+                oldDefaultValueSql: "('DON-LEGACY-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8))");
 
             migrationBuilder.AddColumn<string>(
                 name: "submission_token",
@@ -31,24 +61,6 @@ namespace CRM.Infrastructure.Migrations
                 table: "donors",
                 type: "timestamp with time zone",
                 nullable: true);
-
-            // The bare minimum non-generated statement this schema change needs to
-            // be applicable at all: reference_number defaults to '' above so
-            // existing rows satisfy the incoming NOT NULL constraint, but the
-            // unique index right after this would fail immediately if two or more
-            // pre-existing donors were both left at ''. This gives every
-            // pre-existing row a distinct placeholder derived from its own
-            // (already-unique) id, so the index below can be created. It does
-            // NOT attempt the "nice" DON-{year}-NNNNN format or touch the
-            // donor_reference_seq_* sequences — that data backfill lives in
-            // DonorReferenceNumberBackfillSeeder (CRM.Infrastructure/Persistence/
-            // Seeders), run as ordinary idempotent app code at startup instead of
-            // migration SQL, so it stays testable/regenerable/reviewable like the
-            // rest of the seeders rather than living in a migration's Up(). On a
-            // fresh database (no existing donors) this UPDATE matches zero rows.
-            migrationBuilder.Sql(
-                "UPDATE donors SET reference_number = 'DON-LEGACY-' || substr(md5(id::text), 1, 8) " +
-                "WHERE reference_number = '';");
 
             migrationBuilder.CreateIndex(
                 name: "idx_donors_reference_number",
