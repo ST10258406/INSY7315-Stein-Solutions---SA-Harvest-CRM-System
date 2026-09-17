@@ -69,6 +69,7 @@ public class DashboardRepositoryTests
     private Donor MakeDonor(string name, DonorStatus status = DonorStatus.Active, Guid? relationshipManagerId = null, DateTime? followUpDate = null) => new()
     {
         Id = Guid.NewGuid(),
+        ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
         CompanyName = name,
         CompanyTypeId = 1,
         EntityTypeId = 1,

@@ -87,6 +87,11 @@ public static class DevDataSeeder
                 companyTypeIds, entityTypeIds, frequencyIds, donationTypeIds, regionIds, provinceIds, bbbeeIds),
         };
 
+        for (var i = 0; i < donors.Length; i++)
+        {
+            donors[i].ReferenceNumber = $"DON-{now.Year}-{(i + 1):D5}";
+        }
+
         context.Donors.AddRange(donors);
         await context.SaveChangesAsync();
 

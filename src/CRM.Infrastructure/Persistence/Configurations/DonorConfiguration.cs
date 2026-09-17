@@ -21,6 +21,12 @@ public class DonorConfiguration : IEntityTypeConfiguration<Donor>
         builder.HasIndex(x => x.FollowUpDate).HasDatabaseName("idx_donors_follow_up_date");
         builder.HasIndex(x => x.CompanyName).HasDatabaseName("idx_donors_company_name");
         builder.HasIndex(x => x.FoodspaceCompanyId).HasDatabaseName("idx_donors_foodspace_id").HasFilter("foodspace_company_id IS NOT NULL");
+        builder.HasIndex(x => x.ReferenceNumber).IsUnique().HasDatabaseName("idx_donors_reference_number");
+        builder.HasIndex(x => x.SubmissionToken).IsUnique().HasDatabaseName("idx_donors_submission_token").HasFilter("submission_token IS NOT NULL");
+
+        builder.Property(x => x.ReferenceNumber).HasColumnName("reference_number").HasMaxLength(20).IsRequired();
+        builder.Property(x => x.SubmissionToken).HasColumnName("submission_token").HasMaxLength(256);
+        builder.Property(x => x.SubmissionTokenExpiresAt).HasColumnName("submission_token_expires_at");
 
         builder.Property(x => x.CompanyName).HasColumnName("company_name").HasMaxLength(255).IsRequired();
         builder.Property(x => x.CompanyTypeId).HasColumnName("company_type_id");

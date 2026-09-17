@@ -60,6 +60,7 @@ public class ApprovalRepositoryTests
     private Donor MakeDonor(string name) => new()
     {
         Id = Guid.NewGuid(),
+        ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
         CompanyName = name,
         CompanyTypeId = 1,
         EntityTypeId = 1,

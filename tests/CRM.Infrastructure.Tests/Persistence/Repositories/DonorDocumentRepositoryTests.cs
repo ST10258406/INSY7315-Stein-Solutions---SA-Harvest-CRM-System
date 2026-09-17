@@ -68,6 +68,7 @@ public class DonorDocumentRepositoryTests
     private static Donor MakeDonor(string name, Guid creatorId) => new()
     {
         Id = Guid.NewGuid(),
+        ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
         CompanyName = name,
         CompanyTypeId = 1,
         EntityTypeId = 1,

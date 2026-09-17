@@ -115,6 +115,7 @@ public class DonorRepositoryTests
         var donor = new Donor
         {
             Id = Guid.NewGuid(),
+            ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
             CompanyName = companyName,
             CompanyTypeId = CompanyTypeId,
             EntityTypeId = EntityTypeId,

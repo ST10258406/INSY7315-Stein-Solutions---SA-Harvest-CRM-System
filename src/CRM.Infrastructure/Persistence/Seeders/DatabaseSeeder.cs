@@ -9,10 +9,14 @@ public static class DatabaseSeeder
 {
     /// <summary>
     /// Runs all seeders in dependency order: Roles → Lookups → AdminUser →
-    /// (Development only) dev convenience data. AdminUserSeeder needs the
-    /// SuperAdmin role to already exist; DevDataSeeder needs the admin user
-    /// and lookups to already exist. Each individual seeder has its own
-    /// idempotent guard, so calling this on every startup is safe.
+    /// SystemUser → (Development only) dev convenience data. AdminUserSeeder
+    /// needs the SuperAdmin role to already exist. SystemUserSeeder MUST run
+    /// after AdminUserSeeder, not before — AdminUserSeeder's own idempotency
+    /// guard is "does any user exist at all", so seeding the system user first
+    /// would make it wrongly skip creating the SuperAdmin account. DevDataSeeder
+    /// needs the admin user and lookups to already exist. Each individual
+    /// seeder has its own idempotent guard, so calling this on every startup
+    /// is safe.
     /// </summary>
     public static async Task SeedAsync(IServiceProvider services, bool isDevelopment)
     {
@@ -23,6 +27,7 @@ public static class DatabaseSeeder
         await RoleSeeder.SeedAsync(context);
         await LookupSeeder.SeedAsync(context);
         await AdminUserSeeder.SeedAsync(context, configuration);
+        await SystemUserSeeder.SeedAsync(context);
 
         // Fake donors/tasks/approvals — never seeded outside local Development,
         // so Staging/Production never gets test data mixed in with real donors.

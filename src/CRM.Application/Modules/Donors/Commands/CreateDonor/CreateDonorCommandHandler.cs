@@ -116,6 +116,10 @@ public class CreateDonorCommandHandler : IRequestHandler<CreateDonorCommand, Don
             donor.DonationTypes.Add(new DonorDonationType { DonorId = donor.Id, DonationTypeId = typeId });
         }
 
+        // Every donor gets a reference number, regardless of how it was created —
+        // not just public-form submissions (see SubmitPublicDonorCommandHandler).
+        donor.ReferenceNumber = await _donors.GetNextReferenceNumberAsync(cancellationToken);
+
         await _donors.AddAsync(donor, cancellationToken);
 
         var approval = new DonorApproval

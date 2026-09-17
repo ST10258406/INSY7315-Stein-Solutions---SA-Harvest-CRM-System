@@ -29,4 +29,16 @@ public interface IDonorRepository
 
     /// <summary>Read-only donor detail projection, or null when no such donor exists.</summary>
     Task<DonorDetailDto?> GetDetailByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically allocates the next donor reference number for the current UTC
+    /// year, formatted "DON-{year}-{5-digit sequence}" (e.g. "DON-2026-00042").
+    /// Backed by a DB-level sequence (nextval() is atomic under Postgres, even
+    /// across concurrent callers) rather than a "SELECT MAX + 1" pattern, so two
+    /// simultaneous public-form submissions can never receive the same number.
+    /// Gaps (a number allocated but never committed, e.g. because a later step
+    /// in the same request fails) are an accepted trade-off of this approach —
+    /// duplicates are not.
+    /// </summary>
+    Task<string> GetNextReferenceNumberAsync(CancellationToken cancellationToken = default);
 }
