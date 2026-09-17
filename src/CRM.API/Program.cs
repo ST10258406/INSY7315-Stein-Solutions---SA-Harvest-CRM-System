@@ -26,7 +26,7 @@ if (app.Environment.EnvironmentName != "Testing")
         await context.Database.MigrateAsync();
     }
 
-    await DatabaseSeeder.SeedAsync(app.Services);
+    await DatabaseSeeder.SeedAsync(app.Services, app.Environment.IsDevelopment());
 
     app.Services.RegisterCrmRecurringJobs();
 }
