@@ -39,6 +39,16 @@ public static class Base64PngDecoder
 
         var base64 = dataUri[ExpectedPrefix.Length..];
 
+        // Reject on the encoded string's length before ever calling
+        // Convert.FromBase64String — that call allocates and decodes the whole
+        // payload up front, so checking MaxDecodedSizeBytes only after it runs
+        // (see below) already cost the allocation. Base64 expands 3 bytes to 4
+        // characters, so this is the smallest encoded length that could possibly
+        // decode to more than MaxDecodedSizeBytes; anything longer is rejected
+        // without ever decoding it.
+        if (base64.Length > ((MaxDecodedSizeBytes + 2) / 3) * 4)
+            return false;
+
         byte[] decoded;
         try
         {

@@ -134,4 +134,20 @@ public class Base64PngDecoderTests
 
         Assert.False(Base64PngDecoder.TryDecode($"data:image/png;base64,{oversizedBase64}", out _));
     }
+
+    [Fact]
+    public void TryDecode_EncodedStringTooLongForTheLimit_RejectedWithoutEverCallingFromBase64String()
+    {
+        // Same intent as TryDecode_OversizedPayload_ReturnsFalse, but the payload
+        // here isn't even valid base64 ('!' isn't in the alphabet) — if the
+        // length check ran only after Convert.FromBase64String, this would fail
+        // via the FormatException catch instead, which still returns false but
+        // only after decoding whatever was valid up to that point. Using clearly
+        // invalid characters throughout makes it unambiguous that rejection
+        // happens on the *encoded string's length* before any decode attempt.
+        var tooLong = new string('!', 10_000_000);
+
+        Assert.False(Base64PngDecoder.TryDecode($"data:image/png;base64,{tooLong}", out var bytes));
+        Assert.Empty(bytes);
+    }
 }
