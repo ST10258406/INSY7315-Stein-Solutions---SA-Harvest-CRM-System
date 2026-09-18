@@ -74,6 +74,7 @@ public class ReportsRepositoryTests
     private static Donor MakeDonor(string name, Guid creatorId, Guid? rmId) => new()
     {
         Id = Guid.NewGuid(),
+        ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
         CompanyName = name,
         CompanyTypeId = 1,
         EntityTypeId = 1,
@@ -428,6 +429,7 @@ public class ReportsRepositoryTests
     private static Donor MakeDonorWithStatus(string name, Guid creatorId, DonorStatus status) => new()
     {
         Id = Guid.NewGuid(),
+        ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
         CompanyName = name,
         CompanyTypeId = 1,
         EntityTypeId = 1,

@@ -26,7 +26,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.RateLimiting;
 
 public static class ServiceCollectionExtensions
 {
@@ -184,42 +183,9 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddNpgSql(configuration.GetConnectionString("Default")!, name: "postgresql");
 
-        services.AddRateLimiter(options =>
-        {
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 100,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
-
-            options.AddPolicy("PublicFormPolicy", context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 10,
-                        Window = TimeSpan.FromHours(1),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
-
-            options.OnRejected = async (context, cancellationToken) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.HttpContext.Response.WriteAsJsonAsync(new
-                {
-                    status = 429,
-                    code = "RATE_LIMITED",
-                    message = "Too many requests. Please try again later.",
-                    traceId = context.HttpContext.TraceIdentifier
-                }, cancellationToken);
-            };
-        });
+        // All rate limit policies (global + named per-tier) are configured in
+        // RateLimitingExtensions.cs, not inline here.
+        services.AddPublicApiRateLimiting();
 
         return services;
     }
