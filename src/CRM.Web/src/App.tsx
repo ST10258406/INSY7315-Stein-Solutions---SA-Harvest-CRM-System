@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LandingPage from './features/landing/LandingPage';
+import PublicFormPage from './features/publicForm/PublicFormPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import { ApprovalsPage } from './features/approvals';
 import DonorListPage from './features/donors/DonorListPage';
@@ -43,6 +44,9 @@ function App() {
                 authenticated app shell (no top bar/sidebar), but shares its
                 dark palette directly (see LandingPage.tsx). */}
             <Route path={paths.root} element={<LandingPage />} />
+            {/* Public donor onboarding form — reached externally with zero auth,
+                so it renders standalone, outside AppLayout, like LandingPage. */}
+            <Route path={paths.publicDonorForm} element={<PublicFormPage />} />
             <Route path={paths.login} element={<LoginPage />} />
             <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
