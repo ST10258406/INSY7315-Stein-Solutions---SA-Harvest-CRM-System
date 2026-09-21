@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, Copy } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useCreateUser, useRoles } from '../hooks';
@@ -20,6 +21,11 @@ export function NewUserModal({ open, onOpenChange }: NewUserModalProps) {
   const [copied, setCopied] = useState(false);
   const roles = useRoles();
   const createUser = useCreateUser();
+  const isSuperAdmin = (useAuthStore((s) => s.user?.roles) ?? []).includes('SuperAdmin');
+  // Only a SuperAdmin may assign the SuperAdmin role (enforced server-side by
+  // CreateUserAuthorizationFilter) — hide the option here so an Admin never submits a
+  // request that's guaranteed to come back as a 403.
+  const assignableRoles = roles.data?.filter((role) => isSuperAdmin || role.name !== 'SuperAdmin');
 
   const {
     register,
@@ -176,7 +182,7 @@ export function NewUserModal({ open, onOpenChange }: NewUserModalProps) {
                   }`}
                 >
                   <option value="">{roles.isPending ? 'Loading…' : 'Select a role'}</option>
-                  {roles.data?.map((role) => (
+                  {assignableRoles?.map((role) => (
                     <option key={role.id} value={role.id}>
                       {role.name}
                     </option>

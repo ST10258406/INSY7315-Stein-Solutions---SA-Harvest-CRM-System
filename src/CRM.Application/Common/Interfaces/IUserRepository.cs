@@ -36,8 +36,20 @@ public interface IUserRepository
     /// <summary>Paginated, filtered listing for the Users admin screen (GET /api/v1/users).</summary>
     Task<(List<UserListItemDto> Items, int TotalCount)> SearchAsync(UserSearchCriteria criteria, CancellationToken cancellationToken = default);
 
-    /// <summary>Tracked user with its role eagerly loaded. Used by UpdateUser / ChangeUserRole / SetUserActiveStatus.</summary>
+    /// <summary>
+    /// Tracked user with its role eagerly loaded. Used by UpdateUser / ChangeUserRole /
+    /// SetUserActiveStatus. Excludes the non-authenticatable system actor(s) in
+    /// <see cref="CRM.Domain.Constants.SystemUsers"/> — those rows must never be
+    /// editable, re-roled, or reactivated through the Users admin screen.
+    /// </summary>
     Task<User?> GetByIdWithRoleAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Read-only user with roles eagerly loaded, matched by id. Used by the JWT bearer
+    /// pipeline (OnTokenValidated) to re-check IsActive and refresh role claims from the
+    /// current DB state on every authenticated request — not just at login/refresh.
+    /// </summary>
+    Task<User?> GetByIdWithRolesReadOnlyAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Adds a new user. Caller sets Id and PasswordHash before calling.</summary>
     Task AddAsync(User user, CancellationToken cancellationToken = default);

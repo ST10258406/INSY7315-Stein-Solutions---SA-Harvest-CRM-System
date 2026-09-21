@@ -6,6 +6,7 @@ using System.Text.Json;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Application.Modules.Users.Dtos;
+using CRM.Domain.Constants;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Persistence;
 using Hangfire;
@@ -96,6 +97,36 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
 
         return (client, user, role);
+    }
+
+    /// <summary>Logs in as an already-seeded user without wiping the DB (unlike CreateAuthenticatedClientAsync) — used to hold a second, independent session's token.</summary>
+    private async Task<HttpClient> LoginExistingUserAsync(string email, string password)
+    {
+        var client = _factory.CreateClient();
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new LoginCommand(email, password));
+        var loginContent = await loginResponse.Content.ReadAsStringAsync();
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(loginContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+        return client;
+    }
+
+    private static async Task<User> SeedSystemActorAsync(CrmDbContext context)
+    {
+        var existing = await context.Users.FirstOrDefaultAsync(u => u.Email == SystemUsers.PublicFormEmail);
+        if (existing is not null) return existing;
+
+        var systemUser = new User
+        {
+            Id = Guid.NewGuid(),
+            FirstName = "Public",
+            LastName = "Form Submission",
+            Email = SystemUsers.PublicFormEmail,
+            PasswordHash = "n/a",
+            IsActive = false
+        };
+        context.Users.Add(systemUser);
+        await context.SaveChangesAsync();
+        return systemUser;
     }
 
     [Fact]
@@ -249,5 +280,147 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         var response = await client.PatchAsJsonAsync($"/api/v1/users/{self.Id}/status", new SetUserActiveStatusRequest { IsActive = false });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetUserActiveStatus_DeactivateOtherUser_TheirExistingAccessTokenIsRejectedImmediately()
+    {
+        // Regression: deactivation must cut off access on the very next request, not just
+        // block future logins/refreshes and leave an already-issued access token valid
+        // until it expires.
+        var (adminClient, _, adminRole) = await CreateAuthenticatedClientAsync("Admin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        const string targetPassword = "TargetPassword123";
+        var hasher = new PasswordHasher<User>();
+        var targetUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "will-be-deactivated@saharvest.org",
+            FirstName = "Will",
+            LastName = "BeDeactivated",
+            PasswordHash = hasher.HashPassword(null!, targetPassword),
+            IsActive = true
+        };
+        targetUser.UserRoles.Add(new UserRole { UserId = targetUser.Id, RoleId = adminRole.Id, AssignedByUserId = targetUser.Id });
+        context.Users.Add(targetUser);
+        await context.SaveChangesAsync();
+
+        var targetClient = await LoginExistingUserAsync(targetUser.Email, targetPassword);
+
+        // Confirm the token works before deactivation.
+        var beforeResponse = await targetClient.GetAsync("/api/v1/users");
+        Assert.Equal(HttpStatusCode.OK, beforeResponse.StatusCode);
+
+        var deactivateResponse = await adminClient.PatchAsJsonAsync(
+            $"/api/v1/users/{targetUser.Id}/status", new SetUserActiveStatusRequest { IsActive = false });
+        Assert.Equal(HttpStatusCode.OK, deactivateResponse.StatusCode);
+
+        // Same access token, no re-login — must be rejected now.
+        var afterResponse = await targetClient.GetAsync("/api/v1/users");
+        Assert.Equal(HttpStatusCode.Unauthorized, afterResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeUserRole_TargetLosesElevatedAccessImmediately()
+    {
+        // Regression: a role downgrade must take effect on the very next request — the
+        // demoted user's existing access token still carries the old (elevated) role
+        // claim, but the JWT pipeline re-derives roles from the DB on every request.
+        var (superAdminClient, actingSuperAdmin, superAdminRole) = await CreateAuthenticatedClientAsync("SuperAdmin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var marketingRole = new Role { Id = Guid.NewGuid(), Name = "Marketing" };
+        context.Roles.Add(marketingRole);
+        const string targetPassword = "TargetPassword123";
+        var hasher = new PasswordHasher<User>();
+        var targetUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "soon-demoted@saharvest.org",
+            FirstName = "Soon",
+            LastName = "Demoted",
+            PasswordHash = hasher.HashPassword(null!, targetPassword),
+            IsActive = true
+        };
+        targetUser.UserRoles.Add(new UserRole { UserId = targetUser.Id, RoleId = superAdminRole.Id, AssignedByUserId = actingSuperAdmin.Id });
+        context.Users.Add(targetUser);
+        await context.SaveChangesAsync();
+
+        var targetClient = await LoginExistingUserAsync(targetUser.Email, targetPassword);
+
+        // Confirm the SuperAdminOnly endpoint works before the demotion (no-op re-submit
+        // of the acting SuperAdmin's own current role, so nothing else changes).
+        var beforeResponse = await targetClient.PatchAsJsonAsync(
+            $"/api/v1/users/{actingSuperAdmin.Id}/role", new ChangeUserRoleRequest { RoleId = superAdminRole.Id });
+        Assert.Equal(HttpStatusCode.OK, beforeResponse.StatusCode);
+
+        var demoteResponse = await superAdminClient.PatchAsJsonAsync(
+            $"/api/v1/users/{targetUser.Id}/role", new ChangeUserRoleRequest { RoleId = marketingRole.Id });
+        Assert.Equal(HttpStatusCode.OK, demoteResponse.StatusCode);
+
+        // Same access token as before — must lose SuperAdminOnly access immediately.
+        var afterResponse = await targetClient.PatchAsJsonAsync(
+            $"/api/v1/users/{actingSuperAdmin.Id}/role", new ChangeUserRoleRequest { RoleId = superAdminRole.Id });
+        Assert.Equal(HttpStatusCode.Forbidden, afterResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetUsers_ExcludesSystemActor()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await SeedSystemActorAsync(context);
+
+        var response = await client.GetAsync("/api/v1/users");
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(SystemUsers.PublicFormEmail, content);
+    }
+
+    [Fact]
+    public async Task UpdateUser_SystemActor_ReturnsNotFound()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var systemUser = await SeedSystemActorAsync(context);
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{systemUser.Id}",
+            new UpdateUserRequest { FirstName = "Hacked", LastName = "Name", Email = "hacked@saharvest.org" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetUserActiveStatus_SystemActor_ReturnsNotFound()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var systemUser = await SeedSystemActorAsync(context);
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{systemUser.Id}/status", new SetUserActiveStatusRequest { IsActive = true });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeUserRole_SystemActor_ReturnsNotFound()
+    {
+        var (client, _, role) = await CreateAuthenticatedClientAsync("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var systemUser = await SeedSystemActorAsync(context);
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{systemUser.Id}/role", new ChangeUserRoleRequest { RoleId = role.Id });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

@@ -1,3 +1,4 @@
+using CRM.API.Authorization;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Users.Commands.ChangeUserRole;
 using CRM.Application.Modules.Users.Commands.CreateUser;
@@ -30,7 +31,10 @@ public class UsersController : ControllerBase
         return Ok(result);
     }
 
+    // Assigning the SuperAdmin role needs more than AdminOrAbove — see
+    // CreateUserAuthorizationFilter / RoleAssignmentAuthorizationHandler.
     [HttpPost]
+    [TypeFilter(typeof(CreateUserAuthorizationFilter))]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
     {
         var result = await _mediator.Send(new CreateUserCommand { Request = request });

@@ -6,6 +6,7 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Application.Modules.Users.Dtos;
+using CRM.Domain.Constants;
 using CRM.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,7 +55,9 @@ public class UserRepository : IUserRepository
     public async Task<(List<UserListItemDto> Items, int TotalCount)> SearchAsync(
         UserSearchCriteria criteria, CancellationToken cancellationToken = default)
     {
-        var query = _context.Users.AsNoTracking().AsQueryable();
+        // Never surface the non-authenticatable system actor(s) on the Users admin
+        // screen — they're not real staff accounts (see SystemUsers / SystemUserSeeder).
+        var query = _context.Users.AsNoTracking().Where(u => u.Email != SystemUsers.PublicFormEmail);
 
         if (!string.IsNullOrWhiteSpace(criteria.Search))
         {
@@ -100,6 +103,16 @@ public class UserRepository : IUserRepository
         => _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
+            // Excludes the system actor — see this method's interface remarks. Filtering
+            // the list alone isn't enough since a direct PATCH by id would still reach it.
+            .Where(u => u.Email != SystemUsers.PublicFormEmail)
+            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+    public Task<User?> GetByIdWithRolesReadOnlyAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
     public Task AddAsync(User user, CancellationToken cancellationToken = default)

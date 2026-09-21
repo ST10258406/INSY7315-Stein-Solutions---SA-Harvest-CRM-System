@@ -106,10 +106,52 @@ public static class ServiceCollectionExtensions
                     ClockSkew = TimeSpan.Zero,
                     RoleClaimType = ClaimTypes.Role
                 };
+
+                // The signature/lifetime checks above only prove the token hasn't been
+                // tampered with and hasn't expired — they say nothing about whether the
+                // user is still active or still holds the roles baked into the token at
+                // login time. Re-check both against the current DB state on every
+                // authenticated request, so a deactivation or role change takes effect
+                // immediately instead of waiting up to AccessTokenExpiryMinutes.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var userId))
+                        {
+                            context.Fail("Token has no valid subject.");
+                            return;
+                        }
+
+                        var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                        var user = await users.GetByIdWithRolesReadOnlyAsync(userId, context.HttpContext.RequestAborted);
+
+                        if (user is null || !user.IsActive)
+                        {
+                            context.Fail("User is deactivated or no longer exists.");
+                            return;
+                        }
+
+                        // Rebuild the role claims from the DB rather than trusting whatever
+                        // was embedded in the token — a ChangeUserRole call doesn't (and
+                        // can't) reach out and mint the holder a new access token.
+                        var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                        foreach (var staleRoleClaim in identity.FindAll(ClaimTypes.Role).ToList())
+                        {
+                            identity.RemoveClaim(staleRoleClaim);
+                        }
+                        foreach (var roleName in user.UserRoles.Select(ur => ur.Role.Name))
+                        {
+                            identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+                        }
+                    }
+                };
             });
 
         services.AddCrmAuthorizationPolicies();
         services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, RoleAssignmentAuthorizationHandler>();
 
         var brevoApiKey = configuration["BREVO_API_KEY"]
             ?? throw new InvalidOperationException(
