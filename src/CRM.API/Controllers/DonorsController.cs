@@ -1,7 +1,10 @@
 using CRM.API.Authorization;
+using CRM.API.Extensions;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Donors.Commands.CreateDonor;
 using CRM.Application.Modules.Donors.Commands.DeleteDonorDocument;
+using CRM.Application.Modules.Donors.Commands.SendDonorEmail;
+using CRM.Application.Modules.Donors.Commands.SendPublicFormInvite;
 using CRM.Application.Modules.Donors.Commands.UpdateDonor;
 using CRM.Application.Modules.Donors.Commands.UploadDonorDocument;
 using CRM.Application.Modules.Donors.Dtos;
@@ -17,6 +20,8 @@ using CRM.Application.Modules.Tasks.Queries.GetDonorTasks;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 
 namespace CRM.API.Controllers;
 
@@ -25,10 +30,12 @@ namespace CRM.API.Controllers;
 public class DonorsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IConfiguration _configuration;
 
-    public DonorsController(IMediator mediator)
+    public DonorsController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -53,6 +60,24 @@ public class DonorsController : ControllerBase
     {
         var result = await _mediator.Send(new CreateDonorCommand { Request = request });
         return CreatedAtAction(nameof(GetDonorById), new { id = result.Id }, new { data = result });
+    }
+
+    [HttpPost("public-form-invite")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    [EnableRateLimiting(RateLimitingExtensions.DonorEmailPolicy)]
+    public async Task<IActionResult> SendPublicFormInvite([FromBody] SendPublicFormInviteRequest request)
+    {
+        var baseUrl = _configuration["Frontend:BaseUrl"]
+            ?? throw new InvalidOperationException("Frontend:BaseUrl is not configured.");
+
+        var result = await _mediator.Send(new SendPublicFormInviteCommand
+        {
+            To = request.To,
+            Subject = request.Subject,
+            Body = request.Body,
+            PublicFormUrl = $"{baseUrl.TrimEnd('/')}/donate"
+        });
+        return Ok(new { data = result });
     }
 
     [HttpPatch("{id:guid}")]
@@ -82,6 +107,21 @@ public class DonorsController : ControllerBase
             Subject = request.Subject,
             Body = request.Body,
             FollowUpDate = request.FollowUpDate
+        });
+        return StatusCode(201, new { data = result });
+    }
+
+    [HttpPost("{id:guid}/interactions/email")]
+    [Authorize(Policy = "ProcurementOrAbove")]
+    [EnableRateLimiting(RateLimitingExtensions.DonorEmailPolicy)]
+    public async Task<IActionResult> SendEmail(Guid id, [FromBody] SendDonorEmailRequest request)
+    {
+        var result = await _mediator.Send(new SendDonorEmailCommand
+        {
+            DonorId = id,
+            To = request.To,
+            Subject = request.Subject,
+            Body = request.Body
         });
         return StatusCode(201, new { data = result });
     }

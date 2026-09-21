@@ -1,5 +1,6 @@
 namespace CRM.Application.Modules.PublicDonors.Commands.SubmitPublicDonor;
 
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using CRM.Application.Common.Files;
@@ -24,6 +25,7 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
     private readonly IUnitOfWork _unitOfWork;
     private readonly IBlobStorageService _blobStorage;
     private readonly INotificationService _notificationService;
+    private readonly IEmailService _emailService;
     private readonly ILogger<SubmitPublicDonorCommandHandler> _logger;
 
     public SubmitPublicDonorCommandHandler(
@@ -35,6 +37,7 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
         IUnitOfWork unitOfWork,
         IBlobStorageService blobStorage,
         INotificationService notificationService,
+        IEmailService emailService,
         ILogger<SubmitPublicDonorCommandHandler> logger)
     {
         _donors = donors;
@@ -45,6 +48,7 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
         _unitOfWork = unitOfWork;
         _blobStorage = blobStorage;
         _notificationService = notificationService;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -260,6 +264,30 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
             }
         }
 
+        // Confirmation email to the submitter — same fire-and-forget discipline as
+        // the admin notifications above: fired only after commit, wrapped so a
+        // failure (network, provider outage, whatever) cannot fail or roll back a
+        // submission that already succeeded. EmailService itself is documented to
+        // never throw, but this handler doesn't rely on that guarantee holding.
+        // Deliberately no InteractionLog entry for this — system-triggered
+        // transactional email to a not-yet-approved donor isn't donor-interaction
+        // history.
+        try
+        {
+            await _emailService.SendAsync(
+                to: req.PrimaryContact.Email!,
+                subject: "Your SA Harvest CRM donor submission has been received",
+                htmlBody: BuildConfirmationEmailBody(req.PrimaryContact.Name, donor.ReferenceNumber),
+                emailType: EmailType.OnboardingConfirmation,
+                donorId: donor.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send onboarding confirmation email for donor {DonorId} ({ReferenceNumber}).",
+                donor.Id, donor.ReferenceNumber);
+        }
+
         return new SubmitPublicDonorResponseDto
         {
             Message = SuccessMessage,
@@ -267,4 +295,10 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
             SubmissionToken = submissionToken
         };
     }
+
+    private static string BuildConfirmationEmailBody(string contactName, string referenceNumber) =>
+        $"<p>Hi {WebUtility.HtmlEncode(contactName)},</p>" +
+        $"<p>Thank you for submitting your donor information to SA Harvest. We have received your submission (reference {WebUtility.HtmlEncode(referenceNumber)}) and it is currently <strong>Pending Review</strong>.</p>" +
+        "<p>No action is needed from you at this time. We will be in touch once your submission has been reviewed.</p>" +
+        "<p>Kind regards,<br/>SA Harvest</p>";
 }

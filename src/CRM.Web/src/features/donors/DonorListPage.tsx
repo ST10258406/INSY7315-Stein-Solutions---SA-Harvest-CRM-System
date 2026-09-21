@@ -1,16 +1,19 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, Send } from 'lucide-react';
 import { paths } from '@/routes/paths';
 import { useDonors } from './hooks';
 import { useDonorListFilters } from './hooks/useDonorListFilters';
 import { DonorFiltersBar } from './components/DonorFiltersBar';
 import { DonorTable } from './components/DonorTable';
 import { DonorPagination } from './components/DonorPagination';
+import { SendPublicFormInviteDialog } from './components/SendPublicFormInviteDialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 
 export default function DonorListPage() {
   const { filters, setFilter, setSort, setPage, setPageSize, clearFilters } = useDonorListFilters();
   const { data, isPending, isFetching, isError, error, refetch } = useDonors(filters);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const hasActiveFilters =
     !!filters.search ||
@@ -38,6 +41,11 @@ export default function DonorListPage() {
           <Button variant="secondary" size="sm">
             <Download className="w-3.75 h-3.75" />
             <span>Export</span>
+          </Button>
+
+          <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>
+            <Send className="w-3.75 h-3.75" />
+            <span>Send Public Form</span>
           </Button>
 
           <Link
@@ -71,6 +79,8 @@ export default function DonorListPage() {
           <DonorPagination pagination={data.pagination} onPageChange={setPage} onPageSizeChange={setPageSize} />
         )}
       </section>
+
+      <SendPublicFormInviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </main>
   );
 }

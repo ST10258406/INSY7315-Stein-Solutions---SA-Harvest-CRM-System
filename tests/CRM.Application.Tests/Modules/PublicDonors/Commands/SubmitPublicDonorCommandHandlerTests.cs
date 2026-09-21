@@ -26,6 +26,7 @@ public class SubmitPublicDonorCommandHandlerTests
     private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
     private readonly IBlobStorageService _blobStorageMock = Substitute.For<IBlobStorageService>();
     private readonly INotificationService _notificationServiceMock = Substitute.For<INotificationService>();
+    private readonly IEmailService _emailServiceMock = Substitute.For<IEmailService>();
     private readonly SubmitPublicDonorCommandHandler _handler;
 
     private readonly List<Donor> _donors = [];
@@ -53,7 +54,7 @@ public class SubmitPublicDonorCommandHandlerTests
 
         _handler = new SubmitPublicDonorCommandHandler(
             _donorsMock, _documentsMock, _interactionLogsMock, _auditLogsMock, _usersMock,
-            _unitOfWorkMock, _blobStorageMock, _notificationServiceMock,
+            _unitOfWorkMock, _blobStorageMock, _notificationServiceMock, _emailServiceMock,
             NullLogger<SubmitPublicDonorCommandHandler>.Instance);
     }
 
@@ -101,7 +102,8 @@ public class SubmitPublicDonorCommandHandlerTests
         Assert.Equal(donor.Id, document.DonorId);
         Assert.Null(document.UploadedByUserId); // nullable, deliberately not the system user
 
-        // 3. FormSubmission interaction log
+        // 3. FormSubmission interaction log — and exactly one, i.e. the
+        // confirmation email below does not add a second one.
         var log = Assert.Single(_interactionLogs);
         Assert.Equal(InteractionType.FormSubmission, log.InteractionType);
         Assert.Equal(_systemUser.Id, log.CreatedByUserId);
@@ -126,8 +128,51 @@ public class SubmitPublicDonorCommandHandlerTests
         // Exactly one commit for donor + children + document + log + approval + audit
         await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
 
+        // 6. Onboarding confirmation email to the address on the submission
+        await _emailServiceMock.Received(1).SendAsync(
+            "jane@test.co.za",
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            EmailType.OnboardingConfirmation,
+            donor.Id,
+            Arg.Any<Guid?>());
+
         Assert.Equal("DON-2026-00001", result.ReferenceNumber);
         Assert.False(string.IsNullOrWhiteSpace(result.SubmissionToken));
+    }
+
+    [Fact]
+    public async Task Handle_ValidCommand_EmailBodyMentionsPendingReviewAndReferenceNumber()
+    {
+        var command = new SubmitPublicDonorCommand { Request = MakeValidRequest() };
+
+        await _handler.Handle(command, CancellationToken.None);
+
+        await _emailServiceMock.Received(1).SendAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Is<string>(body => body.Contains("Pending Review") && body.Contains("DON-2026-00001") && body.Contains("Jane Tester")),
+            EmailType.OnboardingConfirmation,
+            Arg.Any<Guid?>(),
+            Arg.Any<Guid?>());
+    }
+
+    [Fact]
+    public async Task Handle_EmailServiceThrows_DoesNotFailTheRequest()
+    {
+        // Same discipline as the admin-notification failure test above: a failed
+        // confirmation email must not turn a successful donor submission into a
+        // 500, and must not roll back what was already committed.
+        _emailServiceMock
+            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailType>(), Arg.Any<Guid?>(), Arg.Any<Guid?>())
+            .ThrowsAsync(new InvalidOperationException("email provider down"));
+
+        var command = new SubmitPublicDonorCommand { Request = MakeValidRequest() };
+
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal("DON-2026-00001", result.ReferenceNumber);
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

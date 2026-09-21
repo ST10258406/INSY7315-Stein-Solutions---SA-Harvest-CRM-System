@@ -34,6 +34,7 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
 
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");

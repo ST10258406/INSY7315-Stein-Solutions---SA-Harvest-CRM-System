@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.ChangePassword;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
@@ -16,7 +17,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Hangfire;
+using NSubstitute;
 
 namespace CRM.API.Tests.Controllers;
 
@@ -28,6 +31,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
         
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
@@ -61,6 +65,12 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
                 {
                     options.UseInMemoryDatabase("InMemoryDbForTesting");
                 });
+
+                // Swap the real Brevo-backed EmailService for a no-op fake so
+                // ForgotPassword integration tests never make a real outbound
+                // HTTP call.
+                services.RemoveAll<IEmailService>();
+                services.AddScoped<IEmailService>(_ => Substitute.For<IEmailService>());
             });
         });
     }

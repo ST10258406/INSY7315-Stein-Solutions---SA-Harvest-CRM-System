@@ -1,5 +1,9 @@
 export const paths = {
   root: '/',
+  // Public donor onboarding form — unauthenticated, shared externally (marketing
+  // material, email signatures). Confirm this exact path with the team before
+  // it's printed anywhere, since changing it later breaks external links.
+  publicDonorForm: '/donate',
   login: '/login',
   dashboard: '/dashboard',
   donors: '/donors',

@@ -102,6 +102,12 @@ public class ExceptionHandlingMiddleware
                 ex.Message,
                 null),
 
+            EmailDeliveryException ex => (
+                StatusCodes.Status502BadGateway,
+                "EMAIL_DELIVERY_FAILED",
+                ex.Message,
+                null),
+
             // Catch-all. Message is deliberately generic — the real
             // exception.Message could leak internal details (SQL errors,
             // file paths, stack info). Full detail goes to Serilog only,
