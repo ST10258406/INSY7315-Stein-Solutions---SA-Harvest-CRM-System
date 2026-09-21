@@ -296,8 +296,8 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
     }
 
     private static string BuildConfirmationEmailBody(string contactName, string referenceNumber) =>
-        $"<p>Hi {contactName},</p>" +
-        $"<p>Thank you for submitting your donor information to SA Harvest. We have received your submission (reference {referenceNumber}) and it is currently <strong>Pending Review</strong>.</p>" +
+        $"<p>Hi {WebUtility.HtmlEncode(contactName)},</p>" +
+        $"<p>Thank you for submitting your donor information to SA Harvest. We have received your submission (reference {WebUtility.HtmlEncode(referenceNumber)}) and it is currently <strong>Pending Review</strong>.</p>" +
         "<p>No action is needed from you at this time. We will be in touch once your submission has been reviewed.</p>" +
         "<p>Kind regards,<br/>SA Harvest</p>";
 }
