@@ -1,3 +1,5 @@
+import UserListPage from '@/features/users/UserListPage';
+
 export default function UsersPage() {
-  return <div>Users Page</div>;
+  return <UserListPage />;
 }

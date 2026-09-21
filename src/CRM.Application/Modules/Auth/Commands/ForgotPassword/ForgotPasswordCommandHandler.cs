@@ -42,7 +42,7 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
             user.PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
             await _unitOfWork.SaveChangesAsync(ct);
 
-            var resetLink = $"http://localhost:5173/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(user.Email)}";
+            var resetLink = $"{request.ResetPasswordUrl}?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(user.Email)}";
 
             await _emailService.SendAsync(
                 to: user.Email,

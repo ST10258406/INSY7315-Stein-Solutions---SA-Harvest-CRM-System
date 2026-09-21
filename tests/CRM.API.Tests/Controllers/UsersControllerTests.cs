@@ -1,0 +1,203 @@
+namespace CRM.API.Tests.Controllers;
+
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using CRM.Application.Modules.Auth.Commands.Login;
+using CRM.Application.Modules.Auth.Dtos;
+using CRM.Application.Modules.Users.Dtos;
+using CRM.Domain.Entities;
+using CRM.Infrastructure.Persistence;
+using Hangfire;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly WebApplicationFactory<Program> _factory;
+
+    public UsersControllerTests(WebApplicationFactory<Program> factory)
+    {
+        Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+        Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
+        Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
+
+        Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("Jwt__AccessTokenExpiryMinutes", "60");
+        Environment.SetEnvironmentVariable("Jwt__Issuer", "TestIssuer");
+        Environment.SetEnvironmentVariable("Jwt__Audience", "TestAudience");
+
+        _factory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Testing");
+            builder.ConfigureServices(services =>
+            {
+                var descriptors = services.Where(
+                    d => d.ServiceType.Namespace != null &&
+                         (d.ServiceType.Namespace.StartsWith("Microsoft.EntityFrameworkCore") ||
+                          d.ServiceType.Namespace.StartsWith("Npgsql.EntityFrameworkCore.PostgreSQL"))).ToList();
+
+                foreach (var d in descriptors)
+                {
+                    services.Remove(d);
+                }
+
+                services.Remove(services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<CrmDbContext>))!);
+                services.Remove(services.SingleOrDefault(d => d.ServiceType == typeof(CrmDbContext))!);
+
+                services.AddHangfire(config => config.UseInMemoryStorage());
+
+                services.AddDbContext<CrmDbContext>(options =>
+                {
+                    options.UseInMemoryDatabase("InMemoryDbForUsersTesting");
+                });
+            });
+        });
+    }
+
+    private async Task<(HttpClient Client, User User, Role Role)> CreateAuthenticatedClientAsync(string roleName)
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var role = new Role { Id = Guid.NewGuid(), Name = roleName };
+        context.Roles.Add(role);
+
+        var password = "TestPassword123";
+        var hasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"test-{roleName.ToLower()}@example.com",
+            FirstName = roleName,
+            LastName = "Test",
+            PasswordHash = hasher.HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
+        };
+
+        user.UserRoles.Add(new UserRole { RoleId = role.Id, UserId = user.Id, Role = role, User = user });
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+
+        var loginCommand = new LoginCommand(user.Email, password);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", loginCommand);
+        var loginContent = await loginResponse.Content.ReadAsStringAsync();
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(loginContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
+
+        return (client, user, role);
+    }
+
+    [Fact]
+    public async Task GetUsers_ProcurementUser_IsForbidden()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Procurement");
+
+        var response = await client.GetAsync("/api/v1/users");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetUsers_AdminUser_ReturnsPaginatedEnvelope()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+
+        var response = await client.GetAsync("/api/v1/users");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(content).RootElement;
+        // At least the Admin who's making the call was seeded.
+        Assert.True(json.GetProperty("pagination").GetProperty("totalCount").GetInt32() >= 1);
+    }
+
+    [Fact]
+    public async Task CreateUser_AdminUser_CreatesUserAndReturnsTemporaryPassword()
+    {
+        var (client, _, role) = await CreateAuthenticatedClientAsync("Admin");
+
+        var request = new CreateUserRequest { FirstName = "Riaan", LastName = "Fourie", Email = "riaan@saharvest.org", RoleId = role.Id };
+        var response = await client.PostAsJsonAsync("/api/v1/users", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(content).RootElement.GetProperty("data");
+
+        Assert.Equal("riaan@saharvest.org", json.GetProperty("email").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("temporaryPassword").GetString()));
+    }
+
+    [Fact]
+    public async Task CreateUser_DuplicateEmail_ReturnsValidationError()
+    {
+        var (client, existingUser, role) = await CreateAuthenticatedClientAsync("Admin");
+
+        var request = new CreateUserRequest { FirstName = "Dup", LastName = "User", Email = existingUser.Email, RoleId = role.Id };
+        var response = await client.PostAsJsonAsync("/api/v1/users", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeUserRole_AdminUser_IsForbidden()
+    {
+        var (client, targetUser, role) = await CreateAuthenticatedClientAsync("Admin");
+
+        var response = await client.PatchAsJsonAsync($"/api/v1/users/{targetUser.Id}/role", new ChangeUserRoleRequest { RoleId = role.Id });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeUserRole_SuperAdminUser_Succeeds()
+    {
+        var (client, superAdmin, superAdminRole) = await CreateAuthenticatedClientAsync("SuperAdmin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var marketingRole = new Role { Id = Guid.NewGuid(), Name = "Marketing" };
+        context.Roles.Add(marketingRole);
+        var targetUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "target@saharvest.org",
+            FirstName = "Target",
+            LastName = "User",
+            PasswordHash = "n/a"
+        };
+        // No Role navigation set here (RoleId alone is enough) — superAdminRole was
+        // persisted by CreateAuthenticatedClientAsync in a different DbContext scope,
+        // so attaching that instance to this graph would make EF re-insert it.
+        targetUser.UserRoles.Add(new UserRole { UserId = targetUser.Id, RoleId = superAdminRole.Id, AssignedByUserId = superAdmin.Id });
+        context.Users.Add(targetUser);
+        await context.SaveChangesAsync();
+
+        var response = await client.PatchAsJsonAsync($"/api/v1/users/{targetUser.Id}/role", new ChangeUserRoleRequest { RoleId = marketingRole.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(content).RootElement.GetProperty("data");
+        Assert.Equal("Marketing", json.GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public async Task SetUserActiveStatus_DeactivateSelf_IsForbidden()
+    {
+        var (client, self, _) = await CreateAuthenticatedClientAsync("Admin");
+
+        var response = await client.PatchAsJsonAsync($"/api/v1/users/{self.Id}/status", new SetUserActiveStatusRequest { IsActive = false });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+}

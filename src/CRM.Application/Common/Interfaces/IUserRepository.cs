@@ -1,6 +1,8 @@
 namespace CRM.Application.Common.Interfaces;
 
 using CRM.Application.Modules.Donors.Dtos;
+using CRM.Application.Common.Models;
+using CRM.Application.Modules.Users.Dtos;
 using CRM.Domain.Entities;
 
 /// <summary>
@@ -30,4 +32,22 @@ public interface IUserRepository
 
     /// <summary>True when a user with this id exists and is active.</summary>
     Task<bool> ExistsAndActiveAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Paginated, filtered listing for the Users admin screen (GET /api/v1/users).</summary>
+    Task<(List<UserListItemDto> Items, int TotalCount)> SearchAsync(UserSearchCriteria criteria, CancellationToken cancellationToken = default);
+
+    /// <summary>Tracked user with its role eagerly loaded. Used by UpdateUser / ChangeUserRole / SetUserActiveStatus.</summary>
+    Task<User?> GetByIdWithRoleAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds a new user. Caller sets Id and PasswordHash before calling.</summary>
+    Task AddAsync(User user, CancellationToken cancellationToken = default);
+
+    /// <summary>True when another user (optionally excluding <paramref name="excludeUserId"/>) already has this email.</summary>
+    Task<bool> EmailExistsAsync(string email, Guid? excludeUserId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>All roles, ordered by name — backs the role dropdowns on the Users screen.</summary>
+    Task<List<RoleDto>> GetRolesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>True when a role with this id exists.</summary>
+    Task<bool> RoleExistsAsync(Guid roleId, CancellationToken cancellationToken = default);
 }

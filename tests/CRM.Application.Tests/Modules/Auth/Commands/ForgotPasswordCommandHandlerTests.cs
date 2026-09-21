@@ -18,6 +18,12 @@ public class ForgotPasswordCommandHandlerTests
         _handler = new ForgotPasswordCommandHandler(_usersMock, _unitOfWorkMock, _emailServiceMock);
     }
 
+    private static ForgotPasswordCommand MakeCommand(string email) => new()
+    {
+        Email = email,
+        ResetPasswordUrl = "https://app.example.test/reset-password"
+    };
+
     [Fact]
     public async Task Handle_ExistingEmail_SetsTokenAndExpiry_CallsEmailService_ReturnsGenericMessage()
     {
@@ -32,7 +38,7 @@ public class ForgotPasswordCommandHandlerTests
 
         _usersMock.GetByEmailAsync("existing@example.com", Arg.Any<CancellationToken>()).Returns(user);
 
-        var command = new ForgotPasswordCommand("existing@example.com");
+        var command = MakeCommand("existing@example.com");
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -63,7 +69,7 @@ public class ForgotPasswordCommandHandlerTests
         // Arrange
         _usersMock.GetByEmailAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((User?)null);
 
-        var command = new ForgotPasswordCommand("nonexistent@example.com");
+        var command = MakeCommand("nonexistent@example.com");
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -84,7 +90,7 @@ public class ForgotPasswordCommandHandlerTests
         // every request so a missing email isn't measurably faster than a real one.
         _usersMock.GetByEmailAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((User?)null);
 
-        await _handler.Handle(new ForgotPasswordCommand("nonexistent@example.com"), CancellationToken.None);
+        await _handler.Handle(MakeCommand("nonexistent@example.com"), CancellationToken.None);
 
         await _usersMock.Received(1).GetByEmailAsync("nonexistent@example.com", Arg.Any<CancellationToken>());
     }
@@ -100,10 +106,10 @@ public class ForgotPasswordCommandHandlerTests
         _usersMock.GetByEmailAsync("user2@example.com", Arg.Any<CancellationToken>()).Returns(user2);
 
         // Act
-        await _handler.Handle(new ForgotPasswordCommand("user1@example.com"), CancellationToken.None);
+        await _handler.Handle(MakeCommand("user1@example.com"), CancellationToken.None);
         var token1 = user1.PasswordResetToken;
 
-        await _handler.Handle(new ForgotPasswordCommand("user2@example.com"), CancellationToken.None);
+        await _handler.Handle(MakeCommand("user2@example.com"), CancellationToken.None);
         var token2 = user2.PasswordResetToken;
 
         // Assert
