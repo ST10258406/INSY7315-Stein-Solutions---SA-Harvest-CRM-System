@@ -67,7 +67,7 @@ export function EmailPanel({ donorId, donorName, contactName, defaultTo, open, o
   const { data, isPending, isError } = useInteractions(donorId, { interactionType: 'Email' }, { enabled: open });
 
   // Newest-first from the API — a thread reads top-to-bottom, oldest first.
-  const emails = [...(data?.pages[0]?.data ?? [])].reverse();
+  const emails = [...(data?.pages.flatMap((page) => page.data) ?? [])].reverse();
 
   const {
     register,

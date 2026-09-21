@@ -57,7 +57,7 @@ public class EmailService : IEmailService
             EmailType = emailType,
             ToAddress = to,
             Subject = subject,
-            Body = htmlBody
+            Body = emailType == EmailType.PasswordReset ? "[redacted password-reset email]" : htmlBody
         };
 
         try
