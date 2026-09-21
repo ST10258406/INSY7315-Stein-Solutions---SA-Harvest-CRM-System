@@ -11,6 +11,8 @@ const META = DOCUMENT_TYPE_META.BBBEECertificate;
 interface DocumentUploadStepProps {
   submissionToken: string;
   onUploaded: () => void;
+  /** The certificate is optional (see ComplianceStep) — this finishes the submission without one. */
+  onSkip: () => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface DocumentUploadStepProps {
  * request, so it's presented as the natural next step of one continuous
  * submission rather than its own page.
  */
-export function DocumentUploadStep({ submissionToken, onUploaded }: DocumentUploadStepProps) {
+export function DocumentUploadStep({ submissionToken, onUploaded, onSkip }: DocumentUploadStepProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -95,11 +97,17 @@ export function DocumentUploadStep({ submissionToken, onUploaded }: DocumentUplo
 
   if (sessionExpired) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-[14px] border-2 border-dashed border-[#D4373A] bg-[#FDF6F6] p-7.5 text-center">
-        <p className="m-0 text-[13.5px] font-bold text-[#16160F]">Your session has expired</p>
-        <p className="m-0 text-[12.5px] font-medium text-[#82827A]">
-          It's been too long since you submitted the form. Please start your submission again from the beginning.
-        </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col items-center gap-2 rounded-[14px] border-2 border-dashed border-[#D4373A] bg-[#FDF6F6] p-7.5 text-center">
+          <p className="m-0 text-[13.5px] font-bold text-[#16160F]">Your certificate upload session has expired</p>
+          <p className="m-0 text-[12.5px] font-medium text-[#82827A]">
+            Your submission was already received — this only affects the certificate upload. Since it's optional, you
+            can finish now and send the certificate to us another way, or skip it entirely.
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="secondary" onClick={onSkip} className="self-center">
+          Continue without a certificate
+        </Button>
       </div>
     );
   }
@@ -162,6 +170,15 @@ export function DocumentUploadStep({ submissionToken, onUploaded }: DocumentUplo
           )}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={onSkip}
+        disabled={upload.isPending}
+        className="self-center text-[12.5px] font-bold text-[#82827A] underline decoration-[#D4D4CC] underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Skip for now — I don't have a certificate
+      </button>
     </div>
   );
 }

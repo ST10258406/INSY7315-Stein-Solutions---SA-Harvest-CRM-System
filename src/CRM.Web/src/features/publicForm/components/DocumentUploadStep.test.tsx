@@ -43,7 +43,7 @@ describe('DocumentUploadStep', () => {
   });
 
   it('rejects an unsupported file type before calling the mutation', async () => {
-    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} />, { wrapper });
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={vi.fn()} />, { wrapper });
 
     // fireEvent.change (not userEvent.upload) deliberately bypasses the
     // input's `accept` filtering — this is the drag-and-drop path, which
@@ -58,7 +58,7 @@ describe('DocumentUploadStep', () => {
 
   it('rejects a file over the 5MB limit before calling the mutation', async () => {
     const user = userEvent.setup();
-    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} />, { wrapper });
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={vi.fn()} />, { wrapper });
 
     const input = screen.getByLabelText(/bbbee certificate file input/i);
     await user.upload(input, makeFile('cert.pdf', 'application/pdf', 6 * 1024 * 1024));
@@ -69,7 +69,7 @@ describe('DocumentUploadStep', () => {
 
   it('uploads a valid file with the given session token', async () => {
     const user = userEvent.setup();
-    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} />, { wrapper });
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={vi.fn()} />, { wrapper });
 
     const input = screen.getByLabelText(/bbbee certificate file input/i);
     await user.upload(input, makeFile('cert.pdf', 'application/pdf'));
@@ -80,7 +80,7 @@ describe('DocumentUploadStep', () => {
     );
   });
 
-  it('shows an unrecoverable message and no retry option once the session token has expired', () => {
+  it('shows an unrecoverable message, no retry option, but a way to continue once the session token has expired', () => {
     mockUploadState = {
       isPending: false,
       isError: true,
@@ -89,9 +89,30 @@ describe('DocumentUploadStep', () => {
         response: { data: { errors: [{ field: 'SessionToken', message: 'Session token expired or invalid.' }] } },
       },
     };
-    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} />, { wrapper });
+    const onSkip = vi.fn();
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={onSkip} />, { wrapper });
 
-    expect(screen.getByText(/your session has expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/certificate upload session has expired/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /continue without a certificate/i }));
+    expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the donor skip the optional certificate and finish the submission', async () => {
+    const user = userEvent.setup();
+    const onSkip = vi.fn();
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={onSkip} />, { wrapper });
+
+    await user.click(screen.getByRole('button', { name: /skip for now/i }));
+
+    expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the skip action while an upload is in progress', () => {
+    mockUploadState = { isPending: true, isError: false, error: null };
+    render(<DocumentUploadStep submissionToken="tok-1" onUploaded={vi.fn()} onSkip={vi.fn()} />, { wrapper });
+
+    expect(screen.getByRole('button', { name: /skip for now/i })).toBeDisabled();
   });
 });

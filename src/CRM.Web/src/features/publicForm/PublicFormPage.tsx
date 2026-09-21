@@ -145,8 +145,14 @@ export default function PublicFormPage() {
     return (
       <PublicPageShell>
         <PublicCard>
-          <h2 className="mb-1 text-[19px] font-extrabold tracking-tight">Upload your BBBEE certificate</h2>
-          <DocumentUploadStep submissionToken={submissionResult.submissionToken} onUploaded={() => setPhase('complete')} />
+          <h2 className="mb-1 text-[19px] font-extrabold tracking-tight">
+            Upload your BBBEE certificate <span className="font-medium text-[#9A9A90]">(optional)</span>
+          </h2>
+          <DocumentUploadStep
+            submissionToken={submissionResult.submissionToken}
+            onUploaded={() => setPhase('complete')}
+            onSkip={() => setPhase('complete')}
+          />
         </PublicCard>
       </PublicPageShell>
     );

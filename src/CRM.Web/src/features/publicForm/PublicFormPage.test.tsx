@@ -49,11 +49,22 @@ vi.mock('./hooks/useSubmitPublicDonor', () => ({
 // transition (form -> document upload -> complete) can be tested in
 // isolation.
 vi.mock('./components/DocumentUploadStep', () => ({
-  DocumentUploadStep: ({ submissionToken, onUploaded }: { submissionToken: string; onUploaded: () => void }) => (
+  DocumentUploadStep: ({
+    submissionToken,
+    onUploaded,
+    onSkip,
+  }: {
+    submissionToken: string;
+    onUploaded: () => void;
+    onSkip: () => void;
+  }) => (
     <div>
       <span>Uploading for token: {submissionToken}</span>
       <button type="button" onClick={onUploaded}>
         Simulate upload success
+      </button>
+      <button type="button" onClick={onSkip}>
+        Simulate skip
       </button>
     </div>
   ),
@@ -316,6 +327,25 @@ describe('PublicFormPage', () => {
     await user.click(await screen.findByRole('button', { name: /simulate upload success/i }));
 
     expect(await screen.findByText(/DON-2026-00042/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /thank you/i })).toBeInTheDocument();
+  }, 15000);
+
+  it('reaches the confirmation screen when the donor skips the optional certificate upload', async () => {
+    mutateAsync.mockResolvedValue({
+      message: 'Thank you. Your submission has been received.',
+      referenceNumber: 'DON-2026-00099',
+      submissionToken: 'tok-xyz789',
+    });
+    const user = userEvent.setup();
+    renderForm();
+
+    await completeFullFormUpToReview(user);
+    await user.click(screen.getByRole('checkbox', { name: /confirm this information is accurate/i }));
+    await user.click(screen.getByRole('button', { name: /^submit$/i }));
+
+    await user.click(await screen.findByRole('button', { name: /simulate skip/i }));
+
+    expect(await screen.findByText(/DON-2026-00099/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /thank you/i })).toBeInTheDocument();
   }, 15000);
 });
