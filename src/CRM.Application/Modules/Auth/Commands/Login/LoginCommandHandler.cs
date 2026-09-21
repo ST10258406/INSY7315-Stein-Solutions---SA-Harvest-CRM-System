@@ -33,9 +33,9 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         // Read-only lookup (the refresh token below is a separate entity being added).
         var user = await _users.GetByEmailWithRolesAsync(request.Email, ct);
 
-        // Same generic failure for "no user" and "wrong password" — do not
-        // let these two branches produce different error messages or timings.
-        if (user is null)
+        // Same generic failure for "no user", "deactivated user", and "wrong password" —
+        // do not let these branches produce different error messages or timings.
+        if (user is null || !user.IsActive)
             throw new UnauthorizedException("Invalid email or password.");
 
         var result = _passwordHasher.VerifyHashedPassword(

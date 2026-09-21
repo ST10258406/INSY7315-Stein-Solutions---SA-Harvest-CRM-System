@@ -150,6 +150,23 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
     }
 
     [Fact]
+    public async Task CreateUser_AdminAssigningSuperAdminRole_IsForbidden()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var superAdminRole = new Role { Id = Guid.NewGuid(), Name = "SuperAdmin" };
+        context.Roles.Add(superAdminRole);
+        await context.SaveChangesAsync();
+
+        var request = new CreateUserRequest { FirstName = "Escalate", LastName = "Attempt", Email = "escalate@saharvest.org", RoleId = superAdminRole.Id };
+        var response = await client.PostAsJsonAsync("/api/v1/users", request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ChangeUserRole_AdminUser_IsForbidden()
     {
         var (client, targetUser, role) = await CreateAuthenticatedClientAsync("Admin");
@@ -189,6 +206,39 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         var content = await response.Content.ReadAsStringAsync();
         var json = JsonDocument.Parse(content).RootElement.GetProperty("data");
         Assert.Equal("Marketing", json.GetProperty("role").GetString());
+    }
+
+    [Fact]
+    public async Task ChangeUserRole_SameRoleResubmitted_DoesNotThrow()
+    {
+        // Regression test: the Change Role dialog preselects the user's current role, so
+        // submitting without changing it is a normal request. A naive "clear the tracked
+        // UserRoles collection, then add a new row with the same (UserId, RoleId) key"
+        // implementation throws under EF Core's real change tracker (not reproducible
+        // against a mocked IUserRepository) because two tracked entries end up with an
+        // identical key.
+        var (client, superAdmin, superAdminRole) = await CreateAuthenticatedClientAsync("SuperAdmin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var targetUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "unchanged-role@saharvest.org",
+            FirstName = "Unchanged",
+            LastName = "Role",
+            PasswordHash = "n/a"
+        };
+        targetUser.UserRoles.Add(new UserRole { UserId = targetUser.Id, RoleId = superAdminRole.Id, AssignedByUserId = superAdmin.Id });
+        context.Users.Add(targetUser);
+        await context.SaveChangesAsync();
+
+        var response = await client.PatchAsJsonAsync($"/api/v1/users/{targetUser.Id}/role", new ChangeUserRoleRequest { RoleId = superAdminRole.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(content).RootElement.GetProperty("data");
+        Assert.Equal("SuperAdmin", json.GetProperty("role").GetString());
     }
 
     [Fact]

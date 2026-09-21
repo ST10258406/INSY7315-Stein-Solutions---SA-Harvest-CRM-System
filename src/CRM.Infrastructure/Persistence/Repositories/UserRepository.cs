@@ -120,4 +120,7 @@ public class UserRepository : IUserRepository
 
     public Task<bool> RoleExistsAsync(Guid roleId, CancellationToken cancellationToken = default)
         => _context.Roles.AsNoTracking().AnyAsync(r => r.Id == roleId, cancellationToken);
+
+    public Task<string?> GetRoleNameAsync(Guid roleId, CancellationToken cancellationToken = default)
+        => _context.Roles.AsNoTracking().Where(r => r.Id == roleId).Select(r => (string?)r.Name).FirstOrDefaultAsync(cancellationToken);
 }

@@ -8,12 +8,18 @@ using MediatR;
 public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveStatusCommand, UserListItemDto>
 {
     private readonly IUserRepository _users;
+    private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
 
-    public SetUserActiveStatusCommandHandler(IUserRepository users, IUnitOfWork unitOfWork, ICurrentUserService currentUserService)
+    public SetUserActiveStatusCommandHandler(
+        IUserRepository users,
+        IRefreshTokenRepository refreshTokens,
+        IUnitOfWork unitOfWork,
+        ICurrentUserService currentUserService)
     {
         _users = users;
+        _refreshTokens = refreshTokens;
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
     }
@@ -32,6 +38,18 @@ public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveSt
         command.OldValues = new { user.IsActive };
 
         user.IsActive = command.IsActive;
+
+        // Deactivating a user must kill their access immediately, not just block future
+        // logins — otherwise an existing refresh token keeps working indefinitely (Login
+        // and Refresh both reject IsActive == false, but only for new/renewed tokens).
+        if (!command.IsActive)
+        {
+            var activeTokens = await _refreshTokens.GetActiveByUserIdAsync(user.Id, cancellationToken);
+            foreach (var rt in activeTokens)
+            {
+                rt.IsRevoked = true;
+            }
+        }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

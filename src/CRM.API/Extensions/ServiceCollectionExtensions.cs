@@ -75,6 +75,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardRepository, DashboardRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IUserPasswordHasher, UserPasswordHasher>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         var jwtSecret = configuration["JWT_SECRET"]

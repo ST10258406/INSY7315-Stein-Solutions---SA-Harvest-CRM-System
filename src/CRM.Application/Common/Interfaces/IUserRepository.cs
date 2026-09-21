@@ -50,4 +50,7 @@ public interface IUserRepository
 
     /// <summary>True when a role with this id exists.</summary>
     Task<bool> RoleExistsAsync(Guid roleId, CancellationToken cancellationToken = default);
+
+    /// <summary>The role's name, or null if it doesn't exist. Used to gate SuperAdmin assignment.</summary>
+    Task<string?> GetRoleNameAsync(Guid roleId, CancellationToken cancellationToken = default);
 }

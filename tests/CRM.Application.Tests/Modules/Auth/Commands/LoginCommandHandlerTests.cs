@@ -111,6 +111,31 @@ public class LoginCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_DeactivatedUser_ThrowsUnauthorizedException()
+    {
+        var passwordHasher = new PasswordHasher<User>();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "deactivated@example.com",
+            PasswordHash = passwordHasher.HashPassword(null!, "CorrectPassword"),
+            IsActive = false,
+            UserRoles = new List<UserRole>()
+        };
+
+        _usersMock.GetByEmailWithRolesAsync("deactivated@example.com", Arg.Any<CancellationToken>()).Returns(user);
+
+        var command = new LoginCommand("deactivated@example.com", "CorrectPassword");
+
+        // Same generic message as "wrong password" / "no such user" — a deactivated
+        // account must not be distinguishable from any other login failure.
+        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Equal("Invalid email or password.", ex.Message);
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Handle_NonExistentEmail_ThrowsUnauthorizedException()
     {
         // Arrange
