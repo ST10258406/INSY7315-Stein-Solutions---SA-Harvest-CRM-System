@@ -41,6 +41,7 @@ public class CrmDbContext : DbContext
     public DbSet<DonorApproval> DonorApprovals => Set<DonorApproval>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

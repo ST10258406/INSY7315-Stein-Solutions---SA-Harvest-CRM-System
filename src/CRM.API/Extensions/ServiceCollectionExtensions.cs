@@ -11,6 +11,7 @@ using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
 using CRM.Infrastructure.Services;
+using CRM.Infrastructure.Services.Email;
 using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -63,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IEmailLogRepository, EmailLogRepository>();
         services.AddScoped<IDonorRepository, DonorRepository>();
         services.AddScoped<IDonorDocumentRepository, DonorDocumentRepository>();
         services.AddScoped<IInteractionLogRepository, InteractionLogRepository>();
@@ -108,6 +110,23 @@ public static class ServiceCollectionExtensions
         services.AddCrmAuthorizationPolicies();
         services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
 
+        var brevoApiKey = configuration["BREVO_API_KEY"]
+            ?? throw new InvalidOperationException(
+                "BREVO_API_KEY is not set. Add it to .env (local) or Azure Key Vault (production).");
+
+        services.Configure<BrevoSettings>(opts =>
+        {
+            configuration.GetSection("Brevo").Bind(opts);
+            opts.ApiKey = brevoApiKey;
+        });
+
+        services.AddHttpClient<IEmailService, EmailService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.brevo.com/v3/");
+            client.DefaultRequestHeaders.Add("api-key", brevoApiKey);
+            client.DefaultRequestHeaders.Add("accept", "application/json");
+        });
+
 
         // Hangfire — same Postgres connection string, own schema
         services.AddHangfire(config => config
@@ -122,7 +141,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBlobStorageService, BlobStorageService>();
         services.AddScoped<IReportExportService, ReportExportService>(); // QuestPDF + ClosedXML, synchronous for now
-        services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
         services.AddScoped<INotificationService, NotificationService>();
 
         // Recurring background jobs
@@ -186,6 +204,7 @@ public static class ServiceCollectionExtensions
         // All rate limit policies (global + named per-tier) are configured in
         // RateLimitingExtensions.cs, not inline here.
         services.AddPublicApiRateLimiting();
+        services.AddAuthenticatedApiRateLimiting(configuration);
 
         return services;
     }

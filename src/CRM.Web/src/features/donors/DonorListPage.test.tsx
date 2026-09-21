@@ -11,7 +11,12 @@ import type { DonorListItemDto, PaginatedResult } from './types';
 vi.mock('@/lib/axios', () => ({
   api: {
     get: vi.fn(),
+    post: vi.fn(),
   },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 function donor(overrides: Partial<DonorListItemDto> = {}): DonorListItemDto {
@@ -86,6 +91,20 @@ describe('DonorListPage', () => {
     expect(await screen.findByText('Acme Co')).toBeInTheDocument();
     expect(screen.getByText('Beta Foods')).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: 'Pending review' })).toBeInTheDocument();
+  });
+
+  it('opens the send-public-form invite dialog, prefilled with a default subject and message', async () => {
+    const user = userEvent.setup();
+    mockApi(() => Promise.resolve({ data: paginatedResult([]) }));
+
+    renderPage();
+    await screen.findByText(/donors total|No donors match/i);
+
+    await user.click(screen.getByRole('button', { name: /Send Public Form/i }));
+
+    expect(await screen.findByRole('heading', { name: 'Send public form' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Subject')).toHaveValue("You're invited to become an SA Harvest donor");
+    expect(screen.getByLabelText('To')).toHaveValue('');
   });
 
   it('shows an empty state when no donors match', async () => {

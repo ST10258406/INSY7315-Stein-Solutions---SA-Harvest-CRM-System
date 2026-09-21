@@ -32,6 +32,9 @@ export interface InteractionLogDto {
   body: string;
   /** Short-lived (15-min) SAS URL, generated at query time — never a raw blob path. */
   emailAttachmentUrl: string | null;
+  /** Loose polymorphic discriminator — e.g. "EmailLog" for a compose-and-send Email interaction. */
+  relatedEntityId: string | null;
+  relatedEntityType: string | null;
   createdAt: string;
   createdBy: InteractionUserDto;
 }
@@ -55,4 +58,12 @@ export interface LogInteractionRequest {
   body: string;
   /** ISO 8601 UTC; must be strictly in the future when present. */
   followUpDate?: string | null;
+}
+
+/** Request body for POST /api/v1/donors/{id}/interactions/email — mirrors SendDonorEmailRequest. */
+export interface SendDonorEmailRequest {
+  /** Single recipient only — no comma/semicolon lists, no CC/BCC. */
+  to: string;
+  subject: string;
+  body: string;
 }

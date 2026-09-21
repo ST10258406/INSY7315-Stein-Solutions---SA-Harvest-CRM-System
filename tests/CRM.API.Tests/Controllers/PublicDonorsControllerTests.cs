@@ -2,6 +2,7 @@ namespace CRM.API.Tests.Controllers;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using CRM.API.Controllers;
 using CRM.API.Extensions;
@@ -12,6 +13,7 @@ using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
 using CRM.Domain.Enums;
 using CRM.Infrastructure.Persistence;
+using CRM.Infrastructure.Services;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -35,6 +37,7 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
 
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
@@ -72,8 +75,28 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
 
                 services.RemoveAll<IBlobStorageService>();
                 services.AddSingleton(_blobStorageMock);
+
+                // Swap the real network call out from under EmailService so
+                // submitting the form never hits the actual Brevo API in tests —
+                // EmailService's own logging/EmailLog behaviour still runs for real,
+                // which is what Submit_ValidPayload_SendsOnboardingConfirmationEmail
+                // below relies on.
+                services.AddHttpClient<IEmailService, EmailService>()
+                    .ConfigurePrimaryHttpMessageHandler(() => new FakeBrevoHttpMessageHandler());
             });
         });
+    }
+
+    private class FakeBrevoHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { messageId = "fake-brevo-message-id" }),
+                    Encoding.UTF8,
+                    "application/json")
+            });
     }
 
     /// <summary>
@@ -227,6 +250,34 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
             .ToListAsync();
         Assert.Equal(2, notifications.Count);
         Assert.Equal(2, notifications.Select(n => n.UserId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task Submit_ValidPayload_SendsOnboardingConfirmationEmail_ExactlyOneEmailLogAndNoInteractionLogForIt()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(context);
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/donors/submit", MakeValidPayload());
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var donor = await context.Donors.SingleAsync();
+
+        var emailLog = await context.EmailLogs.SingleAsync();
+        Assert.Equal(EmailType.OnboardingConfirmation, emailLog.EmailType);
+        Assert.Equal(EmailStatus.Sent, emailLog.Status);
+        Assert.Equal("jane@test.co.za", emailLog.ToAddress);
+        Assert.Equal(donor.Id, emailLog.DonorId);
+        Assert.Equal("fake-brevo-message-id", emailLog.ProviderMessageId);
+
+        // The FormSubmission log from the submission itself is the only
+        // InteractionLog row — the confirmation email does not add a second one.
+        var interactionLog = await context.InteractionLogs.SingleAsync(l => l.DonorId == donor.Id);
+        Assert.Equal(InteractionType.FormSubmission, interactionLog.InteractionType);
     }
 
     [Fact]

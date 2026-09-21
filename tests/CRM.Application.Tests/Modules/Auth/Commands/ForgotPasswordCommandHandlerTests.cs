@@ -1,6 +1,7 @@
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Domain.Entities;
+using CRM.Domain.Enums;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Auth.Commands;
@@ -50,7 +51,10 @@ public class ForgotPasswordCommandHandlerTests
         await _emailServiceMock.Received(1).SendAsync(
             user.Email,
             "Reset your SA Harvest CRM password",
-            Arg.Is<string>(body => body.Contains(user.FirstName) && body.Contains("reset-password")));
+            Arg.Is<string>(body => body.Contains(user.FirstName) && body.Contains("reset-password")),
+            EmailType.PasswordReset,
+            Arg.Any<Guid?>(),
+            user.Id);
     }
 
     [Fact]
@@ -69,7 +73,8 @@ public class ForgotPasswordCommandHandlerTests
         Assert.Equal("If this email address exists, a reset link has been sent.", result.Message);
 
         await _unitOfWorkMock.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
-        await _emailServiceMock.DidNotReceive().SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
+        await _emailServiceMock.DidNotReceive().SendAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EmailType>(), Arg.Any<Guid?>(), Arg.Any<Guid?>());
     }
 
     [Fact]

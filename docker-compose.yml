@@ -42,7 +42,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      BREVO_API_KEY: ${BREVO_API_KEY}
       Azure__BlobStorage__ConnectionString: ${AZURE_STORAGE_CONNECTION_STRING}
       Azure__BlobStorage__ContainerName: donor-documents
       AZURE_KEY_VAULT_URI: ${AZURE_KEY_VAULT_URI}

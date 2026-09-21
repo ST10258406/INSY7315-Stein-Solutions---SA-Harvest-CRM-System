@@ -14,10 +14,11 @@ const PAGE_SIZE = 20;
 export function useInteractions(
   donorId: string | undefined,
   filters: Omit<InteractionFilters, 'page' | 'pageSize'> = {},
+  options: { enabled?: boolean } = {},
 ) {
   return useInfiniteQuery<PaginatedResult<InteractionLogDto>, ApiError>({
     queryKey: interactionKeys.list(donorId, filters),
-    enabled: !!donorId,
+    enabled: !!donorId && (options.enabled ?? true),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const { data } = await api.get<PaginatedResult<InteractionLogDto>>(

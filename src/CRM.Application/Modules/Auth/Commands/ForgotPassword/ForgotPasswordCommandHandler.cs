@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Dtos;
+using CRM.Domain.Enums;
 using MediatR;
 
 namespace CRM.Application.Modules.Auth.Commands.ForgotPassword;
@@ -46,7 +47,9 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
             await _emailService.SendAsync(
                 to: user.Email,
                 subject: "Reset your SA Harvest CRM password",
-                htmlBody: BuildResetEmailBody(user.FirstName, resetLink));
+                htmlBody: BuildResetEmailBody(user.FirstName, resetLink),
+                emailType: EmailType.PasswordReset,
+                sentByUserId: user.Id);
         }
 
         return new ForgotPasswordResponseDto { Message = GenericMessage };

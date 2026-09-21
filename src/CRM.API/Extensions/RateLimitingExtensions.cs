@@ -1,8 +1,10 @@
 namespace CRM.API.Extensions;
 
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
@@ -35,6 +37,50 @@ public static class RateLimitingExtensions
     /// rate limit configuration lives in one place instead of being scattered
     /// across Program.cs/ServiceCollectionExtensions.</summary>
     public const string PublicFormPolicy = "PublicFormPolicy";
+
+    /// <summary>
+    /// Per-user (not per-IP — multiple staff can share an office network) limit on
+    /// POST /donors/{id}/interactions/email. Configurable via
+    /// RateLimiting:DonorEmail:PermitLimit / :WindowMinutes in appsettings.json;
+    /// defaults below apply if that section is absent.
+    /// </summary>
+    public const string DonorEmailPolicy = "DonorEmail";
+
+    private const int DefaultDonorEmailPermitLimit = 20;
+    private const int DefaultDonorEmailWindowMinutes = 60;
+
+    /// <summary>
+    /// Rate limiting for authenticated staff endpoints, partitioned by the caller's
+    /// user id (ClaimTypes.NameIdentifier — the same claim ICurrentUserService reads)
+    /// rather than IP, since staff commonly share an office network. Registered via
+    /// its own AddRateLimiter call, additive to <see cref="AddPublicApiRateLimiting"/>'s
+    /// (ASP.NET Core's rate limiter options are configured additively — see
+    /// Microsoft.Extensions.Options — so both sets of named policies coexist).
+    /// </summary>
+    public static IServiceCollection AddAuthenticatedApiRateLimiting(this IServiceCollection services, IConfiguration configuration)
+    {
+        var permitLimit = configuration.GetValue<int?>("RateLimiting:DonorEmail:PermitLimit") ?? DefaultDonorEmailPermitLimit;
+        var windowMinutes = configuration.GetValue<int?>("RateLimiting:DonorEmail:WindowMinutes") ?? DefaultDonorEmailWindowMinutes;
+
+        services.AddRateLimiter(options =>
+        {
+            options.AddPolicy(DonorEmailPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetUserId(context),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = permitLimit,
+                        Window = TimeSpan.FromMinutes(windowMinutes),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+        });
+
+        return services;
+    }
+
+    private static string GetUserId(HttpContext context) =>
+        context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "anonymous";
 
     public static IServiceCollection AddPublicApiRateLimiting(this IServiceCollection services)
     {

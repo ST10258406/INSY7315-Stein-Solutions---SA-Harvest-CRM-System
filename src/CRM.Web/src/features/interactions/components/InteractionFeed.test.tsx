@@ -18,6 +18,8 @@ const row: InteractionLogDto = {
   subject: 'Surplus volume forecast for Q3',
   body: 'Dineo confirmed the plant will have chilled surplus through September.',
   emailAttachmentUrl: null,
+  relatedEntityId: null,
+  relatedEntityType: null,
   createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
   createdBy: { id: 'user-1', fullName: 'Nomsa Khumalo' },
 };

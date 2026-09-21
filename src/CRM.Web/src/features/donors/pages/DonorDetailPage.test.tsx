@@ -12,7 +12,12 @@ import type { DonorDetailDto } from '../types';
 vi.mock('@/lib/axios', () => ({
   api: {
     get: vi.fn(),
+    post: vi.fn(),
   },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 function donorDetail(overrides: Partial<DonorDetailDto> = {}): DonorDetailDto {
@@ -101,6 +106,24 @@ describe('DonorDetailPage', () => {
     expect(await screen.findByRole('heading', { name: /Acme Co/ })).toBeInTheDocument();
     expect(screen.getByText('Acme Co (Pty) Ltd')).toBeInTheDocument();
     expect(screen.getByText('Weekly')).toBeInTheDocument();
+  });
+
+  it('opens the email panel pre-filled with the donor\'s primary contact email', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.get).mockResolvedValueOnce({ data: { data: donorDetail() } });
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: { data: [], pagination: { page: 1, pageSize: 20, totalCount: 0, totalPages: 0 } },
+    });
+
+    renderPage();
+    await screen.findByRole('heading', { name: /Acme Co/ });
+
+    await user.click(screen.getByRole('button', { name: /Send Email/i }));
+
+    expect(await screen.findByRole('heading', { name: /Email Thread/ })).toBeInTheDocument();
+    // Pre-filled as a recipient chip (not a plain input) since a contact email exists.
+    expect(screen.getByText('jane@acme.example')).toBeInTheDocument();
+    expect(screen.queryByLabelText('To')).not.toBeInTheDocument();
   });
 
   it('switches to the Contacts tab and shows primary contact info, with a fallback for absent contacts', async () => {
