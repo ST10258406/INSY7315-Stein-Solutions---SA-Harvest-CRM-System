@@ -10,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 
 namespace CRM.API.Controllers;
 
@@ -18,10 +19,12 @@ namespace CRM.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(IMediator mediator)
+    public AuthController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator;
+        _configuration = configuration;
     }
 
     [HttpPost("login")]
@@ -43,9 +46,16 @@ public class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingExtensions.PublicFormPolicy)]
-    public async Task<ActionResult<ForgotPasswordResponseDto>> ForgotPassword(ForgotPasswordCommand command)
+    public async Task<ActionResult<ForgotPasswordResponseDto>> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        var result = await _mediator.Send(command);
+        var baseUrl = _configuration["Frontend:BaseUrl"]
+            ?? throw new InvalidOperationException("Frontend:BaseUrl is not configured.");
+
+        var result = await _mediator.Send(new ForgotPasswordCommand
+        {
+            Email = request.Email,
+            ResetPasswordUrl = $"{baseUrl.TrimEnd('/')}/reset-password"
+        });
         return Ok(result);
     }
 

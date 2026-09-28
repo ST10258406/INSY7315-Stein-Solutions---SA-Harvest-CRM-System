@@ -1,6 +1,7 @@
 using CRM.Application.Modules.Lookups.Queries.GetCodedLookup;
 using CRM.Application.Modules.Lookups.Queries.GetLookup;
 using CRM.Application.Modules.Lookups.Queries.GetRelationshipManagers;
+using CRM.Application.Modules.Lookups.Queries.GetRoles;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -50,4 +51,11 @@ public class LookupsController : ControllerBase
     [HttpGet("relationship-managers")]
     public async Task<IActionResult> GetRelationshipManagers()
         => Ok(new { data = await _mediator.Send(new GetRelationshipManagersQuery()) });
+
+    // Tighter than the controller-level policy — role names back the Users screen's
+    // dropdowns, which only Admin/SuperAdmin can reach.
+    [HttpGet("roles")]
+    [Authorize(Policy = "AdminOrAbove")]
+    public async Task<IActionResult> GetRoles()
+        => Ok(new { data = await _mediator.Send(new GetRolesQuery()) });
 }

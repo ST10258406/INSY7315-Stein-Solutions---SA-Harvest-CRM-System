@@ -21,9 +21,9 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
     {
         var storedToken = await _refreshTokens.GetByTokenWithUserAndRolesAsync(request.RefreshToken, ct);
 
-        // Same generic 401 for "doesn't exist", "revoked", and "expired" —
-        // don't tell the caller which case it was.
-        if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTimeOffset.UtcNow)
+        // Same generic 401 for "doesn't exist", "revoked", "expired", and "user
+        // deactivated since the token was issued" — don't tell the caller which case it was.
+        if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTimeOffset.UtcNow || !storedToken.User.IsActive)
             throw new UnauthorizedException("Refresh token is invalid or expired.");
 
         var newAccessToken = _jwtTokenService.GenerateAccessToken(storedToken.User);

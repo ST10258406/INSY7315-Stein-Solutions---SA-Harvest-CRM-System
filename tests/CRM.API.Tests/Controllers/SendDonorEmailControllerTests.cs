@@ -310,11 +310,12 @@ public class SendDonorEmailControllerTests : IClassFixture<WebApplicationFactory
     public async Task Post_UnknownDonor_Returns404()
     {
         _brevoHandler.Respond = _ => ConfigurableBrevoHandler.Success();
+        // CreateAuthenticatedClient already wipes and recreates the DB before seeding its
+        // own user, and this test never seeds a donor — re-wiping here after login would
+        // also delete that just-created user, which now fails authentication entirely
+        // (the JWT pipeline re-checks the user still exists on every request) instead of
+        // reaching the controller to 404 on the unknown donor id.
         var client = await CreateAuthenticatedClient("Procurement");
-        using var scope = _factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
 
         var response = await client.PostAsJsonAsync($"/api/v1/donors/{Guid.NewGuid()}/interactions/email", new
         {

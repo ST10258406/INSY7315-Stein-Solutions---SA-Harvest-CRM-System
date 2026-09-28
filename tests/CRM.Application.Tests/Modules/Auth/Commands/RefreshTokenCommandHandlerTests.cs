@@ -114,6 +114,34 @@ public class RefreshTokenCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_DeactivatedUser_ThrowsUnauthorizedException()
+    {
+        // Regression: an existing, unexpired, non-revoked refresh token must stop working
+        // the moment the underlying user is deactivated — otherwise a deactivated account
+        // could keep renewing access tokens indefinitely.
+        var user = new User { Id = Guid.NewGuid(), Email = "deactivated@example.com", IsActive = false };
+
+        var refreshToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            User = user,
+            Token = "still-valid-token",
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            IsRevoked = false,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("still-valid-token", Arg.Any<CancellationToken>())
+            .Returns(refreshToken);
+
+        var command = new RefreshTokenCommand("still-valid-token");
+
+        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
+        Assert.Equal("Refresh token is invalid or expired.", ex.Message);
+    }
+
+    [Fact]
     public async Task Handle_NonExistentToken_ThrowsUnauthorizedException()
     {
         // Arrange

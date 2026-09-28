@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.ChangePassword;
-using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
@@ -244,10 +243,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        var command = new ForgotPasswordCommand("forgot-pass@example.com");
-
         // Act
-        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "forgot-pass@example.com" });
 
         // Assert
         var content = await response.Content.ReadAsStringAsync();
@@ -269,10 +266,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
 
-        var command = new ForgotPasswordCommand("doesnotexist@example.com");
-
         // Act
-        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "doesnotexist@example.com" });
 
         // Assert
         var content = await response.Content.ReadAsStringAsync();

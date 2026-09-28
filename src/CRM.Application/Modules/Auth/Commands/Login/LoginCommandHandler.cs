@@ -16,6 +16,13 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
     private readonly IJwtTokenService _jwtTokenService;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
+    // A fixed, precomputed hash used to verify against when there's no real user/hash to
+    // check — keeps the expensive PBKDF2 verification on the same code path regardless of
+    // whether the email exists or is active, so "unknown email", "deactivated account",
+    // and "wrong password" aren't distinguishable by response timing.
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<User>().HashPassword(null!, "not-a-real-password-timing-guard");
+
     public LoginCommandHandler(
         IUserRepository users,
         IRefreshTokenRepository refreshTokens,
@@ -32,16 +39,21 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
     {
         // Read-only lookup (the refresh token below is a separate entity being added).
         var user = await _users.GetByEmailWithRolesAsync(request.Email, ct);
+        var isKnownActiveUser = user is not null && user.IsActive;
 
-        // Same generic failure for "no user" and "wrong password" — do not
-        // let these two branches produce different error messages or timings.
-        if (user is null)
-            throw new UnauthorizedException("Invalid email or password.");
-
+        // Always verify against *some* hash — the real one for a known, active user, a
+        // fixed dummy one otherwise — so this line runs on every request regardless of
+        // which branch we're about to take. Skipping it for "no user"/"deactivated"
+        // would let those cases return faster than "wrong password" and leak account
+        // state through timing despite sharing the same error message.
         var result = _passwordHasher.VerifyHashedPassword(
-            user, user.PasswordHash, request.Password);
+            user!, isKnownActiveUser ? user!.PasswordHash : DummyPasswordHash, request.Password);
 
-        if (result == PasswordVerificationResult.Failed)
+        // Same generic failure for "no user", "deactivated user", and "wrong password" —
+        // do not let these branches produce different error messages or timings. The
+        // redundant `user is null` check lets the compiler narrow `user` to non-null
+        // below (isKnownActiveUser already implies it).
+        if (!isKnownActiveUser || result == PasswordVerificationResult.Failed || user is null)
             throw new UnauthorizedException("Invalid email or password.");
 
         var accessToken = _jwtTokenService.GenerateAccessToken(user);
