@@ -54,6 +54,12 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
             AssignedByUserId = currentUserId
         });
 
+        // Everything the response needs is resolved BEFORE the commit. Nothing that can
+        // fail may run after SaveChanges: once the user row exists, a post-commit error
+        // would return 500 and the one-time temporary password would be lost for good,
+        // leaving an account nobody can sign in to.
+        var roleName = await _users.GetRoleNameAsync(req.RoleId, cancellationToken) ?? string.Empty;
+
         await _users.AddAsync(user, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -62,21 +68,17 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
         // must never contain a plaintext credential, even a one-time one.
         command.NewValues = new { user.Id, user.FirstName, user.LastName, user.Email, RoleId = req.RoleId };
 
-        var created = await _users.GetByIdWithRoleAsync(user.Id, cancellationToken)
-            ?? throw new InvalidOperationException($"User {user.Id} could not be re-read immediately after being created.");
-
-        var role = created.UserRoles.FirstOrDefault()?.Role;
-
         return new CreateUserResponseDto
         {
-            Id = created.Id,
-            FirstName = created.FirstName,
-            LastName = created.LastName,
-            Email = created.Email,
-            RoleId = role?.Id ?? req.RoleId,
-            Role = role?.Name ?? string.Empty,
-            IsActive = created.IsActive,
-            CreatedAt = created.CreatedAt,
+            Id = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email,
+            RoleId = req.RoleId,
+            Role = roleName,
+            IsActive = user.IsActive,
+            // Stamped on the tracked entity by UpdatedAtInterceptor during SaveChanges.
+            CreatedAt = user.CreatedAt,
             TemporaryPassword = temporaryPassword
         };
     }

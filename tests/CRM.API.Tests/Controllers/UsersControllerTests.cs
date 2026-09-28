@@ -283,6 +283,36 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
     }
 
     [Fact]
+    public async Task SetUserActiveStatus_MissingIsActive_ReturnsBadRequestAndLeavesUserActive()
+    {
+        // Regression: a body of {} used to bind IsActive to false and deactivate the
+        // target. A missing value must be rejected, never treated as "deactivate".
+        var (client, _, role) = await CreateAuthenticatedClientAsync("Admin");
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var targetUser = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"empty-body-{Guid.NewGuid():N}@saharvest.org",
+            FirstName = "Empty",
+            LastName = "Body",
+            PasswordHash = "not-used",
+            IsActive = true
+        };
+        targetUser.UserRoles.Add(new UserRole { UserId = targetUser.Id, RoleId = role.Id, AssignedByUserId = targetUser.Id });
+        context.Users.Add(targetUser);
+        await context.SaveChangesAsync();
+
+        var response = await client.PatchAsJsonAsync($"/api/v1/users/{targetUser.Id}/status", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var reloaded = await context.Users.AsNoTracking().SingleAsync(u => u.Id == targetUser.Id);
+        Assert.True(reloaded.IsActive);
+    }
+
+    [Fact]
     public async Task SetUserActiveStatus_DeactivateOtherUser_TheirExistingAccessTokenIsRejectedImmediately()
     {
         // Regression: deactivation must cut off access on the very next request, not just

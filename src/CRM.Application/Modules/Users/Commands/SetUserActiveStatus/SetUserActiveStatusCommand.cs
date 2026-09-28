@@ -8,10 +8,12 @@ using MediatR;
 public class SetUserActiveStatusCommand : IRequest<UserListItemDto>, IAuditableCommand
 {
     public Guid Id { get; set; }
-    public bool IsActive { get; set; }
+    // Nullable so a missing value reaches the validator and is rejected, instead of
+    // defaulting to false (a destructive deactivation). See SetUserActiveStatusRequest.
+    public bool? IsActive { get; set; }
 
     public string EntityType => "User";
-    public AuditAction Action => IsActive ? AuditAction.Updated : AuditAction.Deleted;
+    public AuditAction Action => IsActive == true ? AuditAction.Updated : AuditAction.Deleted;
     public Guid EntityId { get; set; }
     public object? OldValues { get; set; }
     public object? NewValues { get; set; }

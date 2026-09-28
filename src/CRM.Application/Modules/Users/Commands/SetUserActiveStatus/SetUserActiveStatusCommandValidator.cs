@@ -7,5 +7,6 @@ public class SetUserActiveStatusCommandValidator : AbstractValidator<SetUserActi
     public SetUserActiveStatusCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.IsActive).NotNull().WithMessage("isActive is required.");
     }
 }
