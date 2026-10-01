@@ -25,14 +25,10 @@ public class DashboardController : ControllerBase
         return Ok(new { data = result });
     }
 
-    /// <summary>Donors contacted per user over the last 7 ("weekly") or 30 ("monthly") days.</summary>
+    /// <summary>Donors contacted per user over the last 7 ("weekly") or 30 ("monthly") days. Period is validated by GetManagerActivityQueryValidator.</summary>
     [HttpGet("manager-activity")]
     public async Task<IActionResult> GetManagerActivity([FromQuery] string period = "weekly")
     {
-        if (!string.Equals(period, "weekly", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(period, "monthly", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "period must be weekly or monthly." });
-
         var result = await _mediator.Send(new GetManagerActivityQuery(period));
         return Ok(new { data = result });
     }

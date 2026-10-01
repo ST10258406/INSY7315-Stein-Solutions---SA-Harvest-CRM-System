@@ -1,6 +1,7 @@
 namespace CRM.Infrastructure.Persistence.Repositories;
 
 using CRM.Application.Common.Interfaces;
+using CRM.Domain.Constants;
 using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,21 +35,38 @@ public class DashboardRepository : IDashboardRepository
             .CountAsync(d => d.RelationshipManagerId == relationshipManagerId
                 && d.FollowUpDate != null && d.FollowUpDate < asOfUtc, cancellationToken);
 
-    public Task<List<ManagerActivityRow>> GetDonorsContactedByUserAsync(
+    public async Task<List<ManagerActivityRow>> GetDonorsContactedByUserAsync(
         DateTime startUtc, DateTime endUtc, int take, CancellationToken cancellationToken = default)
-        => _context.InteractionLogs
+    {
+        // Project the (small, date-bounded) row set once and aggregate in memory: a grouped
+        // COUNT(DISTINCT) into a constructor projection doesn't translate reliably in EF Core
+        // (same reason ReportsRepository.GetDonorsContactedAsync does it this way).
+        var rows = await _context.InteractionLogs
             .AsNoTracking()
             .Where(i => i.CreatedAt >= startUtc && i.CreatedAt < endUtc)
-            .GroupBy(i => new { i.CreatedByUserId, i.CreatedByUser.FirstName, i.CreatedByUser.LastName })
+            // System actors (e.g. the public-form submitter) aren't team members.
+            .Where(i => !i.CreatedByUser.Email.ToLower().EndsWith(SystemUsers.ReservedEmailDomain))
+            .Select(i => new
+            {
+                i.DonorId,
+                UserId = i.CreatedByUserId,
+                i.CreatedByUser.FirstName,
+                i.CreatedByUser.LastName
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(r => r.UserId)
             .Select(g => new ManagerActivityRow(
-                g.Key.CreatedByUserId,
-                g.Key.FirstName,
-                g.Key.LastName,
-                g.Select(i => i.DonorId).Distinct().Count()))
+                g.Key,
+                g.First().FirstName,
+                g.First().LastName,
+                g.Select(r => r.DonorId).Distinct().Count()))
             .OrderByDescending(r => r.DonorsContacted)
             .ThenBy(r => r.FirstName)
             .Take(take)
-            .ToListAsync(cancellationToken);
+            .ToList();
+    }
 
     public Task<int> GetDonorsContactedCountAsync(
         DateTime startUtc, DateTime endUtc, CancellationToken cancellationToken = default)

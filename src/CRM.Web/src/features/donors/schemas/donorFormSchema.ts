@@ -89,10 +89,6 @@ export function createDonorFormSchema(mode: DonorFormMode) {
       legalAddress: buildLegalAddressSchema(mode),
       donations: buildDonationsSchema(mode),
       bbbeeStatusId: z.string().trim().optional(),
-      // Shell field only — no lookup endpoint exists yet to populate this
-      // dropdown (see Issue 45, landing in a follow-up commit). Kept in the
-      // schema/form now so the field slots into the CRM section without a
-      // later reshuffle.
       relationshipManagerId: z.string().trim().optional(),
       marketingConsent: z.boolean(),
       impactReportingPreferences: z.string().trim().optional(),
