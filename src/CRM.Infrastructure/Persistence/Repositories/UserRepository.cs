@@ -57,7 +57,7 @@ public class UserRepository : IUserRepository
     {
         // Never surface the non-authenticatable system actor(s) on the Users admin
         // screen — they're not real staff accounts (see SystemUsers / SystemUserSeeder).
-        var query = _context.Users.AsNoTracking().Where(u => u.Email != SystemUsers.PublicFormEmail);
+        var query = _context.Users.AsNoTracking().Where(u => !u.Email.ToLower().EndsWith(SystemUsers.ReservedEmailDomain));
 
         if (!string.IsNullOrWhiteSpace(criteria.Search))
         {
@@ -105,8 +105,20 @@ public class UserRepository : IUserRepository
                 .ThenInclude(ur => ur.Role)
             // Excludes the system actor — see this method's interface remarks. Filtering
             // the list alone isn't enough since a direct PATCH by id would still reach it.
-            .Where(u => u.Email != SystemUsers.PublicFormEmail)
+            .Where(u => !u.Email.ToLower().EndsWith(SystemUsers.ReservedEmailDomain))
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+
+    public Task<UserAuthorizationTarget?> GetAuthorizationTargetAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == id)
+            .Select(u => new UserAuthorizationTarget
+            {
+                Id = u.Id,
+                Email = u.Email,
+                RoleNames = u.UserRoles.Select(ur => ur.Role.Name).ToList()
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
     public Task<User?> GetByIdWithRolesReadOnlyAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.Users

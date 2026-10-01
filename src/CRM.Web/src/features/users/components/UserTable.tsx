@@ -124,7 +124,12 @@ export function UserTable({
             ) : (
               users.map((user, idx) => {
                 const isSelf = user.id === currentUser?.id;
-                const canDeactivate = !isSelf;
+                // Only a SuperAdmin may edit or change the status of a SuperAdmin — enforced
+                // server-side (UserTargetAuthorizationHandler); mirrored here so Admins aren't
+                // offered actions that would just 403.
+                const isProtected = user.role === 'SuperAdmin' && !isSuperAdmin;
+                const protectedTitle = 'Only a SuperAdmin can manage a SuperAdmin';
+                const canDeactivate = !isSelf && !isProtected;
 
                 return (
                   <tr key={user.id} className="border-t border-[var(--hair)] transition-colors hover:bg-[var(--row-hover)]">
@@ -184,11 +189,16 @@ export function UserTable({
                           className="absolute top-[46px] right-3.5 z-20 flex w-52 flex-col gap-0.5 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1.5 text-left shadow-[0_12px_28px_rgba(20,20,15,0.16)]"
                         >
                           <button
+                            disabled={isProtected}
+                            title={isProtected ? protectedTitle : undefined}
                             onClick={() => {
                               setOpenMenuId(null);
+                              if (isProtected) return;
                               onEditDetails(user);
                             }}
-                            className="flex h-9 items-center gap-2.5 rounded-lg border-none bg-transparent px-3 text-[12.5px] font-semibold whitespace-nowrap text-[var(--ink)] hover:bg-[var(--hover)]"
+                            className={`flex h-9 items-center gap-2.5 rounded-lg border-none bg-transparent px-3 text-[12.5px] font-semibold whitespace-nowrap ${
+                              isProtected ? 'cursor-not-allowed text-[var(--muted2)]' : 'text-[var(--ink)] hover:bg-[var(--hover)]'
+                            }`}
                           >
                             <Pencil className="h-3.75 w-3.75 shrink-0 text-[var(--icon)]" />
                             <span>Edit Details</span>
@@ -210,7 +220,7 @@ export function UserTable({
 
                           <button
                             disabled={!canDeactivate}
-                            title={canDeactivate ? undefined : 'You cannot deactivate your own account'}
+                            title={isSelf ? 'You cannot deactivate your own account' : isProtected ? protectedTitle : undefined}
                             onClick={() => {
                               setOpenMenuId(null);
                               if (!canDeactivate) return;

@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddCrmAuthorizationPolicies();
         services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
         services.AddSingleton<IAuthorizationHandler, RoleAssignmentAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, UserTargetAuthorizationHandler>();
 
         var brevoApiKey = configuration["BREVO_API_KEY"]
             ?? throw new InvalidOperationException(

@@ -86,4 +86,19 @@ public class UpdateUserCommandValidatorTests
 
         await _usersMock.Received(1).EmailExistsAsync(c.Request.Email, c.Id, Arg.Any<CancellationToken>());
     }
+
+    [Theory]
+    [InlineData("public-form@system.local")]
+    [InlineData("anything@SYSTEM.LOCAL")]
+    public async Task Validate_ReservedSystemDomain_Fails(string email)
+    {
+        // A staff account renamed into the system-user domain would become un-manageable.
+        var c = MakeValid();
+        c.Request.Email = email;
+
+        var result = await _validator.ValidateAsync(c);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.ErrorMessage == "This email domain is reserved.");
+    }
 }
