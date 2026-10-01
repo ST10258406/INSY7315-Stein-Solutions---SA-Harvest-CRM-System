@@ -115,27 +115,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, apiError }) => {
           {isLoading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-
-      <div className="flex items-center gap-2.5 my-[18px]">
-        <div className="flex-1 h-px bg-[#EDE7D9]" />
-        <div className="text-[10.5px] font-bold tracking-wide text-[#A69E8B]">OR</div>
-        <div className="flex-1 h-px bg-[#EDE7D9]" />
-      </div>
-
-      <button
-        type="button"
-        disabled
-        title="Microsoft 365 sign-in is coming soon"
-        className="w-full flex items-center justify-center gap-2 bg-white border border-[#DDD6C4] rounded-lg py-2.5 text-xs font-semibold text-[#3F3A2E] opacity-60 cursor-not-allowed"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6E6857" strokeWidth={2}>
-          <rect x="3" y="3" width="8" height="8" rx="1" />
-          <rect x="13" y="3" width="8" height="8" rx="1" />
-          <rect x="3" y="13" width="8" height="8" rx="1" />
-          <rect x="13" y="13" width="8" height="8" rx="1" />
-        </svg>
-        Continue with Microsoft 365
-      </button>
     </div>
   );
 };
