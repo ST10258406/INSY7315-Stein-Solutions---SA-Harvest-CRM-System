@@ -61,6 +61,19 @@ public class CreateUserCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_NewUser_MustChangeTheTemporaryPassword()
+    {
+        var roleId = Guid.NewGuid();
+        _usersMock.GetRoleNameAsync(roleId, Arg.Any<CancellationToken>()).Returns("Marketing");
+        User? added = null;
+        _usersMock.AddAsync(Arg.Do<User>(u => added = u), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        await _handler.Handle(MakeCommand(roleId), CancellationToken.None);
+
+        Assert.True(added!.MustChangePassword);
+    }
+
+    [Fact]
     public async Task Handle_DoesNotReReadTheUserAfterCommitting()
     {
         // Regression guard: any failure after SaveChanges would lose the one-time

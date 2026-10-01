@@ -23,6 +23,19 @@ public class ChangePasswordCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_ValidCommand_ClearsMustChangePassword()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User { Id = userId, Email = "forced@example.com", MustChangePassword = true, PasswordHash = _passwordHasher.HashPassword(null!, "TempPassword123!") };
+        _currentUserServiceMock.GetCurrentUserId().Returns(userId);
+        _usersMock.GetByIdAsync(userId, Arg.Any<CancellationToken>()).Returns(user);
+
+        await _handler.Handle(new ChangePasswordCommand("TempPassword123!", "NewPassword123!", "NewPassword123!"), CancellationToken.None);
+
+        Assert.False(user.MustChangePassword);
+    }
+
+    [Fact]
     public async Task Handle_ValidCommand_RevokesOtherSessionsButKeepsCurrentOne()
     {
         // F-05: if the old password was compromised, the attacker's sessions must not

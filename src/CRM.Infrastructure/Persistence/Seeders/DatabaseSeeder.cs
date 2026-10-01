@@ -27,10 +27,13 @@ public static class DatabaseSeeder
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
+        // Fail fast, before touching any data, if the admin seed settings are unsafe.
+        AdminSeedGuard.EnsureSafe(configuration, isDevelopment);
+
         await RoleSeeder.SeedAsync(context);
         await LookupSeeder.SeedAsync(context);
         await DonorReferenceNumberBackfillSeeder.SeedAsync(context);
-        await AdminUserSeeder.SeedAsync(context, configuration);
+        await AdminUserSeeder.SeedAsync(context, configuration, isDevelopment);
         await SystemUserSeeder.SeedAsync(context);
 
         // Fake donors/tasks/approvals — never seeded outside local Development,

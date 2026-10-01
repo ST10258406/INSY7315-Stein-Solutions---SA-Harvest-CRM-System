@@ -41,6 +41,9 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
 
         user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
+        // Completing a reset proves control of the mailbox, so any forced-change flag is satisfied.
+        user.MustChangePassword = false;
+
         // Single-use: burn the token immediately so it can't be replayed.
         user.PasswordResetTokenHash = null;
         user.PasswordResetTokenExpiresAt = null;

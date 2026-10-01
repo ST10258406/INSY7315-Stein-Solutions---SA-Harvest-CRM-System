@@ -28,4 +28,7 @@ public class UserSummaryDto
     public string LastName { get; set; } = default!;
     public string Email { get; set; } = default!;
     public List<string> Roles { get; set; } = new();
+
+    /// <summary>True when the user must change a seeded/temporary password before doing anything else.</summary>
+    public bool MustChangePassword { get; set; }
 }

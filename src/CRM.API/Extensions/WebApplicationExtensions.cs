@@ -27,6 +27,9 @@ public static class WebApplicationExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // After authentication so the forced-change claim is known; before the endpoint runs.
+        app.UseMiddleware<PasswordChangeRequiredMiddleware>();
+
         app.UseRateLimiter();
 
         app.UseHangfireDashboard("/hangfire", new DashboardOptions

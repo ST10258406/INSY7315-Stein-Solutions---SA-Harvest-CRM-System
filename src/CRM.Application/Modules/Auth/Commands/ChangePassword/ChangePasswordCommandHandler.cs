@@ -51,6 +51,7 @@ public class ChangePasswordCommandHandler : IRequestHandler<ChangePasswordComman
         }
 
         user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+        user.MustChangePassword = false;
 
         // A password change should end every *other* session — if the old password was
         // compromised, the attacker's sessions must not survive it (F-05). The caller's own

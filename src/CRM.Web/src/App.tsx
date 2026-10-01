@@ -14,6 +14,7 @@ import UsersPage from './components/pages/UsersPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage';
 import ResetPasswordPage from './features/auth/pages/ResetPasswordPage';
+import ChangePasswordPage from './features/auth/pages/ChangePasswordPage';
 import { NotAuthorizedPage } from '@/features/auth/pages/NotAuthorizedPage';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { useHydrateAuth } from '@/features/auth/hooks/useHydrateAuth';
@@ -50,6 +51,17 @@ function App() {
             <Route path={paths.login} element={<LoginPage />} />
             <Route path={paths.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={paths.resetPassword} element={<ResetPasswordPage />} />
+
+            {/* Forced password change — authenticated but deliberately outside the app shell,
+                so a user on a temporary password has no navigation to wander off to. */}
+            <Route
+              path={paths.changePassword}
+              element={
+                <ProtectedRoute>
+                  <ChangePasswordPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Authenticated app shell — every child below renders inside AppLayout (top bar + icon rail). */}
             <Route

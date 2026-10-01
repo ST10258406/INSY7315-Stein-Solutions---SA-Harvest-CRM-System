@@ -120,7 +120,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
-                Roles = user.UserRoles?.Select(r => r.Role.Name).ToList() ?? new List<string>()
+                Roles = user.UserRoles?.Select(r => r.Role.Name).ToList() ?? new List<string>(),
+                MustChangePassword = user.MustChangePassword
             }
         };
     }

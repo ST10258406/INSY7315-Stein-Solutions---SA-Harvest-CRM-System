@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 /// </summary>
 public static class AdminUserSeeder
 {
-    public static async Task SeedAsync(CrmDbContext context, IConfiguration configuration)
+    public static async Task SeedAsync(CrmDbContext context, IConfiguration configuration, bool isDevelopment = true)
     {
         if (await context.Users.AnyAsync())
         {
@@ -36,8 +36,10 @@ public static class AdminUserSeeder
             Id = Guid.NewGuid(),
             FirstName = "System",
             LastName = "Administrator",
-            Email = "admin@crm.local",
+            Email = AdminSeedGuard.ResolveAdminEmail(configuration, isDevelopment),
             IsActive = true,
+            // Seeded credentials are provisioning-only: the first login must replace them.
+            MustChangePassword = true,
         };
 
         var hasher = new PasswordHasher<User>();

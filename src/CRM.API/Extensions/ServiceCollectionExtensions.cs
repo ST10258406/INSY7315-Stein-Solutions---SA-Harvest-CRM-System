@@ -2,6 +2,7 @@ namespace CRM.API.Extensions;
 
 using CRM.API.Authentication;
 using CRM.API.Authorization;
+using CRM.API.Middleware;
 using CRM.Application.Modules.Auth;
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
@@ -161,6 +162,14 @@ public static class ServiceCollectionExtensions
                         foreach (var staleRoleClaim in identity.FindAll(ClaimTypes.Role).ToList())
                         {
                             identity.RemoveClaim(staleRoleClaim);
+                        }
+                        foreach (var stale in identity.FindAll(PasswordChangeRequiredMiddleware.ClaimName).ToList())
+                        {
+                            identity.RemoveClaim(stale);
+                        }
+                        if (user.MustChangePassword)
+                        {
+                            identity.AddClaim(new Claim(PasswordChangeRequiredMiddleware.ClaimName, "true"));
                         }
                         foreach (var roleName in user.UserRoles.Select(ur => ur.Role.Name))
                         {

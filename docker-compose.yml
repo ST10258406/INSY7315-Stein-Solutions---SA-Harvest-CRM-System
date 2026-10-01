@@ -47,6 +47,7 @@ services:
       Azure__BlobStorage__ContainerName: donor-documents
       AZURE_KEY_VAULT_URI: ${AZURE_KEY_VAULT_URI}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crm.local}
     depends_on:
       postgres:
         condition: service_healthy

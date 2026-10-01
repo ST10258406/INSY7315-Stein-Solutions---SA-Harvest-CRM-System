@@ -4,6 +4,8 @@ export interface UserSummaryDto {
   lastName: string;
   email: string;
   roles: string[];
+  /** True while the account still has a seeded/temporary password (enforced by the API). */
+  mustChangePassword?: boolean;
 }
 
 /**
