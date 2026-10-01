@@ -73,6 +73,74 @@ public class RefreshTokenRepositoryTests
         Assert.Equal(1, results.Count(claimed => claimed));
     }
 
+    private async Task<RefreshToken> SeedActiveTokenAsync(Guid? familyId = null)
+    {
+        await using var context = new CrmDbContext(_options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = $"rotate-{Guid.NewGuid():N}@example.com",
+            FirstName = "Rotate",
+            LastName = "Race",
+            PasswordHash = "hash"
+        };
+        var token = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = Guid.NewGuid().ToString("N"),
+            FamilyId = familyId ?? Guid.NewGuid(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        context.Users.Add(user);
+        context.RefreshTokens.Add(token);
+        await context.SaveChangesAsync();
+        return token;
+    }
+
+    [Fact]
+    public async Task TryClaimRotationAsync_ConcurrentCallers_ExactlyOneWins()
+    {
+        // Two tabs presenting the same active cookie at once must not both rotate it.
+        var token = await SeedActiveTokenAsync();
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async i =>
+        {
+            await using var context = new CrmDbContext(_options);
+            return await new RefreshTokenRepository(context)
+                .TryClaimRotationAsync(token.Id, $"replacement-{i}", DateTimeOffset.UtcNow);
+        }));
+
+        Assert.Equal(1, results.Count(claimed => claimed));
+
+        await using var verify = new CrmDbContext(_options);
+        var stored = await verify.RefreshTokens.AsNoTracking().SingleAsync(rt => rt.Id == token.Id);
+        Assert.True(stored.IsRevoked);
+        Assert.NotNull(stored.RevokedAt);
+        Assert.StartsWith("replacement-", stored.ReplacedByTokenHash);
+    }
+
+    [Fact]
+    public async Task RevokeFamilyAsync_RevokesEveryActiveMemberInOneStatement()
+    {
+        var familyId = Guid.NewGuid();
+        var first = await SeedActiveTokenAsync(familyId);
+        var second = await SeedActiveTokenAsync(familyId);
+        var otherFamily = await SeedActiveTokenAsync();
+
+        await using var context = new CrmDbContext(_options);
+        var revoked = await new RefreshTokenRepository(context).RevokeFamilyAsync(familyId, DateTimeOffset.UtcNow);
+
+        Assert.Equal(2, revoked);
+        await using var verify = new CrmDbContext(_options);
+        Assert.True((await verify.RefreshTokens.AsNoTracking().SingleAsync(rt => rt.Id == first.Id)).IsRevoked);
+        Assert.True((await verify.RefreshTokens.AsNoTracking().SingleAsync(rt => rt.Id == second.Id)).IsRevoked);
+        Assert.False((await verify.RefreshTokens.AsNoTracking().SingleAsync(rt => rt.Id == otherFamily.Id)).IsRevoked);
+    }
+
     [Fact]
     public async Task IsSessionActiveAsync_FalseOnceTheFamilyIsRevoked()
     {

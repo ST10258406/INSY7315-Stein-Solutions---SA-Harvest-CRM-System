@@ -54,7 +54,11 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         if (storedToken is null)
             throw new UnauthorizedException(GenericFailureMessage);
 
-        if (storedToken.IsRevoked)
+        // Captured up front: the atomic claims below update the row in the database, and on
+        // the test provider also this tracked instance.
+        var isGraceReplay = storedToken.IsRevoked;
+
+        if (isGraceReplay)
         {
             if (!await IsWithinRotationGraceAsync(storedToken, now, ct))
             {
@@ -85,13 +89,29 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             CreatedAt = now
         };
 
+        if (!isGraceReplay && !await _refreshTokens.TryClaimRotationAsync(storedToken.Id, replacement.TokenHash, now, ct))
+        {
+            // Lost a race with a concurrent rotation of this same cookie (e.g. two tabs at
+            // once). That request owns the rotation; this one may only use the token's single
+            // grace replay — so at most two tokens can ever descend from one cookie.
+            if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
+                throw new UnauthorizedException(GenericFailureMessage);
+            isGraceReplay = true;
+        }
+
         // In the grace case the presented token was already rotated; leave its original
         // ReplacedByTokenHash alone and just issue a sibling.
-        if (!storedToken.IsRevoked)
-            storedToken.Revoke(now, replacement.TokenHash);
-
         await _refreshTokens.AddAsync(replacement, ct);
         await _unitOfWork.SaveChangesAsync(ct);
+
+        // A grace sibling joins a family that reuse detection may have revoked between our
+        // eligibility check and this insert. If nothing else in the family is still live,
+        // the session was killed — so kill the sibling too rather than resurrect it.
+        if (isGraceReplay && await _refreshTokens.CountOtherActiveInFamilyAsync(storedToken.FamilyId, replacement.Id, ct) == 0)
+        {
+            await _refreshTokens.RevokeFamilyAsync(storedToken.FamilyId, now, ct);
+            throw new UnauthorizedException(GenericFailureMessage);
+        }
 
         var user = storedToken.User;
         return new RefreshTokenResponseDto
@@ -135,19 +155,17 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
 
     private async Task RevokeFamilyAsync(RefreshToken token, DateTimeOffset now, CancellationToken ct)
     {
-        var family = await _refreshTokens.GetActiveByFamilyIdAsync(token.FamilyId, ct);
-        foreach (var member in family)
-            member.Revoke(now);
-
-        await _unitOfWork.SaveChangesAsync(ct);
+        // One set-based UPDATE, so it catches every member committed by the time it runs
+        // (a load-then-loop revoke could miss a token inserted in between).
+        var revoked = await _refreshTokens.RevokeFamilyAsync(token.FamilyId, now, ct);
 
         // Only worth a warning when there was something left to kill — replaying a token
         // from an already-ended session is just noise.
-        if (family.Count > 0)
+        if (revoked > 0)
         {
             _logger.LogWarning(
                 "Refresh token reuse detected for user {UserId}; revoked {Count} active token(s) in family {FamilyId}",
-                token.UserId, family.Count, token.FamilyId);
+                token.UserId, revoked, token.FamilyId);
         }
     }
 }

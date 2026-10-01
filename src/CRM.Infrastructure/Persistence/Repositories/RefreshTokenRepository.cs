@@ -26,6 +26,60 @@ public class RefreshTokenRepository : IRefreshTokenRepository
     public Task<RefreshToken?> GetByHashAsync(string tokenHash, CancellationToken cancellationToken = default)
         => _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, cancellationToken);
 
+    public async Task<bool> TryClaimRotationAsync(Guid tokenId, string replacementHash, DateTimeOffset at, CancellationToken cancellationToken = default)
+    {
+        // InMemory fallback for CRM.API.Tests only — see TryClaimGraceReplayAsync. Not safe
+        // under concurrency; never runs against Postgres.
+        if (!_context.Database.IsNpgsql())
+        {
+            var token = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Id == tokenId, cancellationToken);
+            if (token is null || token.IsRevoked)
+                return false;
+
+            token.Revoke(at, replacementHash);
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        // Conditional UPDATE: Postgres row-locks the token, so a concurrent rotation of the
+        // same token re-evaluates "NOT IsRevoked" after the first commits and matches nothing.
+        var claimed = await _context.RefreshTokens
+            .Where(rt => rt.Id == tokenId && !rt.IsRevoked)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(rt => rt.IsRevoked, true)
+                .SetProperty(rt => rt.RevokedAt, at)
+                .SetProperty(rt => rt.ReplacedByTokenHash, replacementHash), cancellationToken);
+
+        return claimed == 1;
+    }
+
+    public async Task<int> RevokeFamilyAsync(Guid familyId, DateTimeOffset at, CancellationToken cancellationToken = default)
+    {
+        if (!_context.Database.IsNpgsql())
+        {
+            var active = await _context.RefreshTokens
+                .Where(rt => rt.FamilyId == familyId && !rt.IsRevoked)
+                .ToListAsync(cancellationToken);
+            foreach (var token in active)
+                token.Revoke(at);
+            await _context.SaveChangesAsync(cancellationToken);
+            return active.Count;
+        }
+
+        return await _context.RefreshTokens
+            .Where(rt => rt.FamilyId == familyId && !rt.IsRevoked)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(rt => rt.IsRevoked, true)
+                .SetProperty(rt => rt.RevokedAt, at), cancellationToken);
+    }
+
+    public Task<int> CountOtherActiveInFamilyAsync(Guid familyId, Guid excludingTokenId, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return _context.RefreshTokens.AsNoTracking()
+            .CountAsync(rt => rt.FamilyId == familyId && rt.Id != excludingTokenId && !rt.IsRevoked && rt.ExpiresAt > now, cancellationToken);
+    }
+
     public async Task<bool> TryClaimGraceReplayAsync(Guid tokenId, DateTimeOffset at, CancellationToken cancellationToken = default)
     {
         // The InMemory provider used by CRM.API.Tests can't run ExecuteUpdate — same
