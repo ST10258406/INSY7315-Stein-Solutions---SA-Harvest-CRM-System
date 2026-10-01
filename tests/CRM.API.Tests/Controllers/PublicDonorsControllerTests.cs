@@ -181,6 +181,82 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
         signature = new { imageBase64 = signatureImageBase64 }
     };
 
+    private async Task<(HttpClient Client, CrmDbContext Context)> NewPublicClientAsync()
+    {
+        var client = _factory.CreateClient();
+        var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(context);
+        return (client, context);
+    }
+
+    private static System.Text.Json.Nodes.JsonObject MakeValidPayloadNode() =>
+        (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(MakeValidPayload()))!;
+
+    [Fact]
+    public async Task Submit_CompanyNameOver255Characters_Returns400NotServerError()
+    {
+        var (client, _) = await NewPublicClientAsync();
+        var body = MakeValidPayloadNode();
+        body["company"]!["companyName"] = new string('a', 300);
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/donors/submit", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("CompanyName", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Submit_500TypeIds_Returns400()
+    {
+        var (client, _) = await NewPublicClientAsync();
+        var body = MakeValidPayloadNode();
+        body["donations"]!["typeIds"] = JsonSerializer.SerializeToNode(Enumerable.Range(1, 500).ToArray());
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/donors/submit", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html;base64,AAAA")]
+    [InlineData("/relative")]
+    public async Task Submit_NonHttpWebsite_Returns400(string website)
+    {
+        var (client, _) = await NewPublicClientAsync();
+        var body = MakeValidPayloadNode();
+        body["company"]!["website"] = website;
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/donors/submit", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_StaffOnlyCrmFieldsInBody_AreIgnored()
+    {
+        var (client, context) = await NewPublicClientAsync();
+        var staffId = (await context.Users.FirstAsync()).Id;
+        var body = MakeValidPayloadNode();
+        body["crm"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["relationshipManagerId"] = staffId.ToString(),
+            ["additionalInformation"] = "injected by anonymous caller",
+            ["marketingConsent"] = true
+        };
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/donors/submit", body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var donor = await context.Donors.AsNoTracking().SingleAsync();
+        Assert.Null(donor.RelationshipManagerId);
+        Assert.Null(donor.AdditionalInformation);
+        Assert.True(donor.MarketingConsent);
+    }
+
     [Fact]
     public async Task Submit_ValidPayload_Returns201WithMessageAndReferenceNumber_NeverTheDonorId()
     {

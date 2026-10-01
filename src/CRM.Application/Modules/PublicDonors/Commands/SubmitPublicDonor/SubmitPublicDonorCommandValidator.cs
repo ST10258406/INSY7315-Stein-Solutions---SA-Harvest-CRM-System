@@ -14,11 +14,13 @@ public class SubmitPublicDonorCommandValidator : AbstractValidator<SubmitPublicD
 
         When(x => x.Request is not null, () =>
         {
-            // SubmitPublicDonorRequest IS-A CreateDonorRequest (it just adds
-            // Signature) — the cast lets every donor field-level rule run through
+            // SubmitPublicDonorRequest projects onto a CreateDonorRequest (public-safe
+            // fields only), so every donor field-level rule runs through
             // the exact same validator POST /donors uses, instead of duplicating
             // them here.
-            RuleFor(x => (CreateDonorRequest)x.Request).SetValidator(new CreateDonorRequestValidator(lookups, users));
+            RuleFor(x => x.Request.ToCreateDonorRequest())
+                .SetValidator(new CreateDonorRequestValidator(lookups, users))
+                .OverridePropertyName("Request");
 
             RuleFor(x => x.Request.Signature).NotNull();
             When(x => x.Request.Signature is not null, () =>

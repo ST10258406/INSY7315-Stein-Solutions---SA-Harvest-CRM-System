@@ -79,8 +79,6 @@ public class SubmitPublicDonorCommandHandler : IRequestHandler<SubmitPublicDonor
             BbbeeStatusId = req.Compliance?.BbbeeStatusId,
             CollectionAddress = req.Donations.CollectionAddress,
             OperationsLogisticsDetails = req.Donations.OperationsLogisticsDetails,
-            AdditionalInformation = req.Crm?.AdditionalInformation,
-            RelationshipManagerId = req.Crm?.RelationshipManagerId,
             // Server-set, always — same discipline as CreateDonorCommandHandler.
             Status = DonorStatus.PendingReview,
             SubmissionSource = SubmissionSource.PublicForm,
