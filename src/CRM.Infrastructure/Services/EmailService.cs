@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Sends transactional email via the Brevo REST API (api-key auth and base
 /// address are configured on the injected <see cref="HttpClient"/> — see
-/// AddInfrastructureServices). Everything goes out from the one verified system sender;
+/// AddInfrastructureServices). Bodies are wrapped in the branded <see cref="EmailLayout"/>
+/// before sending (EmailLog keeps the unwrapped body). Everything goes out from the one verified system sender;
 /// user-composed correspondence (see <see cref="StaffComposedEmailTypes"/>) is presented as the
 /// signed-in staff member — their name on the sender and their address as Reply-To — so replies
 /// reach them directly. Every attempt is logged to EmailLog, success or failure, before this method returns. Never throws: email is
@@ -76,8 +77,9 @@ public class EmailService : IEmailService
         {
             var senderName = _settings.SenderName;
             BrevoReplyTo? replyTo = null;
+            var staffComposed = StaffComposedEmailTypes.Contains(emailType);
 
-            if (sentByUserId is { } userId && StaffComposedEmailTypes.Contains(emailType))
+            if (sentByUserId is { } userId && staffComposed)
             {
                 var staff = await _users.GetSenderIdentityAsync(userId);
                 if (staff is not null)
@@ -93,7 +95,7 @@ public class EmailService : IEmailService
                 ReplyTo = replyTo,
                 To = new List<BrevoRecipient> { new() { Email = to } },
                 Subject = subject,
-                HtmlContent = htmlBody
+                HtmlContent = EmailLayout.Wrap(htmlBody, subject, staffComposed, _settings, replyTo?.Name, replyTo?.Email)
             };
 
             using var response = await _httpClient.PostAsJsonAsync("smtp/email", request);

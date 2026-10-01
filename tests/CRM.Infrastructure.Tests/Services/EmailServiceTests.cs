@@ -183,6 +183,57 @@ public class EmailServiceTests
         await _users.DidNotReceiveWithAnyArgs().GetSenderIdentityAsync(default);
     }
 
+    [Fact]
+    public async Task SendAsync_WrapsBodyInBrandedLayout_ButLogsTheUnwrappedBody()
+    {
+        _settings.LogoUrl = "https://app.example.org/sa-harvest-logo.png";
+        var userId = Guid.NewGuid();
+        _users.GetSenderIdentityAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(new EmailSenderIdentity("Jane <b>Smith</b>", "jane@example.org"));
+        var (handler, sent) = CapturingHandler();
+
+        await CreateSut(handler).SendAsync(
+            "donor@example.com", "Hi", "<p>Hello donor</p>", EmailType.DonorCorrespondence, sentByUserId: userId);
+
+        var html = Assert.Single(sent).GetProperty("htmlContent").GetString()!;
+        Assert.Contains("<p>Hello donor</p>", html);
+        Assert.Contains("https://app.example.org/sa-harvest-logo.png", html);
+        Assert.Contains("Just hit <strong>reply</strong>", html);
+        Assert.DoesNotContain("Jane <b>Smith</b>", html); // names are HTML-encoded
+        await _emailLogs.Received(1).AddAsync(
+            Arg.Is<EmailLog>(log => log.Body == "<p>Hello donor</p>"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("http://localhost:3000/sa-harvest-logo.png")]
+    [InlineData("https://localhost:3000/sa-harvest-logo.png")]
+    [InlineData("http://app.example.org/sa-harvest-logo.png")]
+    public async Task SendAsync_LogoUrlNotPublicHttps_OmitsImageInsteadOfShowingBrokenIcon(string logoUrl)
+    {
+        _settings.LogoUrl = logoUrl;
+        var (handler, sent) = CapturingHandler();
+
+        await CreateSut(handler).SendAsync("a@example.com", "Hi", "<p>Hi</p>", EmailType.PasswordReset);
+
+        Assert.DoesNotContain("<img", Assert.Single(sent).GetProperty("htmlContent").GetString()!);
+    }
+
+    [Fact]
+    public async Task SendAsync_SystemEmail_UsesMinimalFooterAndNoReplyNote_AndTextOnlyHeaderWithoutLogoUrl()
+    {
+        _settings.LogoUrl = null;
+        var (handler, sent) = CapturingHandler();
+
+        await CreateSut(handler).SendAsync(
+            "someone@example.com", "Reset", "<p>Reset</p>", EmailType.PasswordReset);
+
+        var html = Assert.Single(sent).GetProperty("htmlContent").GetString()!;
+        Assert.Contains("Automated message", html);
+        Assert.DoesNotContain("Just hit", html);
+        Assert.DoesNotContain("<img", html);
+    }
+
     private class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
