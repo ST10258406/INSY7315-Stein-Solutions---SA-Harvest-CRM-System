@@ -20,6 +20,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
     private readonly IUnitOfWork _unitOfWork;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly LoginLockoutOptions _lockout;
+    private readonly RefreshTokenOptions _refreshTokenOptions;
     private readonly ILogger<LoginCommandHandler> _logger;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
@@ -36,6 +37,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         IUnitOfWork unitOfWork,
         IJwtTokenService jwtTokenService,
         IOptions<LoginLockoutOptions> lockout,
+        IOptions<RefreshTokenOptions> refreshTokenOptions,
         ILogger<LoginCommandHandler> logger)
     {
         _users = users;
@@ -43,6 +45,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
         _lockout = lockout.Value;
+        _refreshTokenOptions = refreshTokenOptions.Value;
         _logger = logger;
     }
 
@@ -88,14 +91,17 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         var accessToken = _jwtTokenService.GenerateAccessToken(user);
         var refreshTokenValue = _jwtTokenService.GenerateRefreshToken();
 
+        // Only the hash is stored; the raw value goes to the client once, in the cookie.
+        // A login starts a new rotation family (see RefreshTokenCommandHandler).
         var refreshToken = new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            Token = refreshTokenValue,
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            TokenHash = SecureTokens.Hash(refreshTokenValue),
+            FamilyId = Guid.NewGuid(),
+            ExpiresAt = now.AddDays(_refreshTokenOptions.LifetimeDays),
             IsRevoked = false,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = now
         };
 
         await _refreshTokens.AddAsync(refreshToken, ct);
@@ -105,6 +111,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         {
             AccessToken = accessToken,
             RefreshToken = refreshTokenValue,
+            RefreshTokenExpiresAt = refreshToken.ExpiresAt,
             ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds,
             User = new UserSummaryDto
             {

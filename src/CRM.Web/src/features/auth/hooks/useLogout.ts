@@ -6,12 +6,13 @@ import { paths } from '@/routes/paths';
 
 export function useLogout() {
   const clearAuth = useAuthStore((s) => s.logout);
-  const refreshToken = useAuthStore((s) => s.refreshToken);
   const navigate = useNavigate();
 
   return useMutation({
     mutationFn: async () => {
-      await api.post('/api/auth/logout', { refreshToken });
+      // The refresh token travels in the HttpOnly cookie; the API revokes it and clears
+      // the cookie, so a reload afterwards stays logged out.
+      await api.post('/api/auth/logout');
     },
     onSettled: () => {
       // Clear local session and redirect even if the API call failed

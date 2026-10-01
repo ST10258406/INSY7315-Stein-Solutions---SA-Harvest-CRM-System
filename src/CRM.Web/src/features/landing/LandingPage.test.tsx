@@ -10,7 +10,6 @@ describe('LandingPage', () => {
     useAuthStore.setState({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isHydrating: false,
       isDevBypass: false,

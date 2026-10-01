@@ -1,5 +1,6 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -28,19 +29,20 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
         // Tracked (not read-only) — we're updating this entity.
         var user = await _users.GetByEmailAsync(request.Email, ct);
 
+        // Hash-and-compare in constant time (SecureTokens.Matches) — the stored value is a
+        // hash, and FixedTimeEquals means timing reveals nothing about a near-miss guess.
         if (user is null
-            || user.PasswordResetToken != request.Token
+            || !SecureTokens.Matches(request.Token, user.PasswordResetTokenHash)
             || user.PasswordResetTokenExpiresAt is null
             || user.PasswordResetTokenExpiresAt < DateTimeOffset.UtcNow)
         {
-            // Note: plain string comparison used for token here. Consider constant-time comparison in future for defense-in-depth against timing attacks.
             throw new ValidationException(new[] { new FluentValidation.Results.ValidationFailure("Token", "Token expired or invalid.") });
         }
 
         user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
 
         // Single-use: burn the token immediately so it can't be replayed.
-        user.PasswordResetToken = null;
+        user.PasswordResetTokenHash = null;
         user.PasswordResetTokenExpiresAt = null;
 
         // Force re-login everywhere — kill every existing session.
@@ -48,7 +50,7 @@ public class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordCommand,
 
         foreach (var rt in activeTokens)
         {
-            rt.IsRevoked = true;
+            rt.Revoke(DateTimeOffset.UtcNow);
         }
 
         // The user mutation and the token revocations are tracked by the same scoped

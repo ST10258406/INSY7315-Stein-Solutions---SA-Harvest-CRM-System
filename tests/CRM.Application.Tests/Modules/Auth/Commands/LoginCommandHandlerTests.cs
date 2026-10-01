@@ -1,5 +1,6 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Interfaces;
 using CRM.Application.Modules.Auth;
 using CRM.Application.Modules.Auth.Commands.Login;
@@ -24,6 +25,7 @@ public class LoginCommandHandlerTests
         _handler = new LoginCommandHandler(
             _usersMock, _refreshTokensMock, _unitOfWorkMock, _jwtTokenServiceMock,
             Options.Create(new LoginLockoutOptions { MaxFailedAttempts = 5, LockoutMinutes = 15 }),
+            Options.Create(new RefreshTokenOptions()),
             NullLogger<LoginCommandHandler>.Instance);
     }
 
@@ -79,7 +81,7 @@ public class LoginCommandHandlerTests
         Assert.Equal(user.Id, result.User.Id);
 
         await _refreshTokensMock.Received(1).AddAsync(
-            Arg.Is<RefreshToken>(rt => rt.UserId == user.Id && rt.Token == "refresh-token" && !rt.IsRevoked),
+            Arg.Is<RefreshToken>(rt => rt.UserId == user.Id && rt.TokenHash == SecureTokens.Hash("refresh-token") && rt.FamilyId != Guid.Empty && !rt.IsRevoked),
             Arg.Any<CancellationToken>());
 
         await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());

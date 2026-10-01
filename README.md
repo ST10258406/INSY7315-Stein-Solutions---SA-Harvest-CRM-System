@@ -264,8 +264,24 @@ via Managed Identity.
 | `VITE_USE_POLLING` | Frontend (Vite) | Set `true` only for Docker-on-Windows file watching |
 
 JWT config that must not drift: **HS256** (pinned via `ValidAlgorithms` — tokens with any
-other `alg` are rejected), 60-minute access token, 7-day refresh token stored in the DB and
+other `alg` are rejected), 60-minute access token, 7-day refresh token (absolute from login)
 revoked on logout.
+
+**Sessions survive a page reload without browser storage.** The access token lives only in
+memory; the refresh token is sent as an **HttpOnly, Secure cookie** (`crm_refresh`, path
+`/api/auth`) that JavaScript can't read. On load the SPA calls `POST /api/auth/refresh`, and
+the cookie restores the session. Every refresh **rotates** the token; presenting an
+already-rotated token (outside a 20-second grace window for simultaneous tabs) revokes the
+whole session family. Refresh tokens and password-reset tokens are stored only as SHA-256
+hashes. Refresh and logout also require the `X-Requested-With: XMLHttpRequest` header (CSRF
+protection). Changing your password signs out every other session.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Auth__RefreshCookie__SameSite` | `Strict` | Keep `Strict` when the frontend and API share a parent domain (e.g. `crm.saharvest.org` + `api.saharvest.org`). Use `None` only for the split default Azure hostnames (`*.azurestaticapps.net` + `*.azurewebsites.net`) — and note **Safari blocks those cross-site cookies, so Safari users would be signed out on every reload**. Custom domains on one parent domain avoid this entirely. |
+| `Auth__RefreshCookie__Secure` | `true` | `false` only in Development (plain `http://localhost`); startup fails elsewhere if it's `false`. |
+| `Auth__RefreshToken__LifetimeDays` | `7` | Absolute session length; rotation doesn't extend it. |
+| `Auth__RefreshToken__ReuseGraceSeconds` | `20` | How long a just-rotated token is still accepted (two tabs reloading at once). |
 
 ### Deployed environments (staging / production)
 

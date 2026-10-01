@@ -1,5 +1,6 @@
 namespace CRM.API.Extensions;
 
+using CRM.API.Authentication;
 using CRM.API.Authorization;
 using CRM.Application.Modules.Auth;
 using CRM.Application.Common.Behaviours;
@@ -261,6 +262,9 @@ public static class ServiceCollectionExtensions
         services.AddAuthEndpointRateLimiting(configuration);
 
         services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
+        services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.SectionName));
+        services.Configure<RefreshCookieOptions>(configuration.GetSection(RefreshCookieOptions.SectionName));
+        services.AddSingleton<RefreshTokenCookie>();
 
         return services;
     }

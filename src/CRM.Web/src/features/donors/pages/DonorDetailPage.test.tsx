@@ -91,7 +91,6 @@ describe('DonorDetailPage', () => {
     useAuthStore.setState({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isHydrating: false,
     });

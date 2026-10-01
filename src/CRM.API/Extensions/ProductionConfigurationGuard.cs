@@ -18,6 +18,7 @@ public static class ProductionConfigurationGuard
     public const string AllowedOriginsKey = "Cors:AllowedOrigins";
     public const string FrontendBaseUrlKey = "Frontend:BaseUrl";
     public const string JwtSecretKey = "JWT_SECRET";
+    public const string RefreshCookieSecureKey = "Auth:RefreshCookie:Secure";
 
     /// <summary>HS256 needs a key at least as long as its 256-bit output (RFC 7518 §3.2).</summary>
     public const int MinimumJwtSecretBytes = 32;
@@ -73,6 +74,11 @@ public static class ProductionConfigurationGuard
             errors.Add($"{JwtSecretKey} is not set.");
         else if (Encoding.UTF8.GetByteCount(jwtSecret) < MinimumJwtSecretBytes)
             errors.Add($"{JwtSecretKey} is shorter than {MinimumJwtSecretBytes} bytes (256 bits).");
+
+        // The refresh cookie carries a 7-day credential: it must never travel over plain HTTP,
+        // and browsers reject SameSite=None without Secure anyway.
+        if (configuration.GetValue<bool?>(RefreshCookieSecureKey) == false)
+            errors.Add($"{RefreshCookieSecureKey} is false. The refresh-token cookie must be Secure outside Development.");
 
         if (errors.Count > 0)
             throw new InvalidOperationException(

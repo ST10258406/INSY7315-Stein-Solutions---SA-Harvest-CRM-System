@@ -1,157 +1,204 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Interfaces;
+using CRM.Application.Modules.Auth;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Domain.Entities;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace CRM.Application.Tests.Modules.Auth.Commands;
 
 public class RefreshTokenCommandHandlerTests
 {
+    private const string RawToken = "presented-refresh-token";
+
     private readonly IRefreshTokenRepository _refreshTokensMock = Substitute.For<IRefreshTokenRepository>();
+    private readonly IUnitOfWork _unitOfWorkMock = Substitute.For<IUnitOfWork>();
     private readonly IJwtTokenService _jwtTokenServiceMock = Substitute.For<IJwtTokenService>();
     private readonly RefreshTokenCommandHandler _handler;
+    private readonly User _user;
 
     public RefreshTokenCommandHandlerTests()
     {
-        _handler = new RefreshTokenCommandHandler(_refreshTokensMock, _jwtTokenServiceMock);
-    }
+        _handler = new RefreshTokenCommandHandler(
+            _refreshTokensMock, _unitOfWorkMock, _jwtTokenServiceMock,
+            Options.Create(new RefreshTokenOptions { ReuseGraceSeconds = 20 }),
+            NullLogger<RefreshTokenCommandHandler>.Instance);
 
-    [Fact]
-    public async Task Handle_ValidToken_ReturnsNewAccessToken()
-    {
-        // Arrange
-        var user = new User
+        _user = new User
         {
             Id = Guid.NewGuid(),
             Email = "refresh-test@example.com",
             FirstName = "Refresh",
             LastName = "User",
-            UserRoles = new List<UserRole>()
+            UserRoles = new List<UserRole> { new() { Role = new Role { Name = "Admin" } } }
         };
 
-        var refreshToken = new RefreshToken
+        _jwtTokenServiceMock.GenerateAccessToken(_user).Returns("new-access-token");
+        _jwtTokenServiceMock.GenerateRefreshToken().Returns("rotated-refresh-token");
+        _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
+        _refreshTokensMock.GetActiveByFamilyIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new List<RefreshToken>());
+    }
+
+    private RefreshToken StoreToken(Action<RefreshToken>? configure = null)
+    {
+        var token = new RefreshToken
         {
             Id = Guid.NewGuid(),
-            UserId = user.Id,
-            User = user,
-            Token = "valid-refresh-token",
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
-            IsRevoked = false,
-            CreatedAt = DateTimeOffset.UtcNow
+            UserId = _user.Id,
+            User = _user,
+            TokenHash = SecureTokens.Hash(RawToken),
+            FamilyId = Guid.NewGuid(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(5),
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-2)
         };
+        configure?.Invoke(token);
+        _refreshTokensMock.GetByHashWithUserAndRolesAsync(token.TokenHash, Arg.Any<CancellationToken>()).Returns(token);
+        return token;
+    }
 
-        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("valid-refresh-token", Arg.Any<CancellationToken>())
-            .Returns(refreshToken);
+    private Task<CRM.Application.Modules.Auth.Dtos.RefreshTokenResponseDto> Refresh()
+        => _handler.Handle(new RefreshTokenCommand(RawToken), CancellationToken.None);
 
-        _jwtTokenServiceMock.GenerateAccessToken(user).Returns("new-access-token");
-        _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
+    [Fact]
+    public async Task Handle_ValidToken_ReturnsNewAccessTokenAndUser()
+    {
+        StoreToken();
 
-        var command = new RefreshTokenCommand("valid-refresh-token");
+        var result = await Refresh();
 
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        Assert.NotNull(result);
         Assert.Equal("new-access-token", result.AccessToken);
         Assert.Equal(3600, result.ExpiresIn);
+        Assert.Equal(_user.Id, result.User.Id);
+        Assert.Equal(["Admin"], result.User.Roles);
+    }
+
+    [Fact]
+    public async Task Handle_LooksUpByHash_NeverByRawValue()
+    {
+        StoreToken();
+
+        await Refresh();
+
+        await _refreshTokensMock.Received(1).GetByHashWithUserAndRolesAsync(SecureTokens.Hash(RawToken), Arg.Any<CancellationToken>());
+        await _refreshTokensMock.DidNotReceive().GetByHashWithUserAndRolesAsync(RawToken, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ValidToken_RotatesWithinFamilyWithoutExtendingExpiry()
+    {
+        var presented = StoreToken();
+
+        var result = await Refresh();
+
+        // The presented token is retired and points at its replacement...
+        Assert.True(presented.IsRevoked);
+        Assert.NotNull(presented.RevokedAt);
+        Assert.Equal(SecureTokens.Hash("rotated-refresh-token"), presented.ReplacedByTokenHash);
+
+        // ...and the replacement (raw value returned once, hash stored) stays in the family.
+        Assert.Equal("rotated-refresh-token", result.RefreshToken);
+        Assert.Equal(presented.ExpiresAt, result.RefreshTokenExpiresAt);
+        await _refreshTokensMock.Received(1).AddAsync(
+            Arg.Is<RefreshToken>(rt =>
+                rt.TokenHash == SecureTokens.Hash("rotated-refresh-token") &&
+                rt.FamilyId == presented.FamilyId &&
+                rt.UserId == _user.Id &&
+                rt.ExpiresAt == presented.ExpiresAt &&
+                !rt.IsRevoked),
+            Arg.Any<CancellationToken>());
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_ExpiredToken_ThrowsUnauthorizedException()
     {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), Email = "expired-test@example.com" };
+        StoreToken(t => t.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1));
 
-        var refreshToken = new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            User = user,
-            Token = "expired-token",
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-5), // Expired
-            IsRevoked = false,
-            CreatedAt = DateTimeOffset.UtcNow.AddDays(-7)
-        };
-
-        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("expired-token", Arg.Any<CancellationToken>())
-            .Returns(refreshToken);
-
-        var command = new RefreshTokenCommand("expired-token");
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
-        Assert.Equal("Refresh token is invalid or expired.", ex.Message);
-    }
-
-    [Fact]
-    public async Task Handle_RevokedToken_ThrowsUnauthorizedException()
-    {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), Email = "revoked-test@example.com" };
-
-        var refreshToken = new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            User = user,
-            Token = "revoked-token",
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
-            IsRevoked = true, // Revoked
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("revoked-token", Arg.Any<CancellationToken>())
-            .Returns(refreshToken);
-
-        var command = new RefreshTokenCommand("revoked-token");
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
-        Assert.Equal("Refresh token is invalid or expired.", ex.Message);
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_DeactivatedUser_ThrowsUnauthorizedException()
     {
-        // Regression: an existing, unexpired, non-revoked refresh token must stop working
-        // the moment the underlying user is deactivated — otherwise a deactivated account
-        // could keep renewing access tokens indefinitely.
-        var user = new User { Id = Guid.NewGuid(), Email = "deactivated@example.com", IsActive = false };
+        _user.IsActive = false;
+        StoreToken();
 
-        var refreshToken = new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            User = user,
-            Token = "still-valid-token",
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
-            IsRevoked = false,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        _refreshTokensMock.GetByTokenWithUserAndRolesAsync("still-valid-token", Arg.Any<CancellationToken>())
-            .Returns(refreshToken);
-
-        var command = new RefreshTokenCommand("still-valid-token");
-
-        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
-        Assert.Equal("Refresh token is invalid or expired.", ex.Message);
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Handle_NonExistentToken_ThrowsUnauthorizedException()
     {
-        // Arrange
-        _refreshTokensMock.GetByTokenWithUserAndRolesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((RefreshToken?)null);
+        _refreshTokensMock.GetByHashWithUserAndRolesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((RefreshToken?)null);
 
-        var command = new RefreshTokenCommand("nonexistent-token");
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+    }
 
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<UnauthorizedException>(() => _handler.Handle(command, CancellationToken.None));
-        Assert.Equal("Refresh token is invalid or expired.", ex.Message);
+    [Fact]
+    public async Task Handle_RevokedByLogout_ThrowsAndRevokesFamily()
+    {
+        // Revoked without a replacement (logout / reset / admin action) — never in grace.
+        var presented = StoreToken(t => t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-1)));
+
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+        await _refreshTokensMock.Received(1).GetActiveByFamilyIdAsync(presented.FamilyId, Arg.Any<CancellationToken>());
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_RotatedTokenReusedAfterGraceWindow_RevokesWholeFamily()
+    {
+        // F-04 reuse detection: an old, already-rotated token coming back means it was copied.
+        var familyId = Guid.NewGuid();
+        var presented = StoreToken(t =>
+        {
+            t.FamilyId = familyId;
+            t.Revoke(DateTimeOffset.UtcNow.AddMinutes(-5), replacedByTokenHash: "newer-hash");
+        });
+        var liveDescendant = new RefreshToken { Id = Guid.NewGuid(), UserId = _user.Id, FamilyId = familyId, TokenHash = "newer-hash" };
+        _refreshTokensMock.GetActiveByFamilyIdAsync(familyId, Arg.Any<CancellationToken>()).Returns(new List<RefreshToken> { liveDescendant });
+
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+
+        Assert.True(liveDescendant.IsRevoked);
+        await _unitOfWorkMock.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_RotatedTokenReusedWithinGraceWindow_IssuesSiblingWithoutRevokingFamily()
+    {
+        // Two tabs reloading at once both present the same cookie: the second must not log
+        // the user out.
+        var presented = StoreToken(t => t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-3), replacedByTokenHash: "first-replacement"));
+        _refreshTokensMock.GetByHashAsync("first-replacement", Arg.Any<CancellationToken>())
+            .Returns(new RefreshToken { TokenHash = "first-replacement", FamilyId = presented.FamilyId, IsRevoked = false });
+
+        var result = await Refresh();
+
+        Assert.Equal("new-access-token", result.AccessToken);
+        Assert.Equal("first-replacement", presented.ReplacedByTokenHash); // original link untouched
+        await _refreshTokensMock.DidNotReceive().GetActiveByFamilyIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _refreshTokensMock.Received(1).AddAsync(
+            Arg.Is<RefreshToken>(rt => rt.FamilyId == presented.FamilyId), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_WithinGraceButFamilyAlreadyKilled_IsTreatedAsReuse()
+    {
+        // If the replacement is no longer live, the family was already revoked (e.g. by reuse
+        // detection) — the grace window must not resurrect it.
+        StoreToken(t => t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-3), replacedByTokenHash: "dead-replacement"));
+        _refreshTokensMock.GetByHashAsync("dead-replacement", Arg.Any<CancellationToken>())
+            .Returns(new RefreshToken { TokenHash = "dead-replacement", IsRevoked = true });
+
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
     }
 }

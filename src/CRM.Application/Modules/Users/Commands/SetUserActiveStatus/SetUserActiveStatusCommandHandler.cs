@@ -51,7 +51,7 @@ public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveSt
             var activeTokens = await _refreshTokens.GetActiveByUserIdAsync(user.Id, cancellationToken);
             foreach (var rt in activeTokens)
             {
-                rt.IsRevoked = true;
+                rt.Revoke(DateTimeOffset.UtcNow);
             }
         }
 

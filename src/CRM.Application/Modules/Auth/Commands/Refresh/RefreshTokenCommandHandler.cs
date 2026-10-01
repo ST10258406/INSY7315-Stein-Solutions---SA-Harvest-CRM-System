@@ -1,37 +1,134 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Interfaces;
 using CRM.Application.Modules.Auth.Dtos;
+using CRM.Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CRM.Application.Modules.Auth.Commands.Refresh;
 
+/// <summary>
+/// Rotating refresh (security review F-04): every successful call revokes the presented
+/// token and issues a new one in the same family. A rotated token presented again outside
+/// the short grace window means it was copied, so the whole family is revoked and the user
+/// has to log in again.
+/// </summary>
 public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, RefreshTokenResponseDto>
 {
-    private readonly IRefreshTokenRepository _refreshTokens;
-    private readonly IJwtTokenService _jwtTokenService;
+    private const string GenericFailureMessage = "Refresh token is invalid or expired.";
 
-    public RefreshTokenCommandHandler(IRefreshTokenRepository refreshTokens, IJwtTokenService jwtTokenService)
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IJwtTokenService _jwtTokenService;
+    private readonly RefreshTokenOptions _options;
+    private readonly ILogger<RefreshTokenCommandHandler> _logger;
+
+    public RefreshTokenCommandHandler(
+        IRefreshTokenRepository refreshTokens,
+        IUnitOfWork unitOfWork,
+        IJwtTokenService jwtTokenService,
+        IOptions<RefreshTokenOptions> options,
+        ILogger<RefreshTokenCommandHandler> logger)
     {
         _refreshTokens = refreshTokens;
+        _unitOfWork = unitOfWork;
         _jwtTokenService = jwtTokenService;
+        _options = options.Value;
+        _logger = logger;
     }
 
     public async Task<RefreshTokenResponseDto> Handle(RefreshTokenCommand request, CancellationToken ct)
     {
-        var storedToken = await _refreshTokens.GetByTokenWithUserAndRolesAsync(request.RefreshToken, ct);
+        var now = DateTimeOffset.UtcNow;
+        var storedToken = await _refreshTokens.GetByHashWithUserAndRolesAsync(SecureTokens.Hash(request.RefreshToken), ct);
 
-        // Same generic 401 for "doesn't exist", "revoked", "expired", and "user
-        // deactivated since the token was issued" — don't tell the caller which case it was.
-        if (storedToken is null || storedToken.IsRevoked || storedToken.ExpiresAt < DateTimeOffset.UtcNow || !storedToken.User.IsActive)
-            throw new UnauthorizedException("Refresh token is invalid or expired.");
+        // Same generic 401 for every failure — "doesn't exist", "revoked", "expired", "user
+        // deactivated", "reuse detected" — don't tell the caller which case it was.
+        if (storedToken is null)
+            throw new UnauthorizedException(GenericFailureMessage);
 
-        var newAccessToken = _jwtTokenService.GenerateAccessToken(storedToken.User);
+        if (storedToken.IsRevoked && !await IsWithinRotationGraceAsync(storedToken, now, ct))
+        {
+            await RevokeFamilyAsync(storedToken, now, ct);
+            throw new UnauthorizedException(GenericFailureMessage);
+        }
 
+        if (storedToken.ExpiresAt < now || !storedToken.User.IsActive)
+            throw new UnauthorizedException(GenericFailureMessage);
+
+        var rawToken = _jwtTokenService.GenerateRefreshToken();
+        var replacement = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = storedToken.UserId,
+            TokenHash = SecureTokens.Hash(rawToken),
+            FamilyId = storedToken.FamilyId,
+            // Rotation never extends the session — see RefreshTokenOptions.LifetimeDays.
+            ExpiresAt = storedToken.ExpiresAt,
+            CreatedAt = now
+        };
+
+        // In the grace case the presented token was already rotated; leave its original
+        // ReplacedByTokenHash alone and just issue a sibling.
+        if (!storedToken.IsRevoked)
+            storedToken.Revoke(now, replacement.TokenHash);
+
+        await _refreshTokens.AddAsync(replacement, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var user = storedToken.User;
         return new RefreshTokenResponseDto
         {
-            AccessToken = newAccessToken,
-            ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds
+            AccessToken = _jwtTokenService.GenerateAccessToken(user),
+            ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds,
+            RefreshToken = rawToken,
+            RefreshTokenExpiresAt = replacement.ExpiresAt,
+            User = new UserSummaryDto
+            {
+                Id = user.Id,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email,
+                Roles = user.UserRoles?.Select(r => r.Role.Name).ToList() ?? new List<string>()
+            }
         };
+    }
+
+    /// <summary>
+    /// True when this revoked token was *rotated* (not killed) moments ago and its
+    /// replacement is still live — the benign "two tabs refreshed at once" race. A family
+    /// already killed by reuse detection has no live replacement, so it never qualifies.
+    /// </summary>
+    private async Task<bool> IsWithinRotationGraceAsync(RefreshToken token, DateTimeOffset now, CancellationToken ct)
+    {
+        if (token.ReplacedByTokenHash is null || token.RevokedAt is null)
+            return false;
+
+        if (now - token.RevokedAt.Value > TimeSpan.FromSeconds(_options.ReuseGraceSeconds))
+            return false;
+
+        var replacement = await _refreshTokens.GetByHashAsync(token.ReplacedByTokenHash, ct);
+        return replacement is { IsRevoked: false };
+    }
+
+    private async Task RevokeFamilyAsync(RefreshToken token, DateTimeOffset now, CancellationToken ct)
+    {
+        var family = await _refreshTokens.GetActiveByFamilyIdAsync(token.FamilyId, ct);
+        foreach (var member in family)
+            member.Revoke(now);
+
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        // Only worth a warning when there was something left to kill — replaying a token
+        // from an already-ended session is just noise.
+        if (family.Count > 0)
+        {
+            _logger.LogWarning(
+                "Refresh token reuse detected for user {UserId}; revoked {Count} active token(s) in family {FamilyId}",
+                token.UserId, family.Count, token.FamilyId);
+        }
     }
 }

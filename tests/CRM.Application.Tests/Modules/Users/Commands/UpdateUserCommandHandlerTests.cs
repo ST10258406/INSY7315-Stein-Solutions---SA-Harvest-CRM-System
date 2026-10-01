@@ -83,8 +83,8 @@ public class UpdateUserCommandHandlerTests
         _usersMock.GetByIdWithRoleAsync(user.Id, Arg.Any<CancellationToken>()).Returns(user);
         var tokens = new List<RefreshToken>
         {
-            new() { Id = Guid.NewGuid(), UserId = user.Id, Token = "a", IsRevoked = false },
-            new() { Id = Guid.NewGuid(), UserId = user.Id, Token = "b", IsRevoked = false }
+            new() { Id = Guid.NewGuid(), UserId = user.Id, TokenHash = "a", IsRevoked = false },
+            new() { Id = Guid.NewGuid(), UserId = user.Id, TokenHash = "b", IsRevoked = false }
         };
         _refreshTokensMock.GetActiveByUserIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(tokens);
 

@@ -12,12 +12,16 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Token)
+        // SHA-256 hex (64 chars) — never the raw token. See RefreshToken's remarks.
+        builder.Property(x => x.TokenHash)
             .IsRequired()
-            .HasMaxLength(512);
+            .HasMaxLength(64);
 
-        builder.HasIndex(x => x.Token)
+        builder.HasIndex(x => x.TokenHash)
             .IsUnique();
+
+        builder.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
+        builder.HasIndex(x => x.FamilyId);
 
         builder.Property(x => x.ExpiresAt).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();

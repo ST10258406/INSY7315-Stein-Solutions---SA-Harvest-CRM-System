@@ -10,7 +10,8 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 
-    public string? PasswordResetToken { get; set; }
+    /// <summary>SHA-256 of the outstanding reset token (the raw token only ever goes out by email).</summary>
+    public string? PasswordResetTokenHash { get; set; }
     public DateTimeOffset? PasswordResetTokenExpiresAt { get; set; }
 
     /// <summary>Consecutive failed logins since the last success or lockout (see LoginCommandHandler).</summary>

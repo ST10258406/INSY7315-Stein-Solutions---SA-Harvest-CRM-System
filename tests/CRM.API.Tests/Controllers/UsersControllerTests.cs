@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.Json;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.Login;
-using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Application.Modules.Users.Dtos;
 using CRM.Domain.Constants;
@@ -95,13 +94,6 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         context.Users.Add(user);
         await context.SaveChangesAsync();
         return user;
-    }
-
-    private async Task<LoginResponseDto> LoginAsync(string email, string password)
-    {
-        var response = await _factory.CreateClient().PostAsJsonAsync("/api/auth/login", new LoginCommand(email, password));
-        return JsonSerializer.Deserialize<LoginResponseDto>(
-            await response.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
     }
 
     private async Task<(HttpClient Client, User User, Role Role)> CreateAuthenticatedClientAsync(string roleName)
@@ -620,15 +612,14 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         context.Roles.Add(adminRole);
         const string password = "TargetPassword123";
         var target = await SeedUserAsync(context, adminRole.Id, "old-address@saharvest.org", password);
-        var targetSession = await LoginAsync(target.Email, password);
+        var (_, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
 
         var response = await superAdminClient.PatchAsJsonAsync(
             $"/api/v1/users/{target.Id}",
             new UpdateUserRequest { FirstName = "Seeded", LastName = "User", Email = "new-address@saharvest.org" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var refreshResponse = await _factory.CreateClient().PostAsJsonAsync(
-            "/api/auth/refresh", new RefreshTokenCommand(targetSession.RefreshToken));
+        var refreshResponse = await _factory.RefreshWithCookieAsync(targetCookie);
         Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
 
         var notice = await context.EmailLogs.AsNoTracking()
@@ -646,15 +637,14 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         context.Roles.Add(adminRole);
         const string password = "TargetPassword123";
         var target = await SeedUserAsync(context, adminRole.Id, "same-address@saharvest.org", password);
-        var targetSession = await LoginAsync(target.Email, password);
+        var (_, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
 
         var response = await superAdminClient.PatchAsJsonAsync(
             $"/api/v1/users/{target.Id}",
             new UpdateUserRequest { FirstName = "Renamed", LastName = "Only", Email = "same-address@saharvest.org" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var refreshResponse = await _factory.CreateClient().PostAsJsonAsync(
-            "/api/auth/refresh", new RefreshTokenCommand(targetSession.RefreshToken));
+        var refreshResponse = await _factory.RefreshWithCookieAsync(targetCookie);
         Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
         Assert.False(await context.EmailLogs.AnyAsync(e => e.EmailType == EmailType.AccountEmailChanged));
     }

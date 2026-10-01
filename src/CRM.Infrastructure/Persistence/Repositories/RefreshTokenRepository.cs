@@ -16,16 +16,20 @@ public class RefreshTokenRepository : IRefreshTokenRepository
         return Task.CompletedTask;
     }
 
-    public Task<RefreshToken?> GetByTokenAsync(string token, CancellationToken cancellationToken = default)
-        => _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == token, cancellationToken);
-
-    public Task<RefreshToken?> GetByTokenWithUserAndRolesAsync(string token, CancellationToken cancellationToken = default)
+    public Task<RefreshToken?> GetByHashWithUserAndRolesAsync(string tokenHash, CancellationToken cancellationToken = default)
         => _context.RefreshTokens
             .Include(rt => rt.User)
                 .ThenInclude(u => u.UserRoles!)
                     .ThenInclude(ur => ur.Role)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(rt => rt.Token == token, cancellationToken);
+            .FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, cancellationToken);
+
+    public Task<RefreshToken?> GetByHashAsync(string tokenHash, CancellationToken cancellationToken = default)
+        => _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.TokenHash == tokenHash, cancellationToken);
+
+    public Task<List<RefreshToken>> GetActiveByFamilyIdAsync(Guid familyId, CancellationToken cancellationToken = default)
+        => _context.RefreshTokens
+            .Where(rt => rt.FamilyId == familyId && !rt.IsRevoked)
+            .ToListAsync(cancellationToken);
 
     public Task<List<RefreshToken>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         => _context.RefreshTokens

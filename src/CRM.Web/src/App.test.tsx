@@ -4,7 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from '@/store/authStore';
 import App from './App';
 
-vi.mock('@/lib/axios', () => ({ api: { get: vi.fn().mockResolvedValue({ data: null }), post: vi.fn() } }));
+// No refresh cookie in tests — hydration finds no session and leaves signInAs's state alone.
+vi.mock('@/lib/axios', () => ({
+  api: { get: vi.fn().mockResolvedValue({ data: null }), post: vi.fn() },
+  refreshSession: vi.fn().mockRejectedValue(new Error('no session')),
+}));
 
 // ReportsPage composes several chart hooks that each hit the API — irrelevant to what
 // this suite verifies (routing/role enforcement), so it's swapped for a stub.

@@ -6,12 +6,17 @@ export interface UserSummaryDto {
   roles: string[];
 }
 
-export interface LoginResponseDto {
+/**
+ * Body of both POST /api/auth/login and POST /api/auth/refresh. Deliberately has no
+ * refresh token: the API sends that only as an HttpOnly cookie JavaScript can't read.
+ */
+export interface SessionResponseDto {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
   user: UserSummaryDto;
 }
+
+export type LoginResponseDto = SessionResponseDto;
 
 export interface ForgotPasswordResponseDto {
   message: string;
