@@ -1,3 +1,4 @@
+using CRM.Application.Tests.Common;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
@@ -39,7 +40,7 @@ public class SubmitPublicDonorDocumentCommandHandlerTests
     {
         SessionToken = token,
         DocumentType = "BBBEECertificate",
-        FileStream = new MemoryStream([1, 2, 3]),
+        FileStream = TestFiles.PdfStream(),
         OriginalFileName = "cert.pdf",
         ContentType = "application/pdf",
         FileSizeBytes = 3,

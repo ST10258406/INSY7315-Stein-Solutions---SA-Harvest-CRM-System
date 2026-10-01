@@ -2,6 +2,7 @@ namespace CRM.Application.Modules.PublicDonors.Commands.SubmitPublicDonorDocumen
 
 using System.Text.Json;
 using CRM.Application.Common.Exceptions;
+using CRM.Application.Common.Files;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.PublicDonors.Dtos;
 using CRM.Domain.Entities;
@@ -77,18 +78,22 @@ public class SubmitPublicDonorDocumentCommandHandler
             // we don't want a DB record pointing at a blob that was never written.
             // An orphaned blob from a subsequent failed SaveChanges is an accepted,
             // cheap failure mode (mirrors UploadDonorDocumentCommandHandler).
-            var blobPath = $"donors/{donorId}/{documentType}/{Guid.NewGuid()}_{command.OriginalFileName}";
-            await _blobStorage.UploadAsync(command.FileStream, blobPath, command.ContentType);
+            // Blob name and content type come from the sniffed file type, never from
+            // client-supplied values (see UploadDonorDocumentCommandHandler).
+            var sniffed = UploadedFileInspector.Sniff(command.FileStream)
+                ?? throw new InvalidOperationException("Upload reached the handler without a recognised file signature.");
+            var blobPath = $"donors/{donorId}/{documentType}/{Guid.NewGuid()}{sniffed.Extension}";
+            await _blobStorage.UploadAsync(command.FileStream, blobPath, sniffed.MimeType);
 
             var document = new DonorDocument
             {
                 Id = Guid.NewGuid(),
                 DonorId = donorId.Value,
                 DocumentType = documentType,
-                FileName = command.OriginalFileName,
+                FileName = UploadedFileInspector.SanitizeDisplayName(command.OriginalFileName),
                 BlobStoragePath = blobPath,
-                FileSizeBytes = command.FileSizeBytes,
-                MimeType = command.ContentType,
+                FileSizeBytes = UploadedFileInspector.RealLength(command.FileStream, command.FileSizeBytes),
+                MimeType = sniffed.MimeType,
                 // Null, not the system user — DonorDocument.UploadedByUserId is
                 // nullable specifically for an anonymous uploader like this one.
                 UploadedByUserId = null,

@@ -50,7 +50,9 @@ public class BlobStorageService : IBlobStorageService
             BlobContainerName = _containerName,
             BlobName = path,
             Resource = "b",
-            ExpiresOn = DateTimeOffset.UtcNow.Add(expiry)
+            ExpiresOn = DateTimeOffset.UtcNow.Add(expiry),
+            // Force a download rather than in-browser rendering of uploaded content.
+            ContentDisposition = "attachment"
         };
         sasBuilder.SetPermissions(BlobSasPermissions.Read);
 

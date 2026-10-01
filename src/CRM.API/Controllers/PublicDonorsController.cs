@@ -59,7 +59,7 @@ public class PublicDonorsController : ControllerBase
             SessionToken = sessionToken,
             DocumentType = documentType,
             FileStream = stream,
-            OriginalFileName = Path.GetFileName(file.FileName),
+            OriginalFileName = file.FileName,
             ContentType = file.ContentType,
             FileSizeBytes = file.Length,
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),

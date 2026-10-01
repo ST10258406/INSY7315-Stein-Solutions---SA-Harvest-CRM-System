@@ -368,7 +368,7 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
             { new StringContent(documentType), "documentType" }
         };
 
-        var fileContent = new ByteArrayContent(fileBytes ?? [1, 2, 3, 4]);
+        var fileContent = new ByteArrayContent(fileBytes ?? "%PDF-1.7 test"u8.ToArray());
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
 
@@ -511,6 +511,62 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
             MakeDocumentUploadForm("wrong-type-token", "Signature"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("MZ-executable", "application/pdf", "cert.pdf")]
+    [InlineData("png-as-pdf", "image/png", "cert.pdf")]
+    [InlineData("pdf-labelled-png", "image/png", "cert.png")]
+    public async Task SubmitDocument_ContentDoesNotMatchDeclaredTypeOrExtension_Returns400(
+        string scenario, string contentType, string fileName)
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+        var token = "mismatch-token-" + scenario;
+        await SeedPendingDonorWithTokenAsync(token);
+
+        byte[] bytes = scenario switch
+        {
+            "MZ-executable" => [0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00],
+            "png-as-pdf" => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+            _ => "%PDF-1.7 test"u8.ToArray()
+        };
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm(token, "BBBEECertificate", bytes, contentType, fileName));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await _blobStorageMock.DidNotReceive().UploadAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task SubmitDocument_HostileFileName_BlobPathIsGuidOnlyAndDisplayNameHasNoSeparators()
+    {
+        var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var seedContext = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        await seedContext.Database.EnsureDeletedAsync();
+        await seedContext.Database.EnsureCreatedAsync();
+        await SeedFixtureDataAsync(seedContext);
+        await SeedPendingDonorWithTokenAsync("hostile-name-token");
+
+        var response = await client.PostAsync(
+            "/api/v1/public/donors/submit/document",
+            MakeDocumentUploadForm("hostile-name-token", "BBBEECertificate", fileName: @"a\..\..\x.pdf"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await _blobStorageMock.Received(1).UploadAsync(
+            Arg.Any<Stream>(),
+            Arg.Is<string>(p => System.Text.RegularExpressions.Regex.IsMatch(
+                p, @"^donors/[0-9a-f-]{36}/BBBEECertificate/[0-9a-f-]{36}\.pdf$")),
+            "application/pdf");
+        var doc = await seedContext.DonorDocuments.AsNoTracking().SingleAsync();
+        Assert.Equal("x.pdf", doc.FileName);
     }
 
     [Fact]
