@@ -68,7 +68,7 @@ describe('OverdueFollowUpsWidget', () => {
     const call = vi.mocked(api.get).mock.calls[0];
     expect(call[0]).toBe('/api/v1/donors');
     expect(call[1]?.params).toMatchObject({ sortBy: 'followUpDate', sortDir: 'asc', pageSize: 6 });
-    expect(call[1]?.params.followUpBefore).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect((call[1]?.params as { followUpBefore: string }).followUpBefore).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('shows the empty state when nothing is overdue', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios from 'axios';
+import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { api, refreshSession } from './axios';
 import { useAuthStore } from '@/store/authStore';
 
@@ -59,5 +59,69 @@ describe('api client', () => {
   it('sends credentials (the refresh cookie) and the CSRF header by default', () => {
     expect(api.defaults.withCredentials).toBe(true);
     expect(api.defaults.headers['X-Requested-With']).toBe('XMLHttpRequest');
+  });
+});
+
+describe('api client response interceptor', () => {
+  const originalAdapter = api.defaults.adapter;
+
+  // A fake transport: requests carrying the stale token get a 401, the refreshed token gets a 200.
+  function installAdapter(respond: (config: InternalAxiosRequestConfig) => { status: number; data?: unknown }) {
+    api.defaults.adapter = async (config) => {
+      const { status, data } = respond(config);
+      const response = { data: data ?? {}, status, statusText: '', headers: {}, config } as AxiosResponse;
+      if (status >= 400) {
+        throw new AxiosError('failed', String(status), config, undefined, response);
+      }
+      return response;
+    };
+  }
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      user: session.user,
+      accessToken: 'stale-token',
+      isAuthenticated: true,
+      isHydrating: false,
+      isDevBypass: false,
+    });
+  });
+
+  afterEach(() => {
+    api.defaults.adapter = originalAdapter;
+    vi.restoreAllMocks();
+  });
+
+  it('refreshes on 401 and retries the original request with the new token', async () => {
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: session });
+    installAdapter((config) =>
+      config.headers.Authorization === 'Bearer restored-access-token' ? { status: 200, data: { ok: true } } : { status: 401 },
+    );
+
+    const response = await api.get('/api/v1/donors');
+
+    expect(response.data).toEqual({ ok: true });
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not stampede the refresh endpoint when several requests 401 together', async () => {
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: session });
+    installAdapter((config) =>
+      config.headers.Authorization === 'Bearer restored-access-token' ? { status: 200 } : { status: 401 },
+    );
+
+    await Promise.all([api.get('/api/v1/donors'), api.get('/api/v1/tasks'), api.get('/api/v1/approvals')]);
+
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('flags the user for a forced password change on 403 PASSWORD_CHANGE_REQUIRED, without refreshing', async () => {
+    const post = vi.spyOn(axios, 'post');
+    installAdapter(() => ({ status: 403, data: { code: 'PASSWORD_CHANGE_REQUIRED' } }));
+
+    await expect(api.get('/api/v1/donors')).rejects.toBeDefined();
+
+    expect(post).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().user?.mustChangePassword).toBe(true);
   });
 });
