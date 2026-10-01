@@ -60,6 +60,12 @@ public interface IUserRepository
     /// </summary>
     Task<User?> GetByIdWithRolesReadOnlyAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Read-only: a user's display name ("First Last") and login email, or null if no such user exists.
+    /// Used to present staff-composed emails as the signed-in user (sender name + Reply-To).
+    /// </summary>
+    Task<EmailSenderIdentity?> GetSenderIdentityAsync(Guid userId, CancellationToken cancellationToken = default);
+
     /// <summary>Adds a new user. Caller sets Id and PasswordHash before calling.</summary>
     Task AddAsync(User user, CancellationToken cancellationToken = default);
 
