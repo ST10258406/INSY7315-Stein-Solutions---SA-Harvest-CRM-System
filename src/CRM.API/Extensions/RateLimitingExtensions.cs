@@ -1,5 +1,6 @@
 namespace CRM.API.Extensions;
 
+using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
@@ -46,6 +47,19 @@ public static class RateLimitingExtensions
     /// </summary>
     public const string DonorEmailPolicy = "DonorEmail";
 
+    /// <summary>Strict per-IP limit on POST /auth/login (default 10/minute) — F-02.</summary>
+    public const string AuthLoginPolicy = "AuthLogin";
+
+    /// <summary>Strict per-IP limit on POST /auth/reset-password (default 10/minute) — F-02.</summary>
+    public const string AuthResetPasswordPolicy = "AuthResetPassword";
+
+    /// <summary>
+    /// Per-IP limit on POST /auth/refresh (default 20/minute). Looser than login because
+    /// every signed-in staff member behind one office NAT refreshes through it, but still
+    /// far below the 100/minute global limiter.
+    /// </summary>
+    public const string AuthRefreshPolicy = "AuthRefresh";
+
     private const int DefaultDonorEmailPermitLimit = 20;
     private const int DefaultDonorEmailWindowMinutes = 60;
 
@@ -77,6 +91,39 @@ public static class RateLimitingExtensions
         });
 
         return services;
+    }
+
+    /// <summary>
+    /// Strict per-IP policies for the anonymous auth endpoints (F-02). The per-account
+    /// lockout in LoginCommandHandler is the second layer. Limits are read from
+    /// RateLimiting:Auth:{Login|ResetPassword|Refresh}:PermitLimit / :WindowMinutes when
+    /// a partition is first created (so test-host overrides apply), with the defaults below.
+    /// </summary>
+    public static IServiceCollection AddAuthEndpointRateLimiting(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddRateLimiter(options =>
+        {
+            AddStrictIpPolicy(options, configuration, AuthLoginPolicy, "RateLimiting:Auth:Login", defaultPermitLimit: 10);
+            AddStrictIpPolicy(options, configuration, AuthResetPasswordPolicy, "RateLimiting:Auth:ResetPassword", defaultPermitLimit: 10);
+            AddStrictIpPolicy(options, configuration, AuthRefreshPolicy, "RateLimiting:Auth:Refresh", defaultPermitLimit: 20);
+        });
+
+        return services;
+    }
+
+    private static void AddStrictIpPolicy(
+        RateLimiterOptions options, IConfiguration configuration, string policyName, string section, int defaultPermitLimit)
+    {
+        options.AddPolicy(policyName, context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: GetClientIp(context),
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = configuration.GetValue<int?>($"{section}:PermitLimit") ?? defaultPermitLimit,
+                    Window = TimeSpan.FromMinutes(configuration.GetValue<int?>($"{section}:WindowMinutes") ?? 1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                }));
     }
 
     private static string GetUserId(HttpContext context) =>
@@ -135,6 +182,15 @@ public static class RateLimitingExtensions
             options.OnRejected = async (context, cancellationToken) =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+
+                // Fixed-window limiters report when the window resets; tell well-behaved
+                // clients exactly how long to back off.
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    context.HttpContext.Response.Headers.RetryAfter =
+                        ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+                }
+
                 await context.HttpContext.Response.WriteAsJsonAsync(new
                 {
                     status = StatusCodes.Status429TooManyRequests,

@@ -87,6 +87,8 @@ public class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand, UserL
             RoleId = role?.Id ?? Guid.Empty,
             Role = role?.Name ?? string.Empty,
             IsActive = user.IsActive,
+            IsLockedOut = user.LockoutEndUtc > DateTimeOffset.UtcNow,
+            LockedUntil = user.LockoutEndUtc > DateTimeOffset.UtcNow ? user.LockoutEndUtc : null,
             CreatedAt = user.CreatedAt
         };
     }

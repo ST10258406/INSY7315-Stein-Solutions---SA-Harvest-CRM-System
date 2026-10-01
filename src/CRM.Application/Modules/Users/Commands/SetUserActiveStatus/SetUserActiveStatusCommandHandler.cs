@@ -71,6 +71,8 @@ public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveSt
             RoleId = role?.Id ?? Guid.Empty,
             Role = role?.Name ?? string.Empty,
             IsActive = user.IsActive,
+            IsLockedOut = user.LockoutEndUtc > DateTimeOffset.UtcNow,
+            LockedUntil = user.LockoutEndUtc > DateTimeOffset.UtcNow ? user.LockoutEndUtc : null,
             CreatedAt = user.CreatedAt
         };
     }

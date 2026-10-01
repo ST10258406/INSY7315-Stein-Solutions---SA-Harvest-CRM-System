@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { useUsers, useUserListFilters, useSetUserActiveStatus } from './hooks';
+import { useUsers, useUserListFilters, useSetUserActiveStatus, useUnlockUser } from './hooks';
 import { UserFiltersBar } from './components/UserFiltersBar';
 import { UserTable } from './components/UserTable';
 import { UserPagination } from './components/UserPagination';
@@ -15,6 +15,7 @@ export default function UserListPage() {
   const { filters, setSearch, setStatus, setRoleId, setSort, setPage, setPageSize } = useUserListFilters();
   const { data, isPending, isFetching, isError, error, refetch } = useUsers(filters);
   const setActiveStatus = useSetUserActiveStatus();
+  const unlockUser = useUnlockUser();
 
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserListItemDto | null>(null);
@@ -69,6 +70,8 @@ export default function UserListPage() {
               setActiveStatus.mutate({ id: user.id, isActive: true });
             }
           }}
+          // Unlocking only restores access, so like reactivating it needs no confirmation.
+          onUnlock={(user) => unlockUser.mutate({ id: user.id })}
         />
 
         {data && data.pagination.totalCount > 0 && (

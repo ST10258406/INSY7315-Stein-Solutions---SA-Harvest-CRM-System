@@ -63,6 +63,8 @@ public class ChangeUserRoleCommandHandler : IRequestHandler<ChangeUserRoleComman
             RoleId = role?.Id ?? Guid.Empty,
             Role = role?.Name ?? string.Empty,
             IsActive = refreshed.IsActive,
+            IsLockedOut = refreshed.LockoutEndUtc > DateTimeOffset.UtcNow,
+            LockedUntil = refreshed.LockoutEndUtc > DateTimeOffset.UtcNow ? refreshed.LockoutEndUtc : null,
             CreatedAt = refreshed.CreatedAt
         };
     }

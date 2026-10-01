@@ -47,6 +47,10 @@ export interface UserListItemDto {
   roleId: string;
   role: string;
   isActive: boolean;
+  /** True while a login lockout is in force — decided server-side. */
+  isLockedOut: boolean;
+  /** ISO timestamp the current lockout ends; null when not locked out. */
+  lockedUntil: string | null;
   createdAt: string;
 }
 

@@ -12,7 +12,7 @@ using CRM.Domain.Entities;
 /// </summary>
 public interface IUserRepository
 {
-    /// <summary>Read-only user with roles eagerly loaded, matched by email. Used by Login.</summary>
+    /// <summary>Tracked user with roles eagerly loaded, matched by email. Used by Login, which updates the failed-login counter and lockout.</summary>
     Task<User?> GetByEmailWithRolesAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>Tracked user matched by email. Used by ForgotPassword / ResetPassword.</summary>

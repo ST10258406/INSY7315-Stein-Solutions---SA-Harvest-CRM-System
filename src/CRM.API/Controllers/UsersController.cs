@@ -3,6 +3,7 @@ using CRM.Application.Common.Models;
 using CRM.Application.Modules.Users.Commands.ChangeUserRole;
 using CRM.Application.Modules.Users.Commands.CreateUser;
 using CRM.Application.Modules.Users.Commands.SetUserActiveStatus;
+using CRM.Application.Modules.Users.Commands.UnlockUser;
 using CRM.Application.Modules.Users.Commands.UpdateUser;
 using CRM.Application.Modules.Users.Dtos;
 using CRM.Application.Modules.Users.Queries.GetUsers;
@@ -68,6 +69,15 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> SetUserActiveStatus(Guid id, [FromBody] SetUserActiveStatusRequest request)
     {
         var result = await _mediator.Send(new SetUserActiveStatusCommand { Id = id, IsActive = request.IsActive });
+        return Ok(new { data = result });
+    }
+
+    // Clears a login lockout early (see LoginLockoutOptions).
+    [HttpPost("{id:guid}/unlock")]
+    [TypeFilter(typeof(UserTargetAuthorizationFilter))]
+    public async Task<IActionResult> UnlockUser(Guid id)
+    {
+        var result = await _mediator.Send(new UnlockUserCommand { Id = id });
         return Ok(new { data = result });
     }
 }

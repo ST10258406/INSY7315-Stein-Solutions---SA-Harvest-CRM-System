@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, FilterX, TriangleAlert, MoreHorizontal, Pencil, Shield, UserX, UserCheck } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, FilterX, TriangleAlert, MoreHorizontal, Pencil, Shield, UserX, UserCheck, Lock, LockOpen } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { RoleBadge } from './RoleBadge';
@@ -10,6 +10,10 @@ function getInitials(firstName: string, lastName: string) {
 }
 
 const AVATAR_PALETTE = ['#3B4A40', '#3F5D46', '#5B4B8A', '#8A5A2B', '#2E5A78', '#7A3B4E', '#4A5B2E', '#6B4A2E'];
+
+function formatTime(value: string) {
+  return new Date(value).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -43,6 +47,7 @@ interface UserTableProps {
   onEditDetails: (user: UserListItemDto) => void;
   onChangeRole: (user: UserListItemDto) => void;
   onToggleStatus: (user: UserListItemDto) => void;
+  onUnlock: (user: UserListItemDto) => void;
 }
 
 export function UserTable({
@@ -59,6 +64,7 @@ export function UserTable({
   onEditDetails,
   onChangeRole,
   onToggleStatus,
+  onUnlock,
 }: UserTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const currentUser = useAuthStore((s) => s.user);
@@ -165,6 +171,15 @@ export function UserTable({
                           {user.isActive ? 'Active' : 'Deactivated'}
                         </span>
                       </span>
+                      {user.isLockedOut && (
+                        <span
+                          title={user.lockedUntil ? `Too many failed sign-ins — locked until ${formatTime(user.lockedUntil)}` : 'Too many failed sign-ins'}
+                          className="mt-1 flex w-fit items-center gap-1 rounded-2xl bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-bold whitespace-nowrap text-amber-700 dark:text-amber-400"
+                        >
+                          <Lock className="h-3 w-3 shrink-0" />
+                          {user.lockedUntil ? `Locked until ${formatTime(user.lockedUntil)}` : 'Locked'}
+                        </span>
+                      )}
                     </td>
 
                     <td className="text-13 px-3.5 py-3.75 font-medium whitespace-nowrap text-[var(--muted-c)]">{formatDate(user.createdAt)}</td>
@@ -215,6 +230,24 @@ export function UserTable({
                             <Shield className="h-3.75 w-3.75 shrink-0 text-[var(--icon)]" />
                             <span>Change Role</span>
                           </button>
+
+                          {user.isLockedOut && (
+                            <button
+                              disabled={isProtected}
+                              title={isProtected ? protectedTitle : undefined}
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                if (isProtected) return;
+                                onUnlock(user);
+                              }}
+                              className={`flex h-9 items-center gap-2.5 rounded-lg border-none bg-transparent px-3 text-[12.5px] font-semibold whitespace-nowrap ${
+                                isProtected ? 'cursor-not-allowed text-[var(--muted2)]' : 'text-[var(--ink)] hover:bg-[var(--hover)]'
+                              }`}
+                            >
+                              <LockOpen className="h-3.75 w-3.75 shrink-0 text-[var(--icon)]" />
+                              <span>Unlock Account</span>
+                            </button>
+                          )}
 
                           <div className="mx-1.5 my-1 h-px bg-[var(--hair)]" />
 

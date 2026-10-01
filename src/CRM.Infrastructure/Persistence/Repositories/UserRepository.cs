@@ -25,7 +25,7 @@ public class UserRepository : IUserRepository
         => _context.Users
             .Include(u => u.UserRoles!)
                 .ThenInclude(ur => ur.Role)
-            .AsNoTracking() // we're only reading the user (not modifying it — the refresh token is a separate entity being added)
+            // Tracked: Login updates the failed-attempt counter / lockout on this instance.
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
     public Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)

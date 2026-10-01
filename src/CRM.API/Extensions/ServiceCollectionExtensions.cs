@@ -1,6 +1,7 @@
 namespace CRM.API.Extensions;
 
 using CRM.API.Authorization;
+using CRM.Application.Modules.Auth;
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
@@ -257,6 +258,9 @@ public static class ServiceCollectionExtensions
         // RateLimitingExtensions.cs, not inline here.
         services.AddPublicApiRateLimiting();
         services.AddAuthenticatedApiRateLimiting(configuration);
+        services.AddAuthEndpointRateLimiting(configuration);
+
+        services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
 
         return services;
     }

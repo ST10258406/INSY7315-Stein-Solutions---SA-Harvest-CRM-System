@@ -29,6 +29,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthLoginPolicy)]
     public async Task<ActionResult<LoginResponseDto>> Login(LoginCommand command)
     {
         var result = await _mediator.Send(command);
@@ -37,6 +38,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthRefreshPolicy)]
     public async Task<ActionResult<RefreshTokenResponseDto>> Refresh(RefreshTokenCommand command)
     {
         var result = await _mediator.Send(command);
@@ -69,6 +71,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthResetPasswordPolicy)]
     public async Task<ActionResult<ResetPasswordResponseDto>> ResetPassword(ResetPasswordCommand command)
     {
         var result = await _mediator.Send(command);

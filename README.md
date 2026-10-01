@@ -286,6 +286,25 @@ origin list or `Frontend:BaseUrl` is empty, uses `http://`, or points at
 problem by setting name and never prints secret values. Use the real staging URL for
 staging — don't relax the guard.
 
+### Login brute-force protection
+
+Two layers, both with sensible defaults (no setting required):
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RateLimiting__Auth__Login__PermitLimit` / `__WindowMinutes` | 10 / 1 | Per-IP limit on `POST /api/auth/login` |
+| `RateLimiting__Auth__ResetPassword__PermitLimit` / `__WindowMinutes` | 10 / 1 | Per-IP limit on `POST /api/auth/reset-password` |
+| `RateLimiting__Auth__Refresh__PermitLimit` / `__WindowMinutes` | 20 / 1 | Per-IP limit on `POST /api/auth/refresh` |
+| `Auth__Lockout__MaxFailedAttempts` | 5 | Consecutive failed logins before an account is locked |
+| `Auth__Lockout__LockoutMinutes` | 15 | How long the lock lasts |
+
+Rate-limited requests get `429` with a `Retry-After` header. A locked account gets the
+same `401 Invalid email or password.` as a wrong password (even with the correct one), so
+the lock reveals nothing. Locks expire on their own; an Admin/SuperAdmin can clear one
+early with `POST /api/v1/users/{id}/unlock` (same target rules as other user edits — only a
+SuperAdmin can unlock a SuperAdmin). Failed logins are logged at Warning with a hashed
+email, never the password or address; the lockout itself is logged with the user id.
+
 ---
 
 ## Common commands
