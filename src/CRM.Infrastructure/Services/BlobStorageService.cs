@@ -11,11 +11,19 @@ public class BlobStorageService : IBlobStorageService
 {
     private readonly string? _connectionString;
     private readonly string _containerName;
+    private readonly Uri? _publicEndpoint;
 
     public BlobStorageService(IConfiguration configuration)
     {
         _connectionString = configuration["Azure:BlobStorage:ConnectionString"];
         _containerName = configuration["Azure:BlobStorage:ContainerName"] ?? "donor-documents";
+
+        // Browser-reachable origin for download links. Locally the API talks to Azurite at the
+        // docker-internal host "azurite", which a browser can't resolve; the SAS signature doesn't
+        // cover the host, so the origin can be swapped without invalidating it.
+        var publicEndpoint = configuration["Azure:BlobStorage:PublicEndpoint"];
+        if (!string.IsNullOrWhiteSpace(publicEndpoint))
+            _publicEndpoint = new Uri(publicEndpoint);
     }
 
     public async Task<BlobUploadResult> UploadAsync(Stream fileStream, string path, string contentType)
@@ -56,7 +64,18 @@ public class BlobStorageService : IBlobStorageService
         };
         sasBuilder.SetPermissions(BlobSasPermissions.Read);
 
-        return Task.FromResult(blobClient.GenerateSasUri(sasBuilder).ToString());
+        var sasUri = blobClient.GenerateSasUri(sasBuilder);
+        if (_publicEndpoint is not null)
+        {
+            sasUri = new UriBuilder(sasUri)
+            {
+                Scheme = _publicEndpoint.Scheme,
+                Host = _publicEndpoint.Host,
+                Port = _publicEndpoint.Port
+            }.Uri;
+        }
+
+        return Task.FromResult(sasUri.ToString());
     }
 
     public Task DeleteAsync(string path)
