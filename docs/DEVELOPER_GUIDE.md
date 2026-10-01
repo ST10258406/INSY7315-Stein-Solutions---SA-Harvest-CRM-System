@@ -290,6 +290,13 @@ Rules:
 - **No hard deletes.** `context.*.Remove()` or `DELETE FROM` outside test code / migrations
   fails the PR. Documents & users soft-delete via `is_active = false`; donors move
   `PendingReview → Active → Lapsed` / `PendingReview → Rejected`.
+- **Soft-deleted documents are invisible.** `DonorDocument` has a global query filter
+  (`HasQueryFilter(d => d.IsActive)` in `DonorDocumentConfiguration`), so every query —
+  listing, download, the document-type authorization lookup, delete — treats a deleted or
+  superseded document as not found (`404` for every role). A filter rather than per-query
+  `IsActive` checks so a new query can't forget it. If you genuinely need inactive rows (an
+  audit/history view, a test asserting the soft delete), opt out explicitly with
+  `.IgnoreQueryFilters()` and say why in a comment.
 - **Append-only:** never generate `UPDATE`/`DELETE` for `interaction_logs` or `audit_logs`;
   no `EntityState.Modified`, no `.Remove()`, no `UpdatedAt` on those entities.
 - Timestamps are `TIMESTAMPTZ` in **UTC**; the frontend converts to SAST for display.

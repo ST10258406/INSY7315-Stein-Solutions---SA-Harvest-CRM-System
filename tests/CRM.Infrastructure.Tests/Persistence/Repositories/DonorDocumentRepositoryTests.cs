@@ -28,7 +28,7 @@ public class DonorDocumentRepositoryTests
         var context = new CrmDbContext(_options);
         await context.Database.EnsureCreatedAsync();
 
-        context.DonorDocuments.RemoveRange(context.DonorDocuments);
+        context.DonorDocuments.RemoveRange(context.DonorDocuments.IgnoreQueryFilters());
         context.Donors.RemoveRange(context.Donors);
         await context.SaveChangesAsync();
 
@@ -130,7 +130,7 @@ public class DonorDocumentRepositoryTests
         await new UnitOfWork(context).SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        Assert.False((await context.DonorDocuments.FindAsync(document.Id))!.IsActive);
+        Assert.False((await context.DonorDocuments.IgnoreQueryFilters().SingleAsync(d => d.Id == document.Id)).IsActive);
     }
 
     [Fact]
@@ -184,12 +184,15 @@ public class DonorDocumentRepositoryTests
         Assert.Null(await repository.GetDocumentTypeAsync(_donorId, Guid.NewGuid()));
     }
 
+    // Security review F-06: a soft-deleted document is invisible to every read, so the
+    // authorization filter's type lookup, the download lookup and the delete lookup all
+    // report it as not found (→ 404 for every role, never confirming it exists). Both
+    // the download handler and the type lookup go through the same filter, so there is
+    // no document the handler could reach that skipped the role check.
+
     [Fact]
-    public async Task GetDocumentTypeAsync_FindsInactiveDocumentsToo()
+    public async Task GetDocumentTypeAsync_IgnoresInactiveDocuments()
     {
-        // The authorization filter must resolve the type for any document the download
-        // handler could reach, active or not — otherwise a soft-deleted document would
-        // skip the role check and fall through to a bare not-found.
         using var context = await CreateSeededContextAsync();
 
         var document = MakeDocument(_donorId, DocumentType.Signature, isActive: false);
@@ -199,7 +202,58 @@ public class DonorDocumentRepositoryTests
 
         var repository = new DonorDocumentRepository(context);
 
-        Assert.Equal(DocumentType.Signature, await repository.GetDocumentTypeAsync(_donorId, document.Id));
+        Assert.Null(await repository.GetDocumentTypeAsync(_donorId, document.Id));
+    }
+
+    [Fact]
+    public async Task GetReadOnlyAsync_IgnoresInactiveDocuments()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var document = MakeDocument(_donorId, DocumentType.BBBEECertificate, isActive: false);
+        context.DonorDocuments.Add(document);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorDocumentRepository(context);
+
+        Assert.Null(await repository.GetReadOnlyAsync(_donorId, document.Id));
+    }
+
+    [Fact]
+    public async Task GetForMutationAsync_IgnoresInactiveDocuments()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var document = MakeDocument(_donorId, DocumentType.Signature, isActive: false);
+        context.DonorDocuments.Add(document);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorDocumentRepository(context);
+
+        Assert.Null(await repository.GetForMutationAsync(_donorId, document.Id));
+    }
+
+    [Fact]
+    public async Task SoftDeletedDocument_IsHiddenButTheRowIsKept()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var document = MakeDocument(_donorId, DocumentType.BBBEECertificate);
+        context.DonorDocuments.Add(document);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorDocumentRepository(context);
+        var loaded = await repository.GetForMutationAsync(_donorId, document.Id);
+        loaded!.IsActive = false;
+        await new UnitOfWork(context).SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        Assert.False(await context.DonorDocuments.AnyAsync(d => d.Id == document.Id));
+        var row = await context.DonorDocuments.IgnoreQueryFilters().SingleAsync(d => d.Id == document.Id);
+        Assert.False(row.IsActive);
     }
 
     [Fact]

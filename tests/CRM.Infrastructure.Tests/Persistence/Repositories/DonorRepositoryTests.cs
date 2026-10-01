@@ -64,7 +64,7 @@ public class DonorRepositoryTests
         context.DonorDonationTypes.RemoveRange(context.DonorDonationTypes);
         context.DonorLegalAddresses.RemoveRange(context.DonorLegalAddresses);
         context.DonorContacts.RemoveRange(context.DonorContacts);
-        context.DonorDocuments.RemoveRange(context.DonorDocuments);
+        context.DonorDocuments.RemoveRange(context.DonorDocuments.IgnoreQueryFilters());
         context.DonorApprovals.RemoveRange(context.DonorApprovals);
         context.Donors.RemoveRange(context.Donors);
         await context.SaveChangesAsync();
@@ -328,6 +328,41 @@ public class DonorRepositoryTests
         Assert.Contains(result.Donations.Types, t => t.Name == "Meat");
         Assert.Contains(result.Donations.OperationalRegions, r => r.Code == "JHB");
     }
+
+    [Fact]
+    public async Task GetDetailByIdAsync_ListsOnlyActiveDocuments()
+    {
+        // Security review F-06: a soft-deleted or superseded document must not appear in the
+        // donor detail response — the global query filter on DonorDocument applies to the
+        // Donor.Documents navigation inside the projection too.
+        using var context = await CreateSeededContextAsync();
+
+        var donor = MakeDonor("FoodCorp SA", _creatorId);
+        var active = MakeDocument(donor.Id, DocumentType.BBBEECertificate, isActive: true);
+        var deleted = MakeDocument(donor.Id, DocumentType.Signature, isActive: false);
+        context.Donors.Add(donor);
+        context.DonorDocuments.AddRange(active, deleted);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        var result = await repository.GetDetailByIdAsync(donor.Id);
+
+        Assert.Equal(active.Id, Assert.Single(result!.Compliance.Documents).Id);
+    }
+
+    private static DonorDocument MakeDocument(Guid donorId, DocumentType type, bool isActive) => new()
+    {
+        Id = Guid.NewGuid(),
+        DonorId = donorId,
+        DocumentType = type,
+        FileName = "file.pdf",
+        BlobStoragePath = $"donors/{donorId}/{type}/{Guid.NewGuid()}_file.pdf",
+        MimeType = "application/pdf",
+        FileSizeBytes = 1024,
+        IsActive = isActive
+    };
 
     [Fact]
     public async Task GetDetailByIdAsync_UnknownId_ReturnsNull()
