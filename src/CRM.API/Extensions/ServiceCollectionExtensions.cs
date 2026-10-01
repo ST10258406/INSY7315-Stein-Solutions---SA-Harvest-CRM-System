@@ -99,6 +99,9 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    // Pin to the algorithm JwtTokenService signs with, so a token claiming any
+                    // other "alg" is rejected outright rather than negotiated (F-20).
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                     ValidIssuer = configuration["Jwt:Issuer"],
                     ValidAudience = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
@@ -200,10 +203,15 @@ public static class ServiceCollectionExtensions
 
         services.AddControllers();
 
+        // Exact origins from config (Cors:AllowedOrigins / Cors__AllowedOrigins__N) — never a
+        // wildcard, since credentials are allowed. Localhost lives only in
+        // appsettings.Development.json; ProductionConfigurationGuard rejects it elsewhere.
+        var allowedOrigins = ProductionConfigurationGuard.GetAllowedOrigins(configuration);
+
         services.AddCors(options =>
         {
             options.AddPolicy("DefaultCorsPolicy", policy =>
-                policy.WithOrigins("http://localhost:3000")
+                policy.WithOrigins(allowedOrigins)
                       .AllowAnyHeader()
                       .AllowAnyMethod()
                       .AllowCredentials());

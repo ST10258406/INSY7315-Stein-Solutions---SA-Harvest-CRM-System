@@ -263,8 +263,28 @@ via Managed Identity.
 | `VITE_API_BASE_URL` | Frontend | e.g. `http://localhost:5000` |
 | `VITE_USE_POLLING` | Frontend (Vite) | Set `true` only for Docker-on-Windows file watching |
 
-JWT config that must not drift: **HS256**, 60-minute access token, 7-day refresh token
-stored in the DB and revoked on logout.
+JWT config that must not drift: **HS256** (pinned via `ValidAlgorithms` — tokens with any
+other `alg` are rejected), 60-minute access token, 7-day refresh token stored in the DB and
+revoked on logout.
+
+### Deployed environments (staging / production)
+
+These are **not** needed locally — `appsettings.Development.json` supplies
+`http://localhost:3000` for both when `ASPNETCORE_ENVIRONMENT=Development` (Docker Compose
+and `dotnet run` both use Development). In every other environment they must be set as
+App Service application settings (double underscore = config section separator):
+
+| App Service setting | Config key | Notes |
+|---|---|---|
+| `Cors__AllowedOrigins__0` (`__1`, `__2`, … for more) | `Cors:AllowedOrigins` | Exact frontend origin(s), e.g. `https://crm.saharvest.org`. `https://` only, no path, **no wildcard** (credentials are allowed) |
+| `Frontend__BaseUrl` | `Frontend:BaseUrl` | Base URL used in password-reset and public-form-invite links, e.g. `https://crm.saharvest.org` |
+| `JWT_SECRET` | `JWT_SECRET` | At least 32 bytes (256 bits) |
+
+Outside Development the API **refuses to start** (`ProductionConfigurationGuard`) if the
+origin list or `Frontend:BaseUrl` is empty, uses `http://`, or points at
+`localhost`/`127.0.0.1`, or if `JWT_SECRET` is shorter than 32 bytes. The error lists every
+problem by setting name and never prints secret values. Use the real staging URL for
+staging — don't relax the guard.
 
 ---
 
