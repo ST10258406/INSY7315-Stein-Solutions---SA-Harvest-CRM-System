@@ -39,12 +39,17 @@ public class JwtTokenServiceTests
             UserRoles = new List<UserRole> { new UserRole { Role = new Role { Name = "Admin" } } }
         };
 
+        var sessionId = Guid.NewGuid();
+
         // Act
-        var token = _sut.GenerateAccessToken(user);
+        var token = _sut.GenerateAccessToken(user, sessionId);
 
         // Assert
         var handler = new JwtSecurityTokenHandler();
         var jwtToken = handler.ReadJwtToken(token);
+
+        // Bound to its session, so revoking the session kills the token (see OnTokenValidated).
+        Assert.Equal(sessionId.ToString(), jwtToken.Claims.First(c => c.Type == JwtRegisteredClaimNames.Sid).Value);
 
         Assert.Equal(_settings.Issuer, jwtToken.Issuer);
         Assert.Equal(_settings.Audience, jwtToken.Audiences.First());
@@ -70,7 +75,7 @@ public class JwtTokenServiceTests
         };
 
         // Act
-        var token = _sut.GenerateAccessToken(user);
+        var token = _sut.GenerateAccessToken(user, Guid.NewGuid());
 
         // Assert
         var handler = new JwtSecurityTokenHandler();
@@ -95,7 +100,7 @@ public class JwtTokenServiceTests
             UserRoles = new List<UserRole>()
         };
 
-        var token = _sut.GenerateAccessToken(user);
+        var token = _sut.GenerateAccessToken(user, Guid.NewGuid());
 
         var validationParameters = new TokenValidationParameters
         {

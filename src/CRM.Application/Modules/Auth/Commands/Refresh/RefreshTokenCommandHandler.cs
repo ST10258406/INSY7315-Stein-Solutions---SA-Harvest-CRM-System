@@ -42,6 +42,10 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
 
     public async Task<RefreshTokenResponseDto> Handle(RefreshTokenCommand request, CancellationToken ct)
     {
+        // No cookie is just "not signed in" — the same 401 as an invalid token, not a 400.
+        if (string.IsNullOrEmpty(request.RefreshToken))
+            throw new UnauthorizedException(GenericFailureMessage);
+
         var now = DateTimeOffset.UtcNow;
         var storedToken = await _refreshTokens.GetByHashWithUserAndRolesAsync(SecureTokens.Hash(request.RefreshToken), ct);
 
@@ -50,10 +54,20 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         if (storedToken is null)
             throw new UnauthorizedException(GenericFailureMessage);
 
-        if (storedToken.IsRevoked && !await IsWithinRotationGraceAsync(storedToken, now, ct))
+        if (storedToken.IsRevoked)
         {
-            await RevokeFamilyAsync(storedToken, now, ct);
-            throw new UnauthorizedException(GenericFailureMessage);
+            if (!await IsWithinRotationGraceAsync(storedToken, now, ct))
+            {
+                await RevokeFamilyAsync(storedToken, now, ct);
+                throw new UnauthorizedException(GenericFailureMessage);
+            }
+
+            // The grace replay is single-use, claimed atomically. Only a request racing the
+            // claim at the same instant can lose here; it's refused without killing the
+            // family (the winner's cookie stays valid), and it can't mint another token.
+            // A later replay sees GraceReplayedAt already set and takes the revoke path above.
+            if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
+                throw new UnauthorizedException(GenericFailureMessage);
         }
 
         if (storedToken.ExpiresAt < now || !storedToken.User.IsActive)
@@ -82,7 +96,7 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         var user = storedToken.User;
         return new RefreshTokenResponseDto
         {
-            AccessToken = _jwtTokenService.GenerateAccessToken(user),
+            AccessToken = _jwtTokenService.GenerateAccessToken(user, storedToken.FamilyId),
             ExpiresIn = _jwtTokenService.AccessTokenExpirySeconds,
             RefreshToken = rawToken,
             RefreshTokenExpiresAt = replacement.ExpiresAt,
@@ -105,6 +119,11 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
     private async Task<bool> IsWithinRotationGraceAsync(RefreshToken token, DateTimeOffset now, CancellationToken ct)
     {
         if (token.ReplacedByTokenHash is null || token.RevokedAt is null)
+            return false;
+
+        // Already used its one replay — a further presentation is no longer the benign
+        // two-tabs race, so the family-revoke path applies.
+        if (token.GraceReplayedAt is not null)
             return false;
 
         if (now - token.RevokedAt.Value > TimeSpan.FromSeconds(_options.ReuseGraceSeconds))

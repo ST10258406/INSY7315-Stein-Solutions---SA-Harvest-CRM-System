@@ -28,6 +28,13 @@ public class RefreshToken
     public DateTimeOffset ExpiresAt { get; set; }
     public bool IsRevoked { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+
+    /// <summary>
+    /// Set when this rotated token was accepted once more inside the grace window. The grace
+    /// replay is single-use: claimed atomically, so a stolen cookie can't keep minting new
+    /// sessions for the rest of the window.
+    /// </summary>
+    public DateTimeOffset? GraceReplayedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>

@@ -9,6 +9,7 @@ using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
 using CRM.Infrastructure.Persistence;
 using Hangfire;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -114,6 +115,66 @@ public class LoginBruteForceProtectionTests : IClassFixture<WebApplicationFactor
         var json = JsonDocument.Parse(await limited.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal("RATE_LIMITED", json.GetProperty("code").GetString());
         Assert.True(json.TryGetProperty("traceId", out _));
+    }
+
+    private static Task<HttpResponseMessage> LoginWithForwardedForAsync(WebApplicationFactory<Program> factory, string forwardedFor)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new LoginCommand("nobody@example.com", "wrong"))
+        };
+        request.Headers.Add("X-Forwarded-For", forwardedFor);
+        return factory.CreateClient().SendAsync(request);
+    }
+
+    /// <summary>
+    /// TestServer leaves Connection.RemoteIpAddress null, and ForwardedHeadersMiddleware skips
+    /// its trusted-proxy check for a null peer — something a real Kestrel connection never
+    /// has. Give every request a public, non-loopback peer address so the tests exercise the
+    /// production code path: a client connecting directly from the internet.
+    /// </summary>
+    private static WebApplicationFactory<Program> WithDirectInternetPeer(WebApplicationFactory<Program> factory)
+        => factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddTransient<IStartupFilter, DirectPeerStartupFilter>()));
+
+    private sealed class DirectPeerStartupFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.7");
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
+    }
+
+    [Fact]
+    public async Task Login_RotatingXForwardedForFromAnUntrustedPeer_DoesNotEscapeTheLimit()
+    {
+        // Outside App Service and with no configured proxies, X-Forwarded-For from a direct
+        // client is ignored; otherwise a fresh fake IP per request would bypass the limit.
+        using var factory = WithDirectInternetPeer(CreateFactory(("RateLimiting:Auth:Login:PermitLimit", "3")));
+
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await LoginWithForwardedForAsync(factory, $"203.0.113.{i}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginWithForwardedForAsync(factory, "203.0.113.99")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_OnAppService_PartitionsByTheForwardedClientIp()
+    {
+        // On App Service the platform front end is the only ingress and appends the real
+        // client IP, so distinct forwarded clients get distinct budgets.
+        using var factory = WithDirectInternetPeer(CreateFactory(
+            ("RateLimiting:Auth:Login:PermitLimit", "1"),
+            ("WEBSITE_SITE_NAME", "crm-api-test")));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await LoginWithForwardedForAsync(factory, "203.0.113.1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await LoginWithForwardedForAsync(factory, "203.0.113.2")).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginWithForwardedForAsync(factory, "203.0.113.1")).StatusCode);
     }
 
     [Theory]

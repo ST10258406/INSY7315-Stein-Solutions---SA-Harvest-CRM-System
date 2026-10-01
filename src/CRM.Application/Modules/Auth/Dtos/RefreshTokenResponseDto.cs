@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace CRM.Application.Modules.Auth.Dtos;
 
-public class RefreshTokenResponseDto
+public class RefreshTokenResponseDto : IIssuesRefreshToken
 {
     public string AccessToken { get; set; } = default!;
     public int ExpiresIn { get; set; } // seconds

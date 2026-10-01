@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace CRM.Application.Modules.Auth.Dtos;
 
-public class LoginResponseDto
+public class LoginResponseDto : IIssuesRefreshToken
 {
     public string AccessToken { get; set; } = default!;
 

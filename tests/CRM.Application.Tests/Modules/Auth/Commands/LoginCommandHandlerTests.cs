@@ -64,7 +64,7 @@ public class LoginCommandHandlerTests
 
         _usersMock.GetByEmailWithRolesAsync("test@example.com", Arg.Any<CancellationToken>()).Returns(user);
 
-        _jwtTokenServiceMock.GenerateAccessToken(user).Returns("access-token");
+        _jwtTokenServiceMock.GenerateAccessToken(user, Arg.Any<Guid>()).Returns("access-token");
         _jwtTokenServiceMock.GenerateRefreshToken().Returns("refresh-token");
         _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
 
@@ -253,5 +253,18 @@ public class LoginCommandHandlerTests
         await _handler.Handle(new LoginCommand(user.Email, "CorrectPassword"), CancellationToken.None);
 
         Assert.Equal(0, user.FailedLoginCount);
+    }
+
+    [Fact]
+    public async Task Handle_ValidCredentials_AccessTokenIsBoundToTheNewSession()
+    {
+        var user = SeedUser();
+        RefreshToken? stored = null;
+        await _refreshTokensMock.AddAsync(Arg.Do<RefreshToken>(rt => stored = rt), Arg.Any<CancellationToken>());
+
+        await _handler.Handle(new LoginCommand(user.Email, "CorrectPassword"), CancellationToken.None);
+
+        Assert.NotNull(stored);
+        _jwtTokenServiceMock.Received(1).GenerateAccessToken(user, stored!.FamilyId);
     }
 }

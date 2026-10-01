@@ -440,6 +440,9 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("expires=Thu, 01 Jan 1970", AuthCookieTestHelpers.GetRefreshSetCookieHeader(response)!, StringComparison.OrdinalIgnoreCase);
         Assert.All(await TokensForAsync(user.Id), t => Assert.True(t.IsRevoked));
         Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.RefreshWithCookieAsync(cookie)).StatusCode);
+
+        // The access token belonged to that session, so it stops working immediately.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await browser.PostAsync("/api/auth/logout", null)).StatusCode);
     }
 
     [Fact]
@@ -627,7 +630,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     {
         // F-05: a stolen session must not survive a password change.
         var user = await ResetDbWithUserAsync("two-devices@example.com", "CurrentPassword123!");
-        var (_, otherDeviceCookie) = await _factory.LoginForCookieAsync(user.Email, "CurrentPassword123!");
+        var (otherDeviceLogin, otherDeviceCookie) = await _factory.LoginForCookieAsync(user.Email, "CurrentPassword123!");
 
         var thisDevice = _factory.CreateBrowserClient();
         var login = await thisDevice.PostAsJsonAsync("/api/auth/login", new LoginCommand(user.Email, "CurrentPassword123!"));
@@ -641,6 +644,12 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.RefreshWithCookieAsync(otherDeviceCookie)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await thisDevice.PostAsync("/api/auth/refresh", null)).StatusCode);
+
+        // The other device's live access token is cut off at once.
+        var otherDevice = _factory.CreateBrowserClient(handleCookies: false);
+        otherDevice.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", otherDeviceLogin.AccessToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await otherDevice.PatchAsJsonAsync("/api/auth/change-password",
+            new ChangePasswordCommand("NewPassword123!", "Another123!", "Another123!"))).StatusCode);
     }
 
     [Fact]
@@ -663,5 +672,24 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_OldCookieReplayedAThirdTime_RevokesWholeFamily()
+    {
+        // Two tabs racing is fine (one grace replay); a further replay of the same old cookie
+        // inside the window is not, and must not keep minting new sessions.
+        var user = await ResetDbWithUserAsync("third-replay@example.com");
+        var (_, original) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
+
+        var tabA = await _factory.RefreshWithCookieAsync(original);
+        var tabB = await _factory.RefreshWithCookieAsync(original);
+        var third = await _factory.RefreshWithCookieAsync(original);
+
+        Assert.Equal(HttpStatusCode.OK, tabA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, tabB.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, third.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await _factory.RefreshWithCookieAsync(AuthCookieTestHelpers.GetRefreshCookie(tabA))).StatusCode);
     }
 }

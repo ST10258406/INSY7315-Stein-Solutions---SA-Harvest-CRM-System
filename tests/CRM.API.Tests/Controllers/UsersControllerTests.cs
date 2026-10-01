@@ -612,7 +612,10 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         context.Roles.Add(adminRole);
         const string password = "TargetPassword123";
         var target = await SeedUserAsync(context, adminRole.Id, "old-address@saharvest.org", password);
-        var (_, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
+        var (targetLogin, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
+        var targetClient = _factory.CreateClient();
+        targetClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", targetLogin.AccessToken);
+        Assert.Equal(HttpStatusCode.OK, (await targetClient.GetAsync("/api/v1/users")).StatusCode);
 
         var response = await superAdminClient.PatchAsJsonAsync(
             $"/api/v1/users/{target.Id}",
@@ -621,6 +624,9 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
 
         var refreshResponse = await _factory.RefreshWithCookieAsync(targetCookie);
         Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
+
+        // The already-issued access token dies immediately too, not after its 60 minutes.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await targetClient.GetAsync("/api/v1/users")).StatusCode);
 
         var notice = await context.EmailLogs.AsNoTracking()
             .SingleAsync(e => e.EmailType == EmailType.AccountEmailChanged);

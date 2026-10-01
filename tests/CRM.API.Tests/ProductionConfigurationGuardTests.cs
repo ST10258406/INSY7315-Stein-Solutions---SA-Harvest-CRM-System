@@ -66,9 +66,19 @@ public class ProductionConfigurationGuardTests
     public void Validate_HttpOrigin_Throws()
         => Assert.Contains("https://", Fails(Config(origins: ["http://crm.saharvest.org"])).Message);
 
+    [Theory]
+    [InlineData("https://crm.saharvest.org/app")]
+    [InlineData("https://crm.saharvest.org?x=1")]
+    [InlineData("https://crm.saharvest.org#x")]
+    [InlineData("https://user@crm.saharvest.org")]
+    [InlineData("https://user:pass@crm.saharvest.org")]
+    public void Validate_OriginWithAnythingButSchemeHostPort_Throws(string origin)
+        => Assert.Contains("origin only", Fails(Config(origins: [origin])).Message);
+
     [Fact]
-    public void Validate_OriginWithPath_Throws()
-        => Assert.Contains("origin only", Fails(Config(origins: ["https://crm.saharvest.org/app"])).Message);
+    public void Validate_OriginWithPort_IsAllowed()
+        => ProductionConfigurationGuard.Validate(
+            Config(origins: ["https://crm.saharvest.org:8443"]), new FakeEnvironment("Production"));
 
     [Theory]
     [InlineData(null)]

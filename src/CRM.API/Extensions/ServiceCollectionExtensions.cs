@@ -138,6 +138,22 @@ public static class ServiceCollectionExtensions
                             return;
                         }
 
+                        // Every access token belongs to one session (refresh-token family,
+                        // the "sid" claim). Once that session is revoked — logout, password
+                        // reset/change, email change, deactivation, or refresh-token reuse —
+                        // its access tokens stop working on the next request instead of
+                        // living out their remaining minutes.
+                        var sessionClaim = context.Principal!.FindFirst(ClaimTypes.Sid)?.Value
+                            ?? context.Principal.FindFirst("sid")?.Value;
+                        var refreshTokens = context.HttpContext.RequestServices.GetRequiredService<IRefreshTokenRepository>();
+                        if (sessionClaim is null
+                            || !Guid.TryParse(sessionClaim, out var sessionId)
+                            || !await refreshTokens.IsSessionActiveAsync(sessionId, userId, context.HttpContext.RequestAborted))
+                        {
+                            context.Fail("Session has ended.");
+                            return;
+                        }
+
                         // Rebuild the role claims from the DB rather than trusting whatever
                         // was embedded in the token — a ChangeUserRole call doesn't (and
                         // can't) reach out and mint the holder a new access token.

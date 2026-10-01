@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CRM.Infrastructure.Migrations
 {
     [DbContext(typeof(CrmDbContext))]
-    [Migration("20261001142521_HashAndRotateRefreshTokens")]
+    [Migration("20261001145337_HashAndRotateRefreshTokens")]
     partial class HashAndRotateRefreshTokens
     {
         /// <inheritdoc />
@@ -1056,6 +1056,9 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<Guid>("FamilyId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("GraceReplayedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsRevoked")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1070,8 +1073,9 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("Token");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");

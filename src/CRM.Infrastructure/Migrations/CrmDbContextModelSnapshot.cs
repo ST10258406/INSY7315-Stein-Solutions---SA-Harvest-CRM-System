@@ -1053,6 +1053,9 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<Guid>("FamilyId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("GraceReplayedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsRevoked")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1067,8 +1070,9 @@ namespace CRM.Infrastructure.Migrations
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("Token");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");

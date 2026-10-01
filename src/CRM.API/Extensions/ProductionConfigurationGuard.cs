@@ -55,8 +55,11 @@ public static class ProductionConfigurationGuard
                 errors.Add($"{AllowedOriginsKey} contains a wildcard ('{origin}'). Credentials are allowed, so only exact origins are valid.");
             else if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
                 errors.Add($"{AllowedOriginsKey} entry '{origin}' must be an absolute https:// origin.");
-            else if (uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query))
-                errors.Add($"{AllowedOriginsKey} entry '{origin}' must be an origin only (scheme, host and optional port — no path or query).");
+            // A browser's Origin header is only scheme://host[:port], so any extra component
+            // means the entry can never match and CORS would silently fail in production.
+            else if (uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) ||
+                     !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo))
+                errors.Add($"{AllowedOriginsKey} entry '{origin}' must be an origin only (scheme, host and optional port — no credentials, path, query or fragment).");
             else if (IsLoopback(uri))
                 errors.Add($"{AllowedOriginsKey} entry '{origin}' points at localhost.");
         }

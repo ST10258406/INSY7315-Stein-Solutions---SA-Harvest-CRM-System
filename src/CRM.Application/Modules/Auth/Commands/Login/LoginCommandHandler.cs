@@ -88,7 +88,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
         user.FailedLoginCount = 0;
         user.LockoutEndUtc = null;
 
-        var accessToken = _jwtTokenService.GenerateAccessToken(user);
         var refreshTokenValue = _jwtTokenService.GenerateRefreshToken();
 
         // Only the hash is stored; the raw value goes to the client once, in the cookie.
@@ -103,6 +102,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponseDt
             IsRevoked = false,
             CreatedAt = now
         };
+
+        var accessToken = _jwtTokenService.GenerateAccessToken(user, refreshToken.FamilyId);
 
         await _refreshTokens.AddAsync(refreshToken, ct);
         await _unitOfWork.SaveChangesAsync(ct);

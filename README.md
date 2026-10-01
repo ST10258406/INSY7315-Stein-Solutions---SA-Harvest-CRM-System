@@ -276,12 +276,29 @@ whole session family. Refresh tokens and password-reset tokens are stored only a
 hashes. Refresh and logout also require the `X-Requested-With: XMLHttpRequest` header (CSRF
 protection). Changing your password signs out every other session.
 
+Every access token is **bound to its session** (the `sid` claim = refresh-token family). The
+JWT pipeline checks that the session is still live on each request, so logout, password
+reset/change, an admin email change, deactivation and refresh-token reuse cut off existing
+access tokens **immediately**, not when they expire. A rotated token gets **one** grace
+replay (claimed atomically); a further replay is treated as theft and kills the session.
+
 | Setting | Default | Notes |
 |---|---|---|
 | `Auth__RefreshCookie__SameSite` | `Strict` | Keep `Strict` when the frontend and API share a parent domain (e.g. `crm.saharvest.org` + `api.saharvest.org`). Use `None` only for the split default Azure hostnames (`*.azurestaticapps.net` + `*.azurewebsites.net`) — and note **Safari blocks those cross-site cookies, so Safari users would be signed out on every reload**. Custom domains on one parent domain avoid this entirely. |
 | `Auth__RefreshCookie__Secure` | `true` | `false` only in Development (plain `http://localhost`); startup fails elsewhere if it's `false`. |
 | `Auth__RefreshToken__LifetimeDays` | `7` | Absolute session length; rotation doesn't extend it. |
 | `Auth__RefreshToken__ReuseGraceSeconds` | `20` | How long a just-rotated token is still accepted (two tabs reloading at once). |
+
+#### Client IP and `X-Forwarded-For`
+
+Every per-IP rate limit (including login brute-force protection) depends on knowing the real
+client IP, so `X-Forwarded-For` is only trusted from known proxies (`ForwardedHeadersSetup`):
+
+| Where it runs | What's trusted |
+|---|---|
+| Azure App Service (detected via the platform's `WEBSITE_SITE_NAME`) | The App Service front end, last hop only. Revisit if Front Door / App Gateway / a CDN is added in front. |
+| Behind another known proxy | Set `ForwardedHeaders__KnownProxies__0` (IPs) and/or `ForwardedHeaders__KnownNetworks__0` (CIDR). |
+| Anywhere else (local Docker, any directly reachable host) | Loopback only — a direct client's header is ignored, so it can't pick a fake IP per request. |
 
 ### Deployed environments (staging / production)
 

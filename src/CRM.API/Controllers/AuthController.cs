@@ -7,7 +7,6 @@ using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.API.Authentication;
 using CRM.API.Extensions;
-using CRM.Application.Common.Exceptions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,49 +21,33 @@ public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly IConfiguration _configuration;
-    private readonly RefreshTokenCookie _refreshCookie;
 
-    public AuthController(IMediator mediator, IConfiguration configuration, RefreshTokenCookie refreshCookie)
+    public AuthController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator;
         _configuration = configuration;
-        _refreshCookie = refreshCookie;
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingExtensions.AuthLoginPolicy)]
+    [IssuesRefreshCookie] // refresh token → HttpOnly cookie only; it's [JsonIgnore]d in the body
     public async Task<ActionResult<LoginResponseDto>> Login(LoginCommand command)
     {
         var result = await _mediator.Send(command);
-        // The refresh token goes only into the HttpOnly cookie; it's [JsonIgnore]d in the body.
-        _refreshCookie.Write(Response, result.RefreshToken, result.RefreshTokenExpiresAt);
         return Ok(result);
     }
 
+    // Also what the SPA calls on page load to restore a session from the cookie alone.
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingExtensions.AuthRefreshPolicy)]
     [RequireCsrfHeader]
-    public async Task<ActionResult<RefreshTokenResponseDto>> Refresh()
+    [IssuesRefreshCookie] // rotated cookie on success; cookie deleted on 401
+    public async Task<ActionResult<RefreshTokenResponseDto>> Refresh([FromRefreshCookie] string? refreshToken)
     {
-        // Also what the SPA calls on page load to restore a session from the cookie alone.
-        var refreshToken = _refreshCookie.Read(Request)
-            ?? throw new UnauthorizedException("Refresh token is invalid or expired.");
-
-        try
-        {
-            var result = await _mediator.Send(new RefreshTokenCommand(refreshToken));
-            // Rotation: the presented token is now revoked, so replace the cookie.
-            _refreshCookie.Write(Response, result.RefreshToken, result.RefreshTokenExpiresAt);
-            return Ok(result);
-        }
-        catch (UnauthorizedException)
-        {
-            // Dead session — drop the cookie so the browser stops presenting it.
-            _refreshCookie.Delete(Response);
-            throw;
-        }
+        var result = await _mediator.Send(new RefreshTokenCommand(refreshToken));
+        return Ok(result);
     }
 
     [HttpPost("forgot-password")]
@@ -86,10 +69,10 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     [Authorize]
     [RequireCsrfHeader]
-    public async Task<IActionResult> Logout()
+    [ClearsRefreshCookie]
+    public async Task<IActionResult> Logout([FromRefreshCookie] string? refreshToken)
     {
-        await _mediator.Send(new LogoutCommand(_refreshCookie.Read(Request)));
-        _refreshCookie.Delete(Response);
+        await _mediator.Send(new LogoutCommand(refreshToken));
         return NoContent();
     }
 
@@ -104,10 +87,10 @@ public class AuthController : ControllerBase
 
     [HttpPatch("change-password")]
     [Authorize]
-    public async Task<IActionResult> ChangePassword(ChangePasswordCommand command)
+    public async Task<IActionResult> ChangePassword(ChangePasswordCommand command, [FromRefreshCookie] string? refreshToken)
     {
         // The cookie identifies the caller's own session, which survives; all others are revoked.
-        await _mediator.Send(command with { CurrentRefreshToken = _refreshCookie.Read(Request) });
+        await _mediator.Send(command with { CurrentRefreshToken = refreshToken });
         return NoContent();
     }
 }

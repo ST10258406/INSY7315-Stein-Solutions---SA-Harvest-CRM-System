@@ -37,7 +37,7 @@ public class RefreshTokenCommandHandlerTests
             UserRoles = new List<UserRole> { new() { Role = new Role { Name = "Admin" } } }
         };
 
-        _jwtTokenServiceMock.GenerateAccessToken(_user).Returns("new-access-token");
+        _jwtTokenServiceMock.GenerateAccessToken(_user, Arg.Any<Guid>()).Returns("new-access-token");
         _jwtTokenServiceMock.GenerateRefreshToken().Returns("rotated-refresh-token");
         _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
         _refreshTokensMock.GetActiveByFamilyIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new List<RefreshToken>());
@@ -179,6 +179,7 @@ public class RefreshTokenCommandHandlerTests
         var presented = StoreToken(t => t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-3), replacedByTokenHash: "first-replacement"));
         _refreshTokensMock.GetByHashAsync("first-replacement", Arg.Any<CancellationToken>())
             .Returns(new RefreshToken { TokenHash = "first-replacement", FamilyId = presented.FamilyId, IsRevoked = false });
+        _refreshTokensMock.TryClaimGraceReplayAsync(presented.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await Refresh();
 
@@ -199,6 +200,61 @@ public class RefreshTokenCommandHandlerTests
             .Returns(new RefreshToken { TokenHash = "dead-replacement", IsRevoked = true });
 
         await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_IssuesAccessTokenBoundToTheSessionFamily()
+    {
+        var presented = StoreToken();
+
+        await Refresh();
+
+        _jwtTokenServiceMock.Received(1).GenerateAccessToken(_user, presented.FamilyId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Handle_NoCookie_ThrowsUnauthorized(string? rawToken)
+    {
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _handler.Handle(new RefreshTokenCommand(rawToken), CancellationToken.None));
+        await _refreshTokensMock.DidNotReceive().GetByHashWithUserAndRolesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_GraceReplayAlreadyUsed_RevokesFamilyInsteadOfMintingAgain()
+    {
+        // The grace replay is single-use: a further replay of the same old cookie is no
+        // longer the two-tabs race, so it can't keep minting sibling tokens.
+        var familyId = Guid.NewGuid();
+        StoreToken(t =>
+        {
+            t.FamilyId = familyId;
+            t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-3), replacedByTokenHash: "first-replacement");
+            t.GraceReplayedAt = DateTimeOffset.UtcNow.AddSeconds(-2);
+        });
+        _refreshTokensMock.GetByHashAsync("first-replacement", Arg.Any<CancellationToken>())
+            .Returns(new RefreshToken { TokenHash = "first-replacement", FamilyId = familyId, IsRevoked = false });
+
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+
+        await _refreshTokensMock.Received(1).GetActiveByFamilyIdAsync(familyId, Arg.Any<CancellationToken>());
+        await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_LosingTheGraceClaimRace_IsRefusedWithoutRevokingFamily()
+    {
+        var presented = StoreToken(t => t.Revoke(DateTimeOffset.UtcNow.AddSeconds(-3), replacedByTokenHash: "first-replacement"));
+        _refreshTokensMock.GetByHashAsync("first-replacement", Arg.Any<CancellationToken>())
+            .Returns(new RefreshToken { TokenHash = "first-replacement", FamilyId = presented.FamilyId, IsRevoked = false });
+        _refreshTokensMock.TryClaimGraceReplayAsync(presented.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
+
+        await _refreshTokensMock.DidNotReceive().GetActiveByFamilyIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
         await _refreshTokensMock.DidNotReceive().AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>());
     }
 }
