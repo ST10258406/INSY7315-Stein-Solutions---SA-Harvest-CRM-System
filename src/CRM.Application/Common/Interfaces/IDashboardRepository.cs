@@ -8,6 +8,13 @@ namespace CRM.Application.Common.Interfaces;
 /// </summary>
 public interface IDashboardRepository
 {
+    /// <summary>
+    /// Per user, COUNT(DISTINCT donor_id) over interaction_logs they created with created_at in
+    /// [startUtc, endUtc), highest first, top <paramref name="take"/>.
+    /// </summary>
+    Task<List<ManagerActivityRow>> GetDonorsContactedByUserAsync(
+        DateTime startUtc, DateTime endUtc, int take, CancellationToken cancellationToken = default);
+
     /// <summary>Global count of every donor row, regardless of status.</summary>
     Task<int> GetTotalDonorsCountAsync(CancellationToken cancellationToken = default);
 
@@ -37,3 +44,5 @@ public interface IDashboardRepository
     Task<int> GetDonorsContactedCountAsync(
         DateTime startUtc, DateTime endUtc, CancellationToken cancellationToken = default);
 }
+
+public record ManagerActivityRow(Guid UserId, string FirstName, string LastName, int DonorsContacted);

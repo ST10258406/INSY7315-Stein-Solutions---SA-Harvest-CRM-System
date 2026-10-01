@@ -36,20 +36,20 @@ describe('ProtectedRoute Component', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('redirects to / when unauthenticated and done hydrating', () => {
+  it('redirects to /login when unauthenticated and done hydrating', () => {
     useAuthStore.setState({ isHydrating: false, isAuthenticated: false });
 
     render(
       <MemoryRouter initialEntries={['/protected']}>
         <Routes>
           <Route path="/protected" element={<ProtectedRoute><div data-testid="protected-content">Content</div></ProtectedRoute>} />
-          <Route path="/" element={<LocationDisplay />} />
+          <Route path="/login" element={<LocationDisplay />} />
         </Routes>
       </MemoryRouter>
     );
 
     expect(screen.queryByTestId('protected-content')).toBeNull();
-    expect(screen.getByTestId('location-display').textContent).toBe('/');
+    expect(screen.getByTestId('location-display').textContent).toBe('/login');
   });
 
   it('renders children when authenticated and no allowedRoles prop provided', () => {

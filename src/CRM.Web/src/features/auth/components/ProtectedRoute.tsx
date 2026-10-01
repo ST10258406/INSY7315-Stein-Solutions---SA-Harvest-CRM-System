@@ -21,11 +21,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // Access tokens are memory-only (see authStore) — any full page refresh
-  // clears them, so this fires on every reload of a protected route, not
-  // just a first visit. Landing on the marketing/entry page here (rather
-  // than a bare /login form) is deliberate: it's the front door back in.
+  // clears them, so this fires on every reload of a protected route.
   if (!isAuthenticated) {
-    return <Navigate to={paths.root} state={{ from: location }} replace />;
+    return <Navigate to={paths.login} state={{ from: location }} replace />;
   }
 
   // Seeded/temporary password: nothing else is reachable until it is changed. The API enforces

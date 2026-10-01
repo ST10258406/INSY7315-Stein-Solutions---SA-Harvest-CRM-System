@@ -1,6 +1,7 @@
 namespace CRM.Infrastructure.Persistence.Repositories;
 
 using CRM.Application.Common.Interfaces;
+using CRM.Domain.Constants;
 using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,6 +34,39 @@ public class DashboardRepository : IDashboardRepository
         => _context.Donors.AsNoTracking()
             .CountAsync(d => d.RelationshipManagerId == relationshipManagerId
                 && d.FollowUpDate != null && d.FollowUpDate < asOfUtc, cancellationToken);
+
+    public async Task<List<ManagerActivityRow>> GetDonorsContactedByUserAsync(
+        DateTime startUtc, DateTime endUtc, int take, CancellationToken cancellationToken = default)
+    {
+        // Project the (small, date-bounded) row set once and aggregate in memory: a grouped
+        // COUNT(DISTINCT) into a constructor projection doesn't translate reliably in EF Core
+        // (same reason ReportsRepository.GetDonorsContactedAsync does it this way).
+        var rows = await _context.InteractionLogs
+            .AsNoTracking()
+            .Where(i => i.CreatedAt >= startUtc && i.CreatedAt < endUtc)
+            // System actors (e.g. the public-form submitter) aren't team members.
+            .Where(i => !i.CreatedByUser.Email.ToLower().EndsWith(SystemUsers.ReservedEmailDomain))
+            .Select(i => new
+            {
+                i.DonorId,
+                UserId = i.CreatedByUserId,
+                i.CreatedByUser.FirstName,
+                i.CreatedByUser.LastName
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(r => r.UserId)
+            .Select(g => new ManagerActivityRow(
+                g.Key,
+                g.First().FirstName,
+                g.First().LastName,
+                g.Select(r => r.DonorId).Distinct().Count()))
+            .OrderByDescending(r => r.DonorsContacted)
+            .ThenBy(r => r.FirstName)
+            .Take(take)
+            .ToList();
+    }
 
     public Task<int> GetDonorsContactedCountAsync(
         DateTime startUtc, DateTime endUtc, CancellationToken cancellationToken = default)
