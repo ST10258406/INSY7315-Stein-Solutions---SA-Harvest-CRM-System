@@ -54,7 +54,7 @@ public class Donor : BaseEntity
     /// One-time opaque credential handed back to a public-form submitter so a
     /// follow-up POST /public/donors/submit/document call can be linked to this
     /// donor without ever exposing <see cref="BaseEntity.Id"/>. Random, unrelated
-    /// to the donor's Id (mirrors User.PasswordResetToken's shape/generation).
+    /// to the donor's Id (mirrors User.PasswordResetTokenHash's shape/generation).
     /// </summary>
     public string? SubmissionToken { get; set; }
     public DateTimeOffset? SubmissionTokenExpiresAt { get; set; }

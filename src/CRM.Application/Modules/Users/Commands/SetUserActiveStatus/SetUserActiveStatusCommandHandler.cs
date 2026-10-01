@@ -51,7 +51,7 @@ public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveSt
             var activeTokens = await _refreshTokens.GetActiveByUserIdAsync(user.Id, cancellationToken);
             foreach (var rt in activeTokens)
             {
-                rt.IsRevoked = true;
+                rt.Revoke(DateTimeOffset.UtcNow);
             }
         }
 
@@ -71,6 +71,8 @@ public class SetUserActiveStatusCommandHandler : IRequestHandler<SetUserActiveSt
             RoleId = role?.Id ?? Guid.Empty,
             Role = role?.Name ?? string.Empty,
             IsActive = user.IsActive,
+            IsLockedOut = user.LockoutEndUtc > DateTimeOffset.UtcNow,
+            LockedUntil = user.LockoutEndUtc > DateTimeOffset.UtcNow ? user.LockoutEndUtc : null,
             CreatedAt = user.CreatedAt
         };
     }

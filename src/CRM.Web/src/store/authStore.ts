@@ -1,15 +1,16 @@
 import { create } from 'zustand';
-import type { UserSummaryDto, LoginResponseDto } from '@/services/authService';
+import type { UserSummaryDto, SessionResponseDto } from '@/services/authService';
 
-// Token Storage Strategy Decision: Memory-only (No persistence)
-// Decision: Access tokens and refresh tokens are stored in memory only.
-// Rationale: This prevents XSS attacks from easily extracting tokens from localStorage/sessionStorage.
-// Hydration relies on a `/api/users/me` check on application load if an active session exists.
+// Token Storage Strategy Decision
+// - Access token: memory only (this store). No localStorage/sessionStorage, ever.
+// - Refresh token: never visible to JavaScript at all. The API sets it as an HttpOnly,
+//   Secure cookie scoped to /api/auth, so XSS can't read or exfiltrate it.
+// Surviving a page reload: on app start useHydrateAuth calls POST /api/auth/refresh; the
+// browser attaches the cookie, and the response restores the access token and user here.
 
 interface AuthState {
   user: UserSummaryDto | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
   // True only for the landing page's "To CRM" dev shortcut (see enableDevBypass).
@@ -17,7 +18,8 @@ interface AuthState {
   // to skip its refresh/logout dance, since every real API call will 401.
   isDevBypass: boolean;
 
-  login: (result: LoginResponseDto) => void;
+  /** Sets the session from a login or refresh response. */
+  login: (result: SessionResponseDto) => void;
   logout: () => void;
   setAccessToken: (token: string) => void;
   setUser: (user: UserSummaryDto) => void;
@@ -28,7 +30,6 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: null,
-  refreshToken: null,
   isAuthenticated: false,
   isHydrating: true, // starts true — see hydration section below
   isDevBypass: false,
@@ -37,7 +38,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({
       user: result.user,
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
       isAuthenticated: true,
       isDevBypass: false,
     }),
@@ -46,7 +46,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isDevBypass: false,
     }),

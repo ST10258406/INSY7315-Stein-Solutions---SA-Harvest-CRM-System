@@ -15,7 +15,11 @@ public class UserMappingProfile : Profile
             .ForMember(d => d.RoleId, o => o.MapFrom(s =>
                 s.UserRoles.OrderByDescending(ur => ur.AssignedAt).Select(ur => ur.RoleId).FirstOrDefault()))
             .ForMember(d => d.Role, o => o.MapFrom(s =>
-                s.UserRoles.OrderByDescending(ur => ur.AssignedAt).Select(ur => ur.Role.Name).FirstOrDefault() ?? string.Empty));
+                s.UserRoles.OrderByDescending(ur => ur.AssignedAt).Select(ur => ur.Role.Name).FirstOrDefault() ?? string.Empty))
+            .ForMember(d => d.IsLockedOut, o => o.MapFrom(s =>
+                s.LockoutEndUtc != null && s.LockoutEndUtc > DateTimeOffset.UtcNow))
+            .ForMember(d => d.LockedUntil, o => o.MapFrom(s =>
+                s.LockoutEndUtc != null && s.LockoutEndUtc > DateTimeOffset.UtcNow ? s.LockoutEndUtc : null));
 
         CreateMap<Role, RoleDto>();
     }

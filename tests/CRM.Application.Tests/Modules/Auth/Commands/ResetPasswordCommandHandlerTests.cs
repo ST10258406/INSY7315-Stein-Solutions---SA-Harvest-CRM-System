@@ -1,5 +1,6 @@
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Domain.Entities;
 using NSubstitute;
@@ -26,7 +27,7 @@ public class ResetPasswordCommandHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = "reset-happy@example.com",
-            PasswordResetToken = "valid-reset-token",
+            PasswordResetTokenHash = SecureTokens.Hash("valid-reset-token"),
             PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
             PasswordHash = "old-hash"
         };
@@ -49,7 +50,7 @@ public class ResetPasswordCommandHandlerTests
         Assert.Equal("Password has been reset successfully.", result.Message);
 
         Assert.NotEqual("old-hash", user.PasswordHash); // Password hashed
-        Assert.Null(user.PasswordResetToken);           // Token burned
+        Assert.Null(user.PasswordResetTokenHash);           // Token burned
         Assert.Null(user.PasswordResetTokenExpiresAt);
 
         Assert.True(refreshToken1.IsRevoked);
@@ -68,7 +69,7 @@ public class ResetPasswordCommandHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = "no-tokens@example.com",
-            PasswordResetToken = "valid-reset-token",
+            PasswordResetTokenHash = SecureTokens.Hash("valid-reset-token"),
             PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
             PasswordHash = "old-hash"
         };
@@ -91,7 +92,7 @@ public class ResetPasswordCommandHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = "expired@example.com",
-            PasswordResetToken = "expired-token",
+            PasswordResetTokenHash = SecureTokens.Hash("expired-token"),
             PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-5)
         };
 
@@ -113,7 +114,7 @@ public class ResetPasswordCommandHandlerTests
         {
             Id = Guid.NewGuid(),
             Email = "wrong-token@example.com",
-            PasswordResetToken = "correct-token",
+            PasswordResetTokenHash = SecureTokens.Hash("correct-token"),
             PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
         };
 

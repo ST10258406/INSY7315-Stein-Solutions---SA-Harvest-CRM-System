@@ -15,5 +15,8 @@ public enum EmailType
     DonorCorrespondence,
 
     /// <summary>Invitation to a prospective (not-yet-a-donor) contact to complete the public onboarding form.</summary>
-    PublicFormInvite
+    PublicFormInvite,
+
+    /// <summary>Security notice sent to a staff user's <em>previous</em> address when their login email is changed.</summary>
+    AccountEmailChanged
 }

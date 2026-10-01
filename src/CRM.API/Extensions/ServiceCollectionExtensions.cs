@@ -1,6 +1,8 @@
 namespace CRM.API.Extensions;
 
+using CRM.API.Authentication;
 using CRM.API.Authorization;
+using CRM.Application.Modules.Auth;
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
@@ -99,6 +101,9 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    // Pin to the algorithm JwtTokenService signs with, so a token claiming any
+                    // other "alg" is rejected outright rather than negotiated (F-20).
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                     ValidIssuer = configuration["Jwt:Issuer"],
                     ValidAudience = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
@@ -133,6 +138,22 @@ public static class ServiceCollectionExtensions
                             return;
                         }
 
+                        // Every access token belongs to one session (refresh-token family,
+                        // the "sid" claim). Once that session is revoked — logout, password
+                        // reset/change, email change, deactivation, or refresh-token reuse —
+                        // its access tokens stop working on the next request instead of
+                        // living out their remaining minutes.
+                        var sessionClaim = context.Principal!.FindFirst(ClaimTypes.Sid)?.Value
+                            ?? context.Principal.FindFirst("sid")?.Value;
+                        var refreshTokens = context.HttpContext.RequestServices.GetRequiredService<IRefreshTokenRepository>();
+                        if (sessionClaim is null
+                            || !Guid.TryParse(sessionClaim, out var sessionId)
+                            || !await refreshTokens.IsSessionActiveAsync(sessionId, userId, context.HttpContext.RequestAborted))
+                        {
+                            context.Fail("Session has ended.");
+                            return;
+                        }
+
                         // Rebuild the role claims from the DB rather than trusting whatever
                         // was embedded in the token — a ChangeUserRole call doesn't (and
                         // can't) reach out and mint the holder a new access token.
@@ -152,6 +173,7 @@ public static class ServiceCollectionExtensions
         services.AddCrmAuthorizationPolicies();
         services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
         services.AddSingleton<IAuthorizationHandler, RoleAssignmentAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, UserTargetAuthorizationHandler>();
 
         var brevoApiKey = configuration["BREVO_API_KEY"]
             ?? throw new InvalidOperationException(
@@ -199,10 +221,15 @@ public static class ServiceCollectionExtensions
 
         services.AddControllers();
 
+        // Exact origins from config (Cors:AllowedOrigins / Cors__AllowedOrigins__N) — never a
+        // wildcard, since credentials are allowed. Localhost lives only in
+        // appsettings.Development.json; ProductionConfigurationGuard rejects it elsewhere.
+        var allowedOrigins = ProductionConfigurationGuard.GetAllowedOrigins(configuration);
+
         services.AddCors(options =>
         {
             options.AddPolicy("DefaultCorsPolicy", policy =>
-                policy.WithOrigins("http://localhost:3000")
+                policy.WithOrigins(allowedOrigins)
                       .AllowAnyHeader()
                       .AllowAnyMethod()
                       .AllowCredentials());
@@ -248,6 +275,12 @@ public static class ServiceCollectionExtensions
         // RateLimitingExtensions.cs, not inline here.
         services.AddPublicApiRateLimiting();
         services.AddAuthenticatedApiRateLimiting(configuration);
+        services.AddAuthEndpointRateLimiting(configuration);
+
+        services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
+        services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.SectionName));
+        services.Configure<RefreshCookieOptions>(configuration.GetSection(RefreshCookieOptions.SectionName));
+        services.AddSingleton<RefreshTokenCookie>();
 
         return services;
     }

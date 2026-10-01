@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
@@ -38,7 +39,8 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
         {
             var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
-            user.PasswordResetToken = token;
+            // Store only the hash — the raw token exists solely in the emailed link (F-04).
+            user.PasswordResetTokenHash = SecureTokens.Hash(token);
             user.PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(1);
             await _unitOfWork.SaveChangesAsync(ct);
 

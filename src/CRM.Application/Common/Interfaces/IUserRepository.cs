@@ -12,7 +12,7 @@ using CRM.Domain.Entities;
 /// </summary>
 public interface IUserRepository
 {
-    /// <summary>Read-only user with roles eagerly loaded, matched by email. Used by Login.</summary>
+    /// <summary>Tracked user with roles eagerly loaded, matched by email. Used by Login, which updates the failed-login counter and lockout.</summary>
     Task<User?> GetByEmailWithRolesAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>Tracked user matched by email. Used by ForgotPassword / ResetPassword.</summary>
@@ -43,6 +43,15 @@ public interface IUserRepository
     /// editable, re-roled, or reactivated through the Users admin screen.
     /// </summary>
     Task<User?> GetByIdWithRoleAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Read-only snapshot of who a user is (email + every role name they hold), or null if
+    /// no such user exists. Unlike <see cref="GetByIdWithRoleAsync"/> this deliberately
+    /// <em>includes</em> system users, because it backs the per-target authorization check
+    /// on the Users endpoints, which must be able to see a target is a system user in order
+    /// to refuse it.
+    /// </summary>
+    Task<UserAuthorizationTarget?> GetAuthorizationTargetAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Read-only user with roles eagerly loaded, matched by id. Used by the JWT bearer

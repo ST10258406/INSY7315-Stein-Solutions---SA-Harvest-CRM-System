@@ -216,9 +216,12 @@ Rules:
     and "wrong password". The two paths must not diverge in wording.
   - `POST /api/auth/forgot-password` always returns `200` with the same generic message,
     whether or not the email exists.
-- **JWT config is fixed:** HS256; access token 60 min; refresh token 7 days, stored in the
-  DB. The logout handler must mark the refresh-token row **revoked** — not just rely on the
-  client discarding it. Signing key comes from config/Key Vault, never hardcoded.
+- **JWT config is fixed:** HS256; access token 60 min; refresh token 7 days (absolute, from
+  login). Refresh tokens are stored **only as SHA-256 hashes**, travel **only in the HttpOnly
+  `crm_refresh` cookie** (never a JSON body), and **rotate on every refresh** — a rotated
+  token presented again revokes its whole family. Logout marks the session **revoked** — not
+  just rely on the client discarding it. Reset tokens are stored hashed and compared with
+  `FixedTimeEquals`. Signing key comes from config/Key Vault, never hardcoded.
 - **Password policy** is enforced by FluentValidation on every command that sets a password
   (register / reset / change): ≥ 8 chars, ≥ 1 digit, ≥ 1 uppercase, ≥ 1 special character.
 
@@ -305,8 +308,8 @@ Feature-first. Each feature under `src/features/<feature>/` owns its `components
 | **Routes** | Every path is a constant in `src/routes/paths.ts`. No hardcoded `navigate('/donors/123')`. |
 | **Server state** | TanStack Query. Hooks named `use<Resource>` — `useDonors`, `useDonor`, `useCreateDonor`. All server data lives in these hooks. |
 | **Mutations** | On success, invalidate the affected query: `queryClient.invalidateQueries({ queryKey: ['donors'] })`. |
-| **Client state** | Zustand only — `authStore` (current user + tokens, **in memory**), `uiStore` (UI prefs). No Redux. |
-| **Storage** | **No `localStorage` / `sessionStorage` anywhere.** Tokens are in-memory (XSS surface). Flagged on sight. |
+| **Client state** | Zustand only — `authStore` (current user + access token, **in memory**), `uiStore` (UI prefs). No Redux. |
+| **Storage** | **No `localStorage` / `sessionStorage` anywhere.** The access token is in memory; the refresh token is an HttpOnly cookie JavaScript can never read (XSS surface). A page reload restores the session by calling `refreshSession()` (`useHydrateAuth`) — never by persisting tokens in storage. Flagged on sight. |
 | **Forms** | React Hook Form + Zod. Zod schemas live in the feature's `schemas/` folder, never inline in the component. |
 | **shadcn/ui** | `components/ui/` is generated. Never hand-edit those files. |
 | **RoleGuard / role checks** | Cosmetic only. Any security-sensitive action must also be `[Authorize]`-protected on the API. Frontend role checks are not security. |

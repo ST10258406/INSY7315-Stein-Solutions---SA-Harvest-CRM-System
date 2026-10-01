@@ -1,4 +1,5 @@
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
@@ -47,8 +48,8 @@ public class ForgotPasswordCommandHandlerTests
         Assert.NotNull(result);
         Assert.Equal("If this email address exists, a reset link has been sent.", result.Message);
 
-        Assert.NotNull(user.PasswordResetToken);
-        Assert.NotEmpty(user.PasswordResetToken!);
+        Assert.NotNull(user.PasswordResetTokenHash);
+        Assert.NotEmpty(user.PasswordResetTokenHash!);
         Assert.NotNull(user.PasswordResetTokenExpiresAt);
         Assert.True(user.PasswordResetTokenExpiresAt > DateTimeOffset.UtcNow.AddMinutes(50));
         Assert.True(user.PasswordResetTokenExpiresAt <= DateTimeOffset.UtcNow.AddHours(1).AddMinutes(1));
@@ -107,14 +108,35 @@ public class ForgotPasswordCommandHandlerTests
 
         // Act
         await _handler.Handle(MakeCommand("user1@example.com"), CancellationToken.None);
-        var token1 = user1.PasswordResetToken;
+        var token1 = user1.PasswordResetTokenHash;
 
         await _handler.Handle(MakeCommand("user2@example.com"), CancellationToken.None);
-        var token2 = user2.PasswordResetToken;
+        var token2 = user2.PasswordResetTokenHash;
 
         // Assert
         Assert.NotNull(token1);
         Assert.NotNull(token2);
         Assert.NotEqual(token1, token2);
+    }
+
+    [Fact]
+    public async Task Handle_StoresOnlyTheHashOfTheEmailedToken()
+    {
+        // F-04: the raw token exists only in the emailed link; the database holds its hash.
+        var user = new User { Id = Guid.NewGuid(), Email = "hash-check@example.com", FirstName = "Hash" };
+        _usersMock.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
+        string? emailBody = null;
+        await _emailServiceMock.SendAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Do<string>(b => emailBody = b),
+            Arg.Any<EmailType>(), Arg.Any<Guid?>(), Arg.Any<Guid?>());
+
+        await _handler.Handle(MakeCommand(user.Email), CancellationToken.None);
+
+        var query = System.Web.HttpUtility.ParseQueryString(
+            new Uri(System.Text.RegularExpressions.Regex.Match(emailBody!, "href=\"([^\"]+)\"").Groups[1].Value).Query);
+        var rawToken = query["token"]!;
+
+        Assert.NotEqual(rawToken, user.PasswordResetTokenHash);
+        Assert.Equal(SecureTokens.Hash(rawToken), user.PasswordResetTokenHash);
     }
 }

@@ -2,13 +2,17 @@ namespace CRM.API.Tests.Controllers;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Application.Modules.Users.Dtos;
 using CRM.Domain.Constants;
 using CRM.Domain.Entities;
+using CRM.Domain.Enums;
 using CRM.Infrastructure.Persistence;
+using CRM.Infrastructure.Services;
 using Hangfire;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -56,8 +60,40 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
                 {
                     options.UseInMemoryDatabase("InMemoryDbForUsersTesting");
                 });
+
+                // Email changes send a notice to the old address — never call real Brevo.
+                services.AddHttpClient<IEmailService, EmailService>()
+                    .ConfigurePrimaryHttpMessageHandler(() => new FakeBrevoHandler());
             });
         });
+    }
+
+    private class FakeBrevoHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { messageId = "fake-brevo-message-id" }), Encoding.UTF8, "application/json")
+            });
+    }
+
+    /// <summary>Seeds a user holding <paramref name="roleId"/> without wiping the DB.</summary>
+    private static async Task<User> SeedUserAsync(CrmDbContext context, Guid roleId, string email, string password = "not-used")
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            FirstName = "Seeded",
+            LastName = "User",
+            PasswordHash = new PasswordHasher<User>().HashPassword(null!, password),
+            IsActive = true
+        };
+        user.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = roleId, AssignedByUserId = user.Id });
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        return user;
     }
 
     private async Task<(HttpClient Client, User User, Role Role)> CreateAuthenticatedClientAsync(string roleName)
@@ -411,8 +447,12 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         Assert.DoesNotContain(SystemUsers.PublicFormEmail, content);
     }
 
+    // ---- F-01: per-target authorization (UserTargetAuthorizationFilter) ----
+    // System users can't be managed by anyone and SuperAdmins only by SuperAdmins; both
+    // are refused at the API boundary with 403 before any command handler runs.
+
     [Fact]
-    public async Task UpdateUser_SystemActor_ReturnsNotFound()
+    public async Task UpdateUser_SystemActor_IsForbidden()
     {
         var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
         using var scope = _factory.Services.CreateScope();
@@ -423,11 +463,30 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
             $"/api/v1/users/{systemUser.Id}",
             new UpdateUserRequest { FirstName = "Hacked", LastName = "Name", Email = "hacked@saharvest.org" });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var reloaded = await context.Users.AsNoTracking().SingleAsync(u => u.Id == systemUser.Id);
+        Assert.Equal(SystemUsers.PublicFormEmail, reloaded.Email);
     }
 
     [Fact]
-    public async Task SetUserActiveStatus_SystemActor_ReturnsNotFound()
+    public async Task UpdateUser_SuperAdminTargetingSystemActor_IsForbidden()
+    {
+        // Not even a SuperAdmin may rename the system actor — SubmitPublicDonorCommandHandler
+        // looks it up by email, so renaming it breaks the public form.
+        var (client, _, _) = await CreateAuthenticatedClientAsync("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var systemUser = await SeedSystemActorAsync(context);
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{systemUser.Id}",
+            new UpdateUserRequest { FirstName = "Public", LastName = "Form Submission", Email = "renamed@saharvest.org" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetUserActiveStatus_SystemActor_IsForbidden()
     {
         var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
         using var scope = _factory.Services.CreateScope();
@@ -437,11 +496,13 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         var response = await client.PatchAsJsonAsync(
             $"/api/v1/users/{systemUser.Id}/status", new SetUserActiveStatusRequest { IsActive = true });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var reloaded = await context.Users.AsNoTracking().SingleAsync(u => u.Id == systemUser.Id);
+        Assert.False(reloaded.IsActive);
     }
 
     [Fact]
-    public async Task ChangeUserRole_SystemActor_ReturnsNotFound()
+    public async Task ChangeUserRole_SystemActor_IsForbidden()
     {
         var (client, _, role) = await CreateAuthenticatedClientAsync("SuperAdmin");
         using var scope = _factory.Services.CreateScope();
@@ -451,6 +512,146 @@ public class UsersControllerTests : IClassFixture<WebApplicationFactory<Program>
         var response = await client.PatchAsJsonAsync(
             $"/api/v1/users/{systemUser.Id}/role", new ChangeUserRoleRequest { RoleId = role.Id });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateUser_AdminTargetingSuperAdmin_IsForbiddenAndEmailUnchanged()
+    {
+        // Regression for F-01: an Admin could change a SuperAdmin's email to one they
+        // control, then use forgot-password to take the account over.
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var superAdminRole = new Role { Id = Guid.NewGuid(), Name = "SuperAdmin" };
+        context.Roles.Add(superAdminRole);
+        var superAdmin = await SeedUserAsync(context, superAdminRole.Id, "owner@saharvest.org");
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{superAdmin.Id}",
+            new UpdateUserRequest { FirstName = "Seeded", LastName = "User", Email = "attacker@evil.example" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.True(json.TryGetProperty("traceId", out _));
+
+        var reloaded = await context.Users.AsNoTracking().SingleAsync(u => u.Id == superAdmin.Id);
+        Assert.Equal("owner@saharvest.org", reloaded.Email);
+    }
+
+    [Fact]
+    public async Task SetUserActiveStatus_AdminTargetingSuperAdmin_IsForbiddenAndStaysActive()
+    {
+        var (client, _, _) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var superAdminRole = new Role { Id = Guid.NewGuid(), Name = "SuperAdmin" };
+        context.Roles.Add(superAdminRole);
+        var superAdmin = await SeedUserAsync(context, superAdminRole.Id, "owner@saharvest.org");
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{superAdmin.Id}/status", new SetUserActiveStatusRequest { IsActive = false });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var reloaded = await context.Users.AsNoTracking().SingleAsync(u => u.Id == superAdmin.Id);
+        Assert.True(reloaded.IsActive);
+    }
+
+    [Fact]
+    public async Task UpdateUser_SuperAdminTargetingSuperAdmin_Succeeds()
+    {
+        var (client, _, superAdminRole) = await CreateAuthenticatedClientAsync("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var otherSuperAdmin = await SeedUserAsync(context, superAdminRole.Id, "other-owner@saharvest.org");
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{otherSuperAdmin.Id}",
+            new UpdateUserRequest { FirstName = "Renamed", LastName = "Owner", Email = "other-owner@saharvest.org" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateUser_AdminTargetingAdmin_Succeeds()
+    {
+        var (client, _, adminRole) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var otherAdmin = await SeedUserAsync(context, adminRole.Id, "colleague@saharvest.org");
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{otherAdmin.Id}",
+            new UpdateUserRequest { FirstName = "Renamed", LastName = "Colleague", Email = "colleague@saharvest.org" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateUser_EmailIntoReservedSystemDomain_ReturnsBadRequest()
+    {
+        var (client, _, adminRole) = await CreateAuthenticatedClientAsync("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var target = await SeedUserAsync(context, adminRole.Id, "colleague@saharvest.org");
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/users/{target.Id}",
+            new UpdateUserRequest { FirstName = "Seeded", LastName = "User", Email = "sneaky@SYSTEM.local" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateUser_EmailChanged_RevokesRefreshTokensAndNotifiesOldAddress()
+    {
+        var (superAdminClient, _, _) = await CreateAuthenticatedClientAsync("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin" };
+        context.Roles.Add(adminRole);
+        const string password = "TargetPassword123";
+        var target = await SeedUserAsync(context, adminRole.Id, "old-address@saharvest.org", password);
+        var (targetLogin, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
+        var targetClient = _factory.CreateClient();
+        targetClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", targetLogin.AccessToken);
+        Assert.Equal(HttpStatusCode.OK, (await targetClient.GetAsync("/api/v1/users")).StatusCode);
+
+        var response = await superAdminClient.PatchAsJsonAsync(
+            $"/api/v1/users/{target.Id}",
+            new UpdateUserRequest { FirstName = "Seeded", LastName = "User", Email = "new-address@saharvest.org" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var refreshResponse = await _factory.RefreshWithCookieAsync(targetCookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
+
+        // The already-issued access token dies immediately too, not after its 60 minutes.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await targetClient.GetAsync("/api/v1/users")).StatusCode);
+
+        var notice = await context.EmailLogs.AsNoTracking()
+            .SingleAsync(e => e.EmailType == EmailType.AccountEmailChanged);
+        Assert.Equal("old-address@saharvest.org", notice.ToAddress);
+    }
+
+    [Fact]
+    public async Task UpdateUser_EmailUnchanged_KeepsRefreshTokensAndSendsNoNotice()
+    {
+        var (superAdminClient, _, _) = await CreateAuthenticatedClientAsync("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin" };
+        context.Roles.Add(adminRole);
+        const string password = "TargetPassword123";
+        var target = await SeedUserAsync(context, adminRole.Id, "same-address@saharvest.org", password);
+        var (_, targetCookie) = await _factory.LoginForCookieAsync(target.Email, password);
+
+        var response = await superAdminClient.PatchAsJsonAsync(
+            $"/api/v1/users/{target.Id}",
+            new UpdateUserRequest { FirstName = "Renamed", LastName = "Only", Email = "same-address@saharvest.org" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var refreshResponse = await _factory.RefreshWithCookieAsync(targetCookie);
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        Assert.False(await context.EmailLogs.AnyAsync(e => e.EmailType == EmailType.AccountEmailChanged));
     }
 }

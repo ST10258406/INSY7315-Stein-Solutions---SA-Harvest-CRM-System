@@ -1,6 +1,7 @@
 namespace CRM.Application.Modules.Users.Commands.CreateUser;
 
 using CRM.Application.Common.Interfaces;
+using CRM.Domain.Constants;
 using FluentValidation;
 
 public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
@@ -18,6 +19,8 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
                 .NotEmpty()
                 .EmailAddress()
                 .MaximumLength(255)
+                .Must(email => !SystemUsers.IsSystemUserEmail(email))
+                .WithMessage("This email domain is reserved.")
                 .MustAsync(async (email, ct) => !await users.EmailExistsAsync(email, null, ct))
                 .WithMessage("A user with this email already exists.");
 

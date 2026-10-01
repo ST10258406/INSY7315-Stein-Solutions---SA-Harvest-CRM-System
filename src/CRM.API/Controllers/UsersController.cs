@@ -3,6 +3,7 @@ using CRM.Application.Common.Models;
 using CRM.Application.Modules.Users.Commands.ChangeUserRole;
 using CRM.Application.Modules.Users.Commands.CreateUser;
 using CRM.Application.Modules.Users.Commands.SetUserActiveStatus;
+using CRM.Application.Modules.Users.Commands.UnlockUser;
 using CRM.Application.Modules.Users.Commands.UpdateUser;
 using CRM.Application.Modules.Users.Dtos;
 using CRM.Application.Modules.Users.Queries.GetUsers;
@@ -41,7 +42,11 @@ public class UsersController : ControllerBase
         return StatusCode(201, new { data = result });
     }
 
+    // Every write below acts on a specific target user, so on top of AdminOrAbove each one
+    // also checks "may this caller manage *this* user?" (SuperAdmins and system users are
+    // protected) — see UserTargetAuthorizationFilter / UserTargetAuthorizationHandler.
     [HttpPatch("{id:guid}")]
+    [TypeFilter(typeof(UserTargetAuthorizationFilter))]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateUserRequest request)
     {
         var result = await _mediator.Send(new UpdateUserCommand { Id = id, Request = request });
@@ -52,6 +57,7 @@ public class UsersController : ControllerBase
     // the "requires SuperAdmin permission" warning shown on the Change Role dialog.
     [HttpPatch("{id:guid}/role")]
     [Authorize(Policy = "SuperAdminOnly")]
+    [TypeFilter(typeof(UserTargetAuthorizationFilter))]
     public async Task<IActionResult> ChangeUserRole(Guid id, [FromBody] ChangeUserRoleRequest request)
     {
         var result = await _mediator.Send(new ChangeUserRoleCommand { Id = id, Request = request });
@@ -59,9 +65,19 @@ public class UsersController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/status")]
+    [TypeFilter(typeof(UserTargetAuthorizationFilter))]
     public async Task<IActionResult> SetUserActiveStatus(Guid id, [FromBody] SetUserActiveStatusRequest request)
     {
         var result = await _mediator.Send(new SetUserActiveStatusCommand { Id = id, IsActive = request.IsActive });
+        return Ok(new { data = result });
+    }
+
+    // Clears a login lockout early (see LoginLockoutOptions).
+    [HttpPost("{id:guid}/unlock")]
+    [TypeFilter(typeof(UserTargetAuthorizationFilter))]
+    public async Task<IActionResult> UnlockUser(Guid id)
+    {
+        var result = await _mediator.Send(new UnlockUserCommand { Id = id });
         return Ok(new { data = result });
     }
 }

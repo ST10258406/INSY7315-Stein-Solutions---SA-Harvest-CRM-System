@@ -5,6 +5,7 @@ using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Application.Modules.Auth.Dtos;
+using CRM.API.Authentication;
 using CRM.API.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -29,17 +30,23 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthLoginPolicy)]
+    [IssuesRefreshCookie] // refresh token → HttpOnly cookie only; it's [JsonIgnore]d in the body
     public async Task<ActionResult<LoginResponseDto>> Login(LoginCommand command)
     {
         var result = await _mediator.Send(command);
         return Ok(result);
     }
 
+    // Also what the SPA calls on page load to restore a session from the cookie alone.
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<RefreshTokenResponseDto>> Refresh(RefreshTokenCommand command)
+    [EnableRateLimiting(RateLimitingExtensions.AuthRefreshPolicy)]
+    [RequireCsrfHeader]
+    [IssuesRefreshCookie] // rotated cookie on success; cookie deleted on 401
+    public async Task<ActionResult<RefreshTokenResponseDto>> Refresh([FromRefreshCookie] string? refreshToken)
     {
-        var result = await _mediator.Send(command);
+        var result = await _mediator.Send(new RefreshTokenCommand(refreshToken));
         return Ok(result);
     }
 
@@ -61,14 +68,17 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
-    public async Task<IActionResult> Logout(LogoutCommand command)
+    [RequireCsrfHeader]
+    [ClearsRefreshCookie]
+    public async Task<IActionResult> Logout([FromRefreshCookie] string? refreshToken)
     {
-        await _mediator.Send(command);
+        await _mediator.Send(new LogoutCommand(refreshToken));
         return NoContent();
     }
 
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthResetPasswordPolicy)]
     public async Task<ActionResult<ResetPasswordResponseDto>> ResetPassword(ResetPasswordCommand command)
     {
         var result = await _mediator.Send(command);
@@ -77,9 +87,10 @@ public class AuthController : ControllerBase
 
     [HttpPatch("change-password")]
     [Authorize]
-    public async Task<IActionResult> ChangePassword(ChangePasswordCommand command)
+    public async Task<IActionResult> ChangePassword(ChangePasswordCommand command, [FromRefreshCookie] string? refreshToken)
     {
-        await _mediator.Send(command);
+        // The cookie identifies the caller's own session, which survives; all others are revoked.
+        await _mediator.Send(command with { CurrentRefreshToken = refreshToken });
         return NoContent();
     }
 }

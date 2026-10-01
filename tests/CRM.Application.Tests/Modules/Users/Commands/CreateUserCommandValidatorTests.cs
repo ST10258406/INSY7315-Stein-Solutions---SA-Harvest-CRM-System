@@ -97,4 +97,16 @@ public class CreateUserCommandValidatorTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.ErrorMessage == "Invalid role.");
     }
+
+    [Fact]
+    public async Task Validate_ReservedSystemDomain_Fails()
+    {
+        var c = MakeValid();
+        c.Request.Email = "impostor@system.local";
+
+        var result = await _validator.ValidateAsync(c);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.ErrorMessage == "This email domain is reserved.");
+    }
 }

@@ -72,8 +72,8 @@ public class SetUserActiveStatusCommandHandlerTests
         var targetUser = new User { Id = Guid.NewGuid(), FirstName = "Johan", LastName = "Pretorius", Email = "johan@saharvest.org", IsActive = true };
         var activeTokens = new List<RefreshToken>
         {
-            new() { Id = Guid.NewGuid(), UserId = targetUser.Id, Token = "t1", IsRevoked = false, ExpiresAt = DateTimeOffset.UtcNow.AddDays(7) },
-            new() { Id = Guid.NewGuid(), UserId = targetUser.Id, Token = "t2", IsRevoked = false, ExpiresAt = DateTimeOffset.UtcNow.AddDays(7) }
+            new() { Id = Guid.NewGuid(), UserId = targetUser.Id, TokenHash = "t1", IsRevoked = false, ExpiresAt = DateTimeOffset.UtcNow.AddDays(7) },
+            new() { Id = Guid.NewGuid(), UserId = targetUser.Id, TokenHash = "t2", IsRevoked = false, ExpiresAt = DateTimeOffset.UtcNow.AddDays(7) }
         };
         _currentUserServiceMock.GetCurrentUserId().Returns(currentUserId);
         _usersMock.GetByIdWithRoleAsync(targetUser.Id, Arg.Any<CancellationToken>()).Returns(targetUser);
