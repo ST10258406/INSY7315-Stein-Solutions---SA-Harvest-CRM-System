@@ -64,6 +64,9 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .NotEmpty()
                     .When(x => x.Request.PrimaryContact!.Name is not null);
 
+                RuleFor(x => x.Request.PrimaryContact!.JobTitle)
+                    .MaxLen(DonorFieldRules.JobTitleMax);
+
                 RuleFor(x => x.Request.PrimaryContact!.Email)
                     .MaxLen(DonorFieldRules.EmailMax)
                     .NotEmpty().EmailAddress()
@@ -82,6 +85,9 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .NotEmpty()
                     .When(x => x.Request.MarketingContact!.Name is not null);
 
+                RuleFor(x => x.Request.MarketingContact!.JobTitle)
+                    .MaxLen(DonorFieldRules.JobTitleMax);
+
                 RuleFor(x => x.Request.MarketingContact!.Email)
                     .MaxLen(DonorFieldRules.EmailMax)
                     .NotEmpty().EmailAddress()
@@ -99,6 +105,9 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .MaxLen(DonorFieldRules.ContactNameMax)
                     .NotEmpty()
                     .When(x => x.Request.AccountsContact!.Name is not null);
+
+                RuleFor(x => x.Request.AccountsContact!.JobTitle)
+                    .MaxLen(DonorFieldRules.JobTitleMax);
 
                 RuleFor(x => x.Request.AccountsContact!.Email)
                     .MaxLen(DonorFieldRules.EmailMax)
@@ -144,6 +153,9 @@ public class UpdateDonorCommandValidator : AbstractValidator<UpdateDonorCommand>
                     .MaxLen(DonorFieldRules.MaxLongTextLength)
                     .NotEmpty()
                     .When(x => x.Request.Donations!.CollectionAddress is not null);
+
+                RuleFor(x => x.Request.Donations!.OperationsLogisticsDetails)
+                    .MaxLen(DonorFieldRules.MaxLongTextLength);
 
                 RuleFor(x => x.Request.Donations!.FrequencyId)
                     .MustAsync(async (id, ct) => id is null || await lookups.DonationFrequencyExistsActiveAsync(id!.Value, ct))

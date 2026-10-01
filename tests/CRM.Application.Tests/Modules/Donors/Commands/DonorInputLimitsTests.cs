@@ -203,6 +203,35 @@ public class DonorInputLimitsTests
         }));
 
     [Theory]
+    [InlineData(255, true)]
+    [InlineData(256, false)]
+    public async Task Update_JobTitle_Boundary_ForEveryContact(int length, bool ok)
+    {
+        var title = new string('a', length);
+        Assert.Equal(ok, await UpdateValidAsync(new UpdateDonorRequest
+        {
+            PrimaryContact = new UpdateDonorContactRequest { JobTitle = title }
+        }));
+        Assert.Equal(ok, await UpdateValidAsync(new UpdateDonorRequest
+        {
+            MarketingContact = new UpdateDonorContactRequest { JobTitle = title }
+        }));
+        Assert.Equal(ok, await UpdateValidAsync(new UpdateDonorRequest
+        {
+            AccountsContact = new UpdateDonorContactRequest { JobTitle = title }
+        }));
+    }
+
+    [Theory]
+    [InlineData(4000, true)]
+    [InlineData(4001, false)]
+    public async Task Update_OperationsLogisticsDetails_Boundary(int length, bool ok) =>
+        Assert.Equal(ok, await UpdateValidAsync(new UpdateDonorRequest
+        {
+            Donations = new UpdateDonorDonationsRequest { OperationsLogisticsDetails = new string('a', length) }
+        }));
+
+    [Theory]
     [InlineData("https://ok.co.za", true)]
     [InlineData("javascript:alert(1)", false)]
     public async Task Update_Website_MustBeHttpUrl(string website, bool ok) =>

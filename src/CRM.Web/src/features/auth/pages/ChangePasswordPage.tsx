@@ -76,8 +76,9 @@ const ChangePasswordPage: React.FC = () => {
 
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3.5">
               <div>
-                <div className="text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">Current (temporary) password</div>
+                <label htmlFor="currentPassword" className="block text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">Current (temporary) password</label>
                 <input
+                  id="currentPassword"
                   {...register('currentPassword')}
                   type={showPw ? 'text' : 'password'}
                   autoComplete="current-password"
@@ -87,8 +88,9 @@ const ChangePasswordPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">New password</div>
+                <label htmlFor="newPassword" className="block text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">New password</label>
                 <input
+                  id="newPassword"
                   {...register('newPassword')}
                   type={showPw ? 'text' : 'password'}
                   autoComplete="new-password"
@@ -98,8 +100,9 @@ const ChangePasswordPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">Confirm new password</div>
+                <label htmlFor="confirmPassword" className="block text-[11.5px] font-semibold text-[#3F3A2E] mb-1.5">Confirm new password</label>
                 <input
+                  id="confirmPassword"
                   {...register('confirmPassword')}
                   type={showPw ? 'text' : 'password'}
                   autoComplete="new-password"

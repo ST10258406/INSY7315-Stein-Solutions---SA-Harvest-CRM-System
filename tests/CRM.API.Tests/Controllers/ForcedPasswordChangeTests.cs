@@ -91,6 +91,12 @@ public class ForcedPasswordChangeTests : IClassFixture<WebApplicationFactory<Pro
         var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", body.GetProperty("accessToken").GetString());
+
+        // The refresh cookie is Secure, so the test client (plain http) would not send it back
+        // by itself. A browser does, and the server uses it to keep the caller's own session
+        // alive when a password change revokes the others — so replay it explicitly.
+        var setCookie = response.Headers.GetValues("Set-Cookie").First();
+        client.DefaultRequestHeaders.Add("Cookie", setCookie.Split(';')[0]);
         return (client, body);
     }
 
@@ -122,7 +128,7 @@ public class ForcedPasswordChangeTests : IClassFixture<WebApplicationFactory<Pro
         Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
 
         var after = await client.GetAsync("/api/v1/donors");
-        Assert.NotEqual(HttpStatusCode.Forbidden, after.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
 
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
@@ -162,7 +168,7 @@ public class ForcedPasswordChangeTests : IClassFixture<WebApplicationFactory<Pro
         var (client, login) = await LoginAsync(factory, "normal@example.com", TempPassword);
 
         Assert.False(login.GetProperty("user").GetProperty("mustChangePassword").GetBoolean());
-        Assert.NotEqual(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/donors")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/donors")).StatusCode);
     }
 
     private static async Task<string> CodeOrEmptyAsync(HttpResponseMessage response)
