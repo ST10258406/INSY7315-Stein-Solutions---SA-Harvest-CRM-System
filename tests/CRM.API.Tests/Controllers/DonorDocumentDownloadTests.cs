@@ -220,6 +220,7 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
     // so its existence isn't confirmed), and no SAS URL is ever generated for it.
     [Theory]
     [InlineData("Procurement", DocumentType.Signature)]
+    [InlineData("Procurement", DocumentType.BBBEECertificate)]
     [InlineData("Admin", DocumentType.BBBEECertificate)]
     [InlineData("SuperAdmin", DocumentType.BBBEECertificate)]
     [InlineData("SuperAdmin", DocumentType.Signature)]
