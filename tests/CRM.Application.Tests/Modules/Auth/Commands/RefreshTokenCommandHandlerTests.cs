@@ -40,6 +40,11 @@ public class RefreshTokenCommandHandlerTests
         _jwtTokenServiceMock.GenerateAccessToken(_user, Arg.Any<Guid>()).Returns("new-access-token");
         _jwtTokenServiceMock.GenerateRefreshToken().Returns("rotated-refresh-token");
         _jwtTokenServiceMock.AccessTokenExpirySeconds.Returns(3600);
+
+        // The transaction boundary itself is Infrastructure's job (see UnitOfWorkTests); here
+        // it just runs the work so the handler's claim/insert logic is exercised.
+        _unitOfWorkMock.ExecuteInTransactionAsync(Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.Arg<Func<Task<bool>>>()());
         _refreshTokensMock.TryClaimRotationAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(true);
         _refreshTokensMock.CountOtherActiveInFamilyAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(1);
     }
@@ -300,6 +305,33 @@ public class RefreshTokenCommandHandlerTests
         await Assert.ThrowsAsync<UnauthorizedException>(Refresh);
 
         await _refreshTokensMock.Received(1).RevokeFamilyAsync(presented.FamilyId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ClaimAndInsertHappenInsideOneTransaction()
+    {
+        // F-04 review: the old token must never be visible as "replaced" before its
+        // replacement exists, so the claim and the insert share one transaction.
+        var presented = StoreToken();
+        var insideTransaction = false;
+        _unitOfWorkMock.ExecuteInTransactionAsync(Arg.Any<Func<Task<bool>>>(), Arg.Any<CancellationToken>())
+            .Returns(async ci =>
+            {
+                insideTransaction = true;
+                try { return await ci.Arg<Func<Task<bool>>>()(); }
+                finally { insideTransaction = false; }
+            });
+        var claimedInside = false;
+        var insertedInside = false;
+        _refreshTokensMock.TryClaimRotationAsync(presented.Id, Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(_ => { claimedInside = insideTransaction; return true; });
+        _refreshTokensMock.When(r => r.AddAsync(Arg.Any<RefreshToken>(), Arg.Any<CancellationToken>()))
+            .Do(_ => insertedInside = insideTransaction);
+
+        await Refresh();
+
+        Assert.True(claimedInside);
+        Assert.True(insertedInside);
     }
 
     [Fact]

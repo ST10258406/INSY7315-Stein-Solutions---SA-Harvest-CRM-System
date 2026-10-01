@@ -58,20 +58,10 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
         // the test provider also this tracked instance.
         var isGraceReplay = storedToken.IsRevoked;
 
-        if (isGraceReplay)
+        if (isGraceReplay && !await IsWithinRotationGraceAsync(storedToken, now, ct))
         {
-            if (!await IsWithinRotationGraceAsync(storedToken, now, ct))
-            {
-                await RevokeFamilyAsync(storedToken, now, ct);
-                throw new UnauthorizedException(GenericFailureMessage);
-            }
-
-            // The grace replay is single-use, claimed atomically. Only a request racing the
-            // claim at the same instant can lose here; it's refused without killing the
-            // family (the winner's cookie stays valid), and it can't mint another token.
-            // A later replay sees GraceReplayedAt already set and takes the revoke path above.
-            if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
-                throw new UnauthorizedException(GenericFailureMessage);
+            await RevokeFamilyAsync(storedToken, now, ct);
+            throw new UnauthorizedException(GenericFailureMessage);
         }
 
         if (storedToken.ExpiresAt < now || !storedToken.User.IsActive)
@@ -89,20 +79,40 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, R
             CreatedAt = now
         };
 
-        if (!isGraceReplay && !await _refreshTokens.TryClaimRotationAsync(storedToken.Id, replacement.TokenHash, now, ct))
+        // Claim and insert in ONE transaction. The claims are immediate UPDATEs; outside a
+        // transaction the old token would be visible as "replaced by X" before X exists, and a
+        // concurrent tab (or the per-request session check) would see a family with no live
+        // token. Inside it, other requests see either the old state or the complete new one.
+        var issued = await _unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            // Lost a race with a concurrent rotation of this same cookie (e.g. two tabs at
-            // once). That request owns the rotation; this one may only use the token's single
-            // grace replay — so at most two tokens can ever descend from one cookie.
-            if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
-                throw new UnauthorizedException(GenericFailureMessage);
-            isGraceReplay = true;
-        }
+            if (isGraceReplay)
+            {
+                // The grace replay is single-use, claimed atomically. Only a request racing
+                // the claim at the same instant can lose; it's refused without killing the
+                // family (the winner's cookie stays valid) and can't mint another token. A
+                // later replay sees GraceReplayedAt already set and takes the revoke path.
+                if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
+                    return false;
+            }
+            else if (!await _refreshTokens.TryClaimRotationAsync(storedToken.Id, replacement.TokenHash, now, ct))
+            {
+                // Lost a race with a concurrent rotation of this same cookie (e.g. two tabs at
+                // once). That request owns the rotation; this one may only use the token's
+                // single grace replay — so at most two tokens ever descend from one cookie.
+                if (!await _refreshTokens.TryClaimGraceReplayAsync(storedToken.Id, now, ct))
+                    return false;
+                isGraceReplay = true;
+            }
 
-        // In the grace case the presented token was already rotated; leave its original
-        // ReplacedByTokenHash alone and just issue a sibling.
-        await _refreshTokens.AddAsync(replacement, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
+            // In the grace case the presented token was already rotated; leave its original
+            // ReplacedByTokenHash alone and just issue a sibling.
+            await _refreshTokens.AddAsync(replacement, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            return true;
+        }, ct);
+
+        if (!issued)
+            throw new UnauthorizedException(GenericFailureMessage);
 
         // A grace sibling joins a family that reuse detection may have revoked between our
         // eligibility check and this insert. If nothing else in the family is still live,
