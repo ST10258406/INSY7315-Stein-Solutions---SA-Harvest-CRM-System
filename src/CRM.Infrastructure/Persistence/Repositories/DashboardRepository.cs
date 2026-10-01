@@ -34,6 +34,22 @@ public class DashboardRepository : IDashboardRepository
             .CountAsync(d => d.RelationshipManagerId == relationshipManagerId
                 && d.FollowUpDate != null && d.FollowUpDate < asOfUtc, cancellationToken);
 
+    public Task<List<ManagerActivityRow>> GetDonorsContactedByUserAsync(
+        DateTime startUtc, DateTime endUtc, int take, CancellationToken cancellationToken = default)
+        => _context.InteractionLogs
+            .AsNoTracking()
+            .Where(i => i.CreatedAt >= startUtc && i.CreatedAt < endUtc)
+            .GroupBy(i => new { i.CreatedByUserId, i.CreatedByUser.FirstName, i.CreatedByUser.LastName })
+            .Select(g => new ManagerActivityRow(
+                g.Key.CreatedByUserId,
+                g.Key.FirstName,
+                g.Key.LastName,
+                g.Select(i => i.DonorId).Distinct().Count()))
+            .OrderByDescending(r => r.DonorsContacted)
+            .ThenBy(r => r.FirstName)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
     public Task<int> GetDonorsContactedCountAsync(
         DateTime startUtc, DateTime endUtc, CancellationToken cancellationToken = default)
         => _context.InteractionLogs

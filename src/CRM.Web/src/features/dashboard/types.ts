@@ -13,3 +13,13 @@ export interface DashboardStatsDto {
   donorsContactedThisMonth: number;
   donorsContactedLastMonth: number;
 }
+
+export type ManagerActivityPeriod = 'weekly' | 'monthly';
+
+/** Mirrors CRM.Application.Modules.Dashboard.Dtos.ManagerActivityDto. */
+export interface ManagerActivityDto {
+  period: ManagerActivityPeriod;
+  fromUtc: string;
+  toUtc: string;
+  items: { userId: string; name: string; donorsContacted: number }[];
+}
