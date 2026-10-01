@@ -20,4 +20,5 @@ export const paths = {
   notAuthorized: '/not-authorized',
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
+  changePassword: '/change-password',
 };

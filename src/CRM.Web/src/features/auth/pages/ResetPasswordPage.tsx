@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import ResetPasswordForm from '@/components/auth/ResetPasswordForm';
 import AuthBrandPanel from '@/components/auth/AuthBrandPanel';
 import { useResetPassword } from '@/features/auth/hooks/useResetPassword';
@@ -13,12 +13,23 @@ const INVALID_LINK_MESSAGE = 'This reset link is invalid or has expired.';
 const ResetPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const { mutateAsync: resetPasswordMutation } = useResetPassword();
 
-  const token = searchParams.get('token');
-  const email = searchParams.get('email');
+  // Read the link's credentials once into state, then strip them from the address bar so the
+  // token doesn't linger in history, screenshots or a Referer header.
+  const [{ token, email }] = useState(() => ({
+    token: searchParams.get('token'),
+    email: searchParams.get('email'),
+  }));
+
+  useEffect(() => {
+    if (searchParams.has('token') || searchParams.has('email')) {
+      navigate(location.pathname, { replace: true });
+    }
+  }, [searchParams, navigate, location.pathname]);
 
   if (!token || !email) {
     return (

@@ -27,6 +27,7 @@ public class PublicDonorsController : ControllerBase
     }
 
     [HttpPost("submit")]
+    [RequestSizeLimit(8 * 1024 * 1024)] // enough for a base64 signature (5MB decoded cap), not for abuse
     [EnableRateLimiting(RateLimitingExtensions.PublicSubmitPolicy)]
     public async Task<ActionResult<SubmitPublicDonorResponseDto>> Submit([FromBody] SubmitPublicDonorRequest request)
     {

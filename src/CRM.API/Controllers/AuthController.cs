@@ -70,6 +70,7 @@ public class AuthController : ControllerBase
     [Authorize]
     [RequireCsrfHeader]
     [ClearsRefreshCookie]
+    [AllowWhenPasswordChangeRequired]
     public async Task<IActionResult> Logout([FromRefreshCookie] string? refreshToken)
     {
         await _mediator.Send(new LogoutCommand(refreshToken));
@@ -86,6 +87,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPatch("change-password")]
+    [AllowWhenPasswordChangeRequired]
     [Authorize]
     public async Task<IActionResult> ChangePassword(ChangePasswordCommand command, [FromRefreshCookie] string? refreshToken)
     {

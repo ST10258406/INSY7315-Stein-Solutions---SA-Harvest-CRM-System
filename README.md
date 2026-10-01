@@ -259,7 +259,8 @@ via Managed Identity.
 | `SENDGRID_API_KEY` | API | Outbound email |
 | `AZURE_STORAGE_CONNECTION_STRING` | API | Points at Azurite locally; real storage in prod |
 | `AZURE_KEY_VAULT_URI` | API | Secret source in production |
-| `ADMIN_DEFAULT_PASSWORD` | API seeder | Initial SuperAdmin password — change after first login |
+| `ADMIN_DEFAULT_PASSWORD` | API seeder | Initial SuperAdmin password. The first login forces a change. Outside Development the API refuses to start if it is a known example value (e.g. `ChangeMe123!`) or shorter than 12 characters |
+| `ADMIN_EMAIL` | API seeder | Email of the seeded SuperAdmin. Required outside Development and must be a real, reachable address (password reset is sent there). Defaults to `admin@crm.local` in Development |
 | `VITE_API_BASE_URL` | Frontend | e.g. `http://localhost:5000` |
 | `VITE_USE_POLLING` | Frontend (Vite) | Set `true` only for Docker-on-Windows file watching |
 

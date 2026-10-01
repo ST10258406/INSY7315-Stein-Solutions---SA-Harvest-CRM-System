@@ -64,7 +64,7 @@ describe('DonorKpiCards', () => {
 
   it('renders real totalCount values from the API for each card', async () => {
     vi.mocked(api.get).mockImplementation((_url, config) => {
-      const status = config?.params?.status;
+      const status = (config?.params as { status?: string } | undefined)?.status;
       const totals: Record<string, number> = { undefined: 42, Active: 30, PendingReview: 8, Lapsed: 4 };
       return Promise.resolve({ data: paginatedResult(totals[String(status)]) });
     });
@@ -88,7 +88,7 @@ describe('DonorKpiCards', () => {
 
   it('shows a placeholder dash for a card whose count fails to load, without crashing the others', async () => {
     vi.mocked(api.get).mockImplementation((_url, config) => {
-      const status = config?.params?.status;
+      const status = (config?.params as { status?: string } | undefined)?.status;
       if (status === 'Lapsed') {
         return Promise.reject(new Error('network error'));
       }

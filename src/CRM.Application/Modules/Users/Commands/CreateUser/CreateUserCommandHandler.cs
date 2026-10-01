@@ -42,7 +42,9 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Creat
             FirstName = req.FirstName,
             LastName = req.LastName,
             Email = req.Email,
-            IsActive = true
+            IsActive = true,
+            // The creating admin sees this temporary password, so it must be replaced at first login.
+            MustChangePassword = true
         };
         user.PasswordHash = _passwordHasher.HashPassword(temporaryPassword);
 

@@ -16,6 +16,9 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApiServices(builder.Configuration);
 
+// No "Server: Kestrel" fingerprint header.
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
 var app = builder.Build();
 
 // Refuse to start outside Development with localhost/empty CORS origins or frontend URL,

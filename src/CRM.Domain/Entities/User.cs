@@ -10,6 +10,13 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// True while the account still uses a seeded or admin-issued temporary password. The API
+    /// rejects everything except change-password and logout until it is cleared
+    /// (see PasswordChangeRequiredMiddleware).
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
     /// <summary>SHA-256 of the outstanding reset token (the raw token only ever goes out by email).</summary>
     public string? PasswordResetTokenHash { get; set; }
     public DateTimeOffset? PasswordResetTokenExpiresAt { get; set; }

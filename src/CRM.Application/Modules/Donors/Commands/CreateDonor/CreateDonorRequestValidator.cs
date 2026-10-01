@@ -2,6 +2,7 @@ namespace CRM.Application.Modules.Donors.Commands.CreateDonor;
 
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
+using CRM.Application.Modules.Donors.Validation;
 using FluentValidation;
 
 /// <summary>
@@ -18,11 +19,11 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
         RuleFor(x => x.Company).NotNull();
         When(x => x.Company is not null, () =>
         {
-            RuleFor(x => x.Company.CompanyName).NotEmpty();
-            RuleFor(x => x.Company.Website).NotEmpty();
-            RuleFor(x => x.Company.RegisteredCompanyName).NotEmpty();
-            RuleFor(x => x.Company.TradingName).NotEmpty();
-            RuleFor(x => x.Company.CompanyRegistrationNumber).NotEmpty();
+            RuleFor(x => x.Company.CompanyName).NotEmpty().MaxLen(DonorFieldRules.CompanyNameMax);
+            RuleFor(x => x.Company.Website).NotEmpty().MaxLen(DonorFieldRules.WebsiteMax).HttpUrl();
+            RuleFor(x => x.Company.RegisteredCompanyName).NotEmpty().MaxLen(DonorFieldRules.CompanyNameMax);
+            RuleFor(x => x.Company.TradingName).NotEmpty().MaxLen(DonorFieldRules.CompanyNameMax);
+            RuleFor(x => x.Company.CompanyRegistrationNumber).NotEmpty().MaxLen(DonorFieldRules.RegistrationNumberMax);
 
             RuleFor(x => x.Company.CompanyTypeId)
                 .GreaterThan((short)0)
@@ -40,6 +41,7 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
             // raw CHECK-constraint violation surfacing as a 500.
             RuleFor(x => x.Company.IncomeTaxNumber)
                 .NotEmpty()
+                .MaxLen(DonorFieldRules.TaxNumberMax)
                 .Must(tin => tin is null || !tin.StartsWith('4'))
                 .WithMessage("Income tax number cannot start with 4.");
         });
@@ -47,32 +49,35 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
         RuleFor(x => x.PrimaryContact).NotNull();
         When(x => x.PrimaryContact is not null, () =>
         {
-            RuleFor(x => x.PrimaryContact.Name).NotEmpty();
-            RuleFor(x => x.PrimaryContact.Email).NotEmpty().EmailAddress();
-            RuleFor(x => x.PrimaryContact.Phone).NotEmpty();
+            RuleFor(x => x.PrimaryContact.Name).NotEmpty().MaxLen(DonorFieldRules.ContactNameMax);
+            RuleFor(x => x.PrimaryContact.JobTitle).MaxLen(DonorFieldRules.JobTitleMax);
+            RuleFor(x => x.PrimaryContact.Email).NotEmpty().MaximumLength(DonorFieldRules.EmailMax).EmailAddress();
+            RuleFor(x => x.PrimaryContact.Phone).NotEmpty().MaxLen(DonorFieldRules.PhoneMax).PhoneNumber();
         });
 
         When(x => x.MarketingContact is not null, () =>
         {
-            RuleFor(x => x.MarketingContact!.Name).NotEmpty();
-            RuleFor(x => x.MarketingContact!.Email).NotEmpty().EmailAddress();
-            RuleFor(x => x.MarketingContact!.Phone).NotEmpty();
+            RuleFor(x => x.MarketingContact!.Name).NotEmpty().MaxLen(DonorFieldRules.ContactNameMax);
+            RuleFor(x => x.MarketingContact!.JobTitle).MaxLen(DonorFieldRules.JobTitleMax);
+            RuleFor(x => x.MarketingContact!.Email).NotEmpty().MaximumLength(DonorFieldRules.EmailMax).EmailAddress();
+            RuleFor(x => x.MarketingContact!.Phone).NotEmpty().MaxLen(DonorFieldRules.PhoneMax).PhoneNumber();
         });
 
         When(x => x.AccountsContact is not null, () =>
         {
-            RuleFor(x => x.AccountsContact!.Name).NotEmpty();
-            RuleFor(x => x.AccountsContact!.Email).NotEmpty().EmailAddress();
-            RuleFor(x => x.AccountsContact!.Phone).NotEmpty();
+            RuleFor(x => x.AccountsContact!.Name).NotEmpty().MaxLen(DonorFieldRules.ContactNameMax);
+            RuleFor(x => x.AccountsContact!.JobTitle).MaxLen(DonorFieldRules.JobTitleMax);
+            RuleFor(x => x.AccountsContact!.Email).NotEmpty().MaximumLength(DonorFieldRules.EmailMax).EmailAddress();
+            RuleFor(x => x.AccountsContact!.Phone).NotEmpty().MaxLen(DonorFieldRules.PhoneMax).PhoneNumber();
         });
 
         RuleFor(x => x.LegalAddress).NotNull();
         When(x => x.LegalAddress is not null, () =>
         {
-            RuleFor(x => x.LegalAddress.StreetAddress).NotEmpty();
-            RuleFor(x => x.LegalAddress.Suburb).NotEmpty();
-            RuleFor(x => x.LegalAddress.City).NotEmpty();
-            RuleFor(x => x.LegalAddress.PostalCode).NotEmpty();
+            RuleFor(x => x.LegalAddress.StreetAddress).NotEmpty().MaxLen(DonorFieldRules.StreetMax);
+            RuleFor(x => x.LegalAddress.Suburb).NotEmpty().MaxLen(DonorFieldRules.SuburbMax);
+            RuleFor(x => x.LegalAddress.City).NotEmpty().MaxLen(DonorFieldRules.CityMax);
+            RuleFor(x => x.LegalAddress.PostalCode).NotEmpty().MaxLen(DonorFieldRules.PostalCodeMax).PostalCode();
 
             RuleFor(x => x.LegalAddress.ProvinceId)
                 .GreaterThan((short)0)
@@ -83,7 +88,8 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
         RuleFor(x => x.Donations).NotNull();
         When(x => x.Donations is not null, () =>
         {
-            RuleFor(x => x.Donations.CollectionAddress).NotEmpty();
+            RuleFor(x => x.Donations.CollectionAddress).NotEmpty().MaxLen(DonorFieldRules.MaxLongTextLength);
+            RuleFor(x => x.Donations.OperationsLogisticsDetails).MaxLen(DonorFieldRules.MaxLongTextLength);
 
             RuleFor(x => x.Donations.FrequencyId)
                 .GreaterThan((short)0)
@@ -91,7 +97,9 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
                 .WithMessage("Invalid donation frequency.");
 
             RuleFor(x => x.Donations.TypeIds)
+                .Cascade(CascadeMode.Stop)
                 .NotEmpty()
+                .BoundedIdList()
                 .MustAsync(async (ids, ct) =>
                 {
                     var distinct = ids.Distinct().ToList();
@@ -101,7 +109,9 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
                 .WithMessage("One or more donation types are invalid.");
 
             RuleFor(x => x.Donations.RegionIds)
+                .Cascade(CascadeMode.Stop)
                 .NotEmpty()
+                .BoundedIdList()
                 .MustAsync(async (ids, ct) =>
                 {
                     var distinct = ids.Distinct().ToList();
@@ -116,6 +126,12 @@ public class CreateDonorRequestValidator : AbstractValidator<CreateDonorRequest>
             RuleFor(x => x.Compliance!.BbbeeStatusId!.Value)
                 .MustAsync(async (id, ct) => await lookups.BbbeeStatusExistsActiveAsync(id, ct))
                 .WithMessage("Invalid BBBEE status.");
+        });
+
+        When(x => x.Crm is not null, () =>
+        {
+            RuleFor(x => x.Crm!.ImpactReportingPreferences).MaxLen(DonorFieldRules.MaxLongTextLength);
+            RuleFor(x => x.Crm!.AdditionalInformation).MaxLen(DonorFieldRules.MaxLongTextLength);
         });
 
         When(x => x.Crm?.RelationshipManagerId is not null, () =>

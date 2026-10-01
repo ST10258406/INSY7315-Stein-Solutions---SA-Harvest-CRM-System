@@ -25,6 +25,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.PasswordResetTokenHash).HasColumnName("password_reset_token").HasMaxLength(256);
         builder.Property(x => x.PasswordResetTokenExpiresAt).HasColumnName("password_reset_token_expires_at");
         builder.Property(x => x.FailedLoginCount).HasColumnName("failed_login_count").HasDefaultValue(0);
+        builder.Property(x => x.MustChangePassword).HasColumnName("must_change_password").HasDefaultValue(false);
         builder.Property(x => x.LockoutEndUtc).HasColumnName("lockout_end_utc");
     }
 }
