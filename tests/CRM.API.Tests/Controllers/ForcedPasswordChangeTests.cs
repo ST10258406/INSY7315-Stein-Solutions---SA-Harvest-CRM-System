@@ -60,13 +60,13 @@ public class ForcedPasswordChangeTests : IClassFixture<WebApplicationFactory<Pro
         });
     }
 
-    private static async Task SeedUserAsync(WebApplicationFactory<Program> factory, string email, bool mustChange)
+    private static async Task SeedUserAsync(WebApplicationFactory<Program> factory, string email, bool mustChange, string roleName = "Admin")
     {
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
 
-        var role = await context.Roles.FirstOrDefaultAsync(r => r.Name == "Admin")
-            ?? context.Roles.Add(new Role { Id = Guid.NewGuid(), Name = "Admin" }).Entity;
+        var role = await context.Roles.FirstOrDefaultAsync(r => r.Name == roleName)
+            ?? context.Roles.Add(new Role { Id = Guid.NewGuid(), Name = roleName }).Entity;
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -114,6 +114,21 @@ public class ForcedPasswordChangeTests : IClassFixture<WebApplicationFactory<Pro
         Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
         var body = JsonDocument.Parse(await blocked.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal("PASSWORD_CHANGE_REQUIRED", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task FlaggedUser_OnARoleRestrictedEndpoint_StillGetsPasswordChangeRequired_NotAGenericForbidden()
+    {
+        // Marketing is not allowed on /users (AdminOrAbove). Authorization alone would answer a
+        // plain 403; the forced-change check must run first so the SPA learns what to do.
+        using var factory = CreateFactory();
+        await SeedUserAsync(factory, "forced-marketing@example.com", mustChange: true, roleName: "Marketing");
+        var (client, _) = await LoginAsync(factory, "forced-marketing@example.com", TempPassword);
+
+        var response = await client.GetAsync("/api/v1/users");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("PASSWORD_CHANGE_REQUIRED", await CodeOrEmptyAsync(response));
     }
 
     [Fact]

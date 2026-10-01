@@ -44,6 +44,10 @@ public static class AdminSeedGuard
     {
         if (isDevelopment) return;
 
+        // Checked on every boot, not only when a fresh admin is created: the same address is
+        // used to repair a legacy bootstrap admin on upgrade (see AdminUserSeeder).
+        _ = ResolveAdminEmail(configuration, isDevelopment: false);
+
         var password = configuration["ADMIN_DEFAULT_PASSWORD"];
         if (string.IsNullOrWhiteSpace(password)) return; // absence is handled by the seeder when it is actually needed
 

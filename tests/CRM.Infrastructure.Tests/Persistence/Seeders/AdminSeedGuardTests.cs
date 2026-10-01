@@ -17,7 +17,7 @@ public class AdminSeedGuardTests
     [InlineData("MyChangeMe-Secret1!")]
     public void EnsureSafe_ExamplePasswordOutsideDevelopment_Throws(string password)
     {
-        var config = Config(("ADMIN_DEFAULT_PASSWORD", password));
+        var config = Config(("ADMIN_DEFAULT_PASSWORD", password), ("ADMIN_EMAIL", "ops@saharvest.org.za"));
 
         Assert.Throws<InvalidOperationException>(() => AdminSeedGuard.EnsureSafe(config, isDevelopment: false));
     }
@@ -29,14 +29,24 @@ public class AdminSeedGuardTests
     [InlineData("NoSpecialChars12345")]
     public void EnsureSafe_PasswordBreakingPolicyOutsideDevelopment_Throws(string password)
     {
-        var config = Config(("ADMIN_DEFAULT_PASSWORD", password));
+        var config = Config(("ADMIN_DEFAULT_PASSWORD", password), ("ADMIN_EMAIL", "ops@saharvest.org.za"));
 
         Assert.Throws<InvalidOperationException>(() => AdminSeedGuard.EnsureSafe(config, isDevelopment: false));
     }
 
     [Fact]
     public void EnsureSafe_StrongUniquePassword_Passes() =>
-        AdminSeedGuard.EnsureSafe(Config(("ADMIN_DEFAULT_PASSWORD", "k9#Vq2!xLm7@Rt4w")), isDevelopment: false);
+        AdminSeedGuard.EnsureSafe(
+            Config(("ADMIN_DEFAULT_PASSWORD", "k9#Vq2!xLm7@Rt4w"), ("ADMIN_EMAIL", "ops@saharvest.org.za")), isDevelopment: false);
+
+    [Fact]
+    public void EnsureSafe_MissingAdminEmailOutsideDevelopment_Throws() =>
+        Assert.Throws<InvalidOperationException>(() =>
+            AdminSeedGuard.EnsureSafe(Config(("ADMIN_DEFAULT_PASSWORD", "k9#Vq2!xLm7@Rt4w")), isDevelopment: false));
+
+    [Fact]
+    public void EnsureSafe_NoPasswordButValidEmail_Passes() =>
+        AdminSeedGuard.EnsureSafe(Config(("ADMIN_EMAIL", "ops@saharvest.org.za")), isDevelopment: false);
 
     [Fact]
     public void EnsureSafe_ExamplePasswordInDevelopment_IsAllowed() =>

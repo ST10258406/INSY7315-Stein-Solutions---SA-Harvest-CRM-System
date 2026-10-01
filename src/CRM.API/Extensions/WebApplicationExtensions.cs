@@ -35,10 +35,13 @@ public static class WebApplicationExtensions
         app.UseCors("DefaultCorsPolicy");
 
         app.UseAuthentication();
-        app.UseAuthorization();
 
-        // After authentication so the forced-change claim is known; before the endpoint runs.
+        // After authentication (the forced-change claim is known) but BEFORE authorization, which
+        // would otherwise short-circuit role-restricted endpoints with a generic 403 and hide the
+        // PASSWORD_CHANGE_REQUIRED code from a flagged user.
         app.UseMiddleware<PasswordChangeRequiredMiddleware>();
+
+        app.UseAuthorization();
 
         app.UseRateLimiter();
 
