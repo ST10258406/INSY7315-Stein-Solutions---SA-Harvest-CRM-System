@@ -19,13 +19,18 @@ public class SubmitPublicDonorDocumentCommandValidator : AbstractValidator<Submi
         // Same content/size rules as the internal upload path (UploadedFileInspector) —
         // validated before any blob upload call, so a bad file never costs a network
         // round trip to Azure just to get rejected.
+        RuleFor(x => x.FileStream)
+            .NotNull()
+            .WithMessage("A file is required.");
+
         RuleFor(x => x)
             .Custom((x, context) =>
             {
                 var error = UploadedFileInspector.Validate(
                     x.FileStream, x.FileSizeBytes, x.ContentType, x.OriginalFileName, DocumentType.BBBEECertificate);
                 if (error is not null) context.AddFailure(nameof(x.FileStream), error);
-            });
+            })
+            .When(x => x.FileStream is not null);
 
         RuleFor(x => x.OriginalFileName).NotEmpty();
     }

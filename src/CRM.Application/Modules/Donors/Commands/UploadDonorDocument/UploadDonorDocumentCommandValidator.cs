@@ -18,6 +18,10 @@ public class UploadDonorDocumentCommandValidator : AbstractValidator<UploadDonor
         // round trip to Azure just to get rejected. Content is sniffed from its magic
         // bytes and cross-checked against the declared type and extension; the size
         // limit uses the real stream length.
+        RuleFor(x => x.FileStream)
+            .NotNull()
+            .WithMessage("A file is required.");
+
         RuleFor(x => x)
             .Custom((x, context) =>
             {

@@ -35,6 +35,17 @@ public class SubmitPublicDonorDocumentCommandValidatorTests
     }
 
     [Fact]
+    public void Validate_NullFileStream_FailsWithoutThrowing()
+    {
+        var command = MakeValidCommand();
+        command.FileStream = null!;
+
+        var result = _validator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
     public void Validate_ExecutableRenamedToPdf_Fails()
     {
         var command = MakeValidCommand();

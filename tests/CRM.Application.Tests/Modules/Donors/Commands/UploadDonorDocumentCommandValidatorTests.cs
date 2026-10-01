@@ -26,6 +26,17 @@ public class UploadDonorDocumentCommandValidatorTests
     }
 
     [Fact]
+    public void Validate_NullFileStream_FailsWithoutThrowing()
+    {
+        var command = MakeValidCommand();
+        command.FileStream = null!;
+
+        var result = _validator.Validate(command);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
     public void Validate_ValidBbbeeCertificatePdf_Passes()
     {
         var result = _validator.Validate(MakeValidCommand());
