@@ -16,6 +16,16 @@ public static class WebApplicationExtensions
         // ForwardedHeadersSetup — never "any client", outside Azure App Service's own front end.
         app.UseForwardedHeaders(ForwardedHeadersSetup.Create(app.Configuration));
 
+        // First after forwarded headers, so even error responses carry the security headers.
+        app.UseMiddleware<SecurityHeadersMiddleware>(app.Environment.IsDevelopment());
+
+        // HSTS only outside Development (never on localhost), 1 year, no preload: preload is
+        // effectively permanent and should only be opted into deliberately.
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 
         app.UseSerilogRequestLogging();

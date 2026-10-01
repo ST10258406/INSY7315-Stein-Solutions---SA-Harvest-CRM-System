@@ -96,6 +96,12 @@ describe('ResetPasswordPage', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it('Strips the token and email from the address bar once the page has read them', () => {
+    renderPage();
+
+    expect(mockNavigate).toHaveBeenCalledWith('/reset-password', { replace: true });
+  });
+
   it('Valid submit → mutation fires with token/email from URL plus form values', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({ data: { message: 'Password has been reset successfully.' } });
 

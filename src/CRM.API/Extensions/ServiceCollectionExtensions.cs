@@ -228,6 +228,13 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor(); // required by CurrentUserService
 
+        services.AddHsts(options =>
+        {
+            options.MaxAge = TimeSpan.FromDays(365);
+            options.IncludeSubDomains = false;
+            options.Preload = false;
+        });
+
         services.AddControllers();
 
         // Exact origins from config (Cors:AllowedOrigins / Cors__AllowedOrigins__N) — never a
