@@ -47,7 +47,7 @@ function renderPanel(onClose = vi.fn()) {
 describe('NotificationPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthStore.setState({ isAuthenticated: true, isDevBypass: false });
+    useAuthStore.setState({ isAuthenticated: true });
   });
   afterEach(cleanup);
 

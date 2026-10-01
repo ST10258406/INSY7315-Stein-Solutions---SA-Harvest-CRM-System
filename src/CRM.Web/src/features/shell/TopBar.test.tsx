@@ -23,7 +23,6 @@ function signInAs(roles: string[]) {
     user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@saharvest.org', roles },
     isAuthenticated: true,
     isHydrating: false,
-    isDevBypass: false,
   });
 }
 

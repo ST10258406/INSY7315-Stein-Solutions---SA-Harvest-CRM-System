@@ -11,7 +11,7 @@ const session = {
 
 describe('refreshSession (HttpOnly cookie session restore)', () => {
   beforeEach(() => {
-    useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false, isHydrating: true, isDevBypass: false });
+    useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false, isHydrating: true });
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -83,7 +83,6 @@ describe('api client response interceptor', () => {
       accessToken: 'stale-token',
       isAuthenticated: true,
       isHydrating: false,
-      isDevBypass: false,
     });
   });
 

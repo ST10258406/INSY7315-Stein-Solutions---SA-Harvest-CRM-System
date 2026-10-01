@@ -25,7 +25,6 @@ function signIn() {
     accessToken: 'access-token',
     isAuthenticated: true,
     isHydrating: false,
-    isDevBypass: false,
   });
 }
 
