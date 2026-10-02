@@ -1,11 +1,17 @@
 import { Users, Clock, Database, UserX } from 'lucide-react';
 import { useDonors } from '@/features/donors/hooks';
+import type { DashboardScopeFilters, DashboardSegmentFilters } from './types';
 
-export function DonorKpiCards() {
-  const total = useDonors({ pageSize: 1 });
-  const active = useDonors({ status: 'Active', pageSize: 1 });
-  const pending = useDonors({ status: 'PendingReview', pageSize: 1 });
-  const lapsed = useDonors({ status: 'Lapsed', pageSize: 1 });
+interface DonorKpiCardsProps {
+  /** Dashboard scope + Donor activity segment filters, applied to every count. */
+  filters?: DashboardScopeFilters & DashboardSegmentFilters;
+}
+
+export function DonorKpiCards({ filters = {} }: DonorKpiCardsProps) {
+  const total = useDonors({ ...filters, pageSize: 1 });
+  const active = useDonors({ ...filters, status: 'Active', pageSize: 1 });
+  const pending = useDonors({ ...filters, status: 'PendingReview', pageSize: 1 });
+  const lapsed = useDonors({ ...filters, status: 'Lapsed', pageSize: 1 });
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

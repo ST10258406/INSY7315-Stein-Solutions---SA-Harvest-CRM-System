@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
@@ -5,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
 import { ManagerActivityChart } from './ManagerActivityChart';
+import type { ManagerActivityPeriod } from './types';
 
 vi.mock('@/lib/axios', () => ({ api: { get: vi.fn() } }));
 
@@ -14,11 +16,17 @@ function respond(items: { userId: string; name: string; donorsContacted: number 
   });
 }
 
+/** The period is owned by DashboardPage; this stands in for it. */
+function StatefulChart() {
+  const [period, setPeriod] = useState<ManagerActivityPeriod>('weekly');
+  return <ManagerActivityChart period={period} onPeriodChange={setPeriod} />;
+}
+
 function renderChart() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ManagerActivityChart />
+      <StatefulChart />
     </QueryClientProvider>,
   );
 }
