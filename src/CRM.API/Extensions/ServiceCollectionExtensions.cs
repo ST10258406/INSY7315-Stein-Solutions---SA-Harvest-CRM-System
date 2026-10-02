@@ -192,6 +192,10 @@ public static class ServiceCollectionExtensions
         {
             configuration.GetSection("Brevo").Bind(opts);
             opts.ApiKey = brevoApiKey;
+            // Email clients need an absolute URL for the header logo; reuse the frontend's public asset.
+            var frontendBaseUrl = configuration["Frontend:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(opts.LogoUrl) && !string.IsNullOrWhiteSpace(frontendBaseUrl))
+                opts.LogoUrl = $"{frontendBaseUrl.TrimEnd('/')}/sa-harvest-logo.png";
         });
 
         services.AddHttpClient<IEmailService, EmailService>(client =>

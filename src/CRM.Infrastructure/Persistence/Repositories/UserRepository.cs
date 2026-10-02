@@ -34,6 +34,13 @@ public class UserRepository : IUserRepository
     public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.Users.FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
+    public Task<EmailSenderIdentity?> GetSenderIdentityAsync(Guid userId, CancellationToken cancellationToken = default)
+        => _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new EmailSenderIdentity(u.FirstName + " " + u.LastName, u.Email))
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<Guid>> GetActiveUserIdsByRoleAsync(string roleName, CancellationToken cancellationToken = default)
         => _context.Users
             .AsNoTracking()
