@@ -58,7 +58,7 @@ Donors never log in. The primary users are the NPO's procurement and marketing t
 - ASP.NET Core 10 Web API on **.NET 10**, C# 13
 - **Modular Monolith** + **Clean Architecture** (Domain → Application → Infrastructure → API)
 - **CQRS** via MediatR, with three pipeline behaviours: `LoggingBehaviour` → `ValidationBehaviour` → `AuditBehaviour`
-- **PostgreSQL 16** via EF Core 10 + Npgsql (code-first migrations, Fluent API only)
+- **PostgreSQL 18** via EF Core 10 + Npgsql (code-first migrations, Fluent API only)
 - **FluentValidation** for all command/query validation
 - **AutoMapper** for entity → DTO projection
 - **Hangfire** (+ `Hangfire.PostgreSql`) for scheduled/background jobs
@@ -215,6 +215,11 @@ Each seeder is idempotent (guards on "any rows already exist"), so restarting th
 won't duplicate data. To start completely fresh, drop the volume:
 `docker compose down -v` (this also wipes Azurite blobs), then bring the stack back up.
 
+> **Upgrading from PostgreSQL 16:** the stack now runs `postgres:18`, which stores its data in
+> a different layout and cannot open a volume created by `postgres:16`. Run
+> `docker compose down -v` once, then `docker compose up --build`; migrations and the seeders
+> rebuild the database on startup. Any local-only data in the old volume is lost.
+
 > These credentials are for **local development only**. In production `ADMIN_DEFAULT_PASSWORD`
 > comes from Key Vault and must be rotated immediately after the first sign-in.
 
@@ -248,8 +253,9 @@ npm run dev
 ## Environment variables
 
 Copy `.env.example` to `.env`. Nothing secret is ever committed — locally it lives in
-`.env` (git-ignored) or .NET user-secrets; in production it comes from **Azure Key Vault**
-via Managed Identity.
+`.env` (git-ignored) or .NET user-secrets; in production it lives in **Azure Key Vault** and reaches the app as Key Vault references
+in App Service settings (the app itself never calls Key Vault). See
+[docs/azure-deployment.md](docs/azure-deployment.md) for the full list of settings.
 
 | Variable | Used by | Notes |
 |---|---|---|
@@ -301,7 +307,7 @@ client IP, so `X-Forwarded-For` is only trusted from known proxies (`ForwardedHe
 | Behind another known proxy | Set `ForwardedHeaders__KnownProxies__0` (IPs) and/or `ForwardedHeaders__KnownNetworks__0` (CIDR). |
 | Anywhere else (local Docker, any directly reachable host) | Loopback only — a direct client's header is ignored, so it can't pick a fake IP per request. |
 
-### Deployed environments (staging / production)
+### Deployed environment (production)
 
 These are **not** needed locally — `appsettings.Development.json` supplies
 `http://localhost:3000` for both when `ASPNETCORE_ENVIRONMENT=Development` (Docker Compose
@@ -317,8 +323,8 @@ App Service application settings (double underscore = config section separator):
 Outside Development the API **refuses to start** (`ProductionConfigurationGuard`) if the
 origin list or `Frontend:BaseUrl` is empty, uses `http://`, or points at
 `localhost`/`127.0.0.1`, or if `JWT_SECRET` is shorter than 32 bytes. The error lists every
-problem by setting name and never prints secret values. Use the real staging URL for
-staging — don't relax the guard.
+problem by setting name and never prints secret values. Don't relax the guard; set the real
+production URLs.
 
 ### Login brute-force protection
 
@@ -383,10 +389,21 @@ and `npx tsc --noEmit` before opening a PR.
 
 ## CI/CD
 
-GitHub Actions run on push and PR to `main` and `Development`:
+Branching: `feature/*` → `Development` (CI only) → `main` (CI + **deploy to production**).
+There is no staging environment.
 
-- **`backend.yml`** — spins up a Postgres 16 service, then `dotnet restore` / `build --configuration Release` / `test` against `CRM.slnx` on .NET 10.
+CI runs on push and PR to `main` and `Development`:
+
+- **`backend.yml`** — spins up a Postgres 18 service, then `dotnet restore` / `build --configuration Release` / `test` against `CRM.slnx` on .NET 10.
 - **`frontend.yml`** — `npm ci`, `npx tsc --noEmit`, `npm run build` in `src/CRM.Web` on Node 26.
+
+CD runs only from `main`, behind the GitHub `production` environment's required reviewer:
+
+- **`backend-deploy.yml`** builds the API image, pushes it to ACR and updates the App Service container.
+- **`frontend-deploy.yml`** runs on pushes to `main` touching `src/CRM.Web/**` (or manual dispatch). It builds the SPA with the production API origin and uploads `dist/` to Static Web Apps.
+
+Deploy flow, rollback and first-deploy troubleshooting: [docs/azure-deployment.md](docs/azure-deployment.md).
+Accepted risks: [docs/risk-register.md](docs/risk-register.md).
 
 A PR is mergeable only when both pipelines pass, the solution builds with **zero warnings**,
 TypeScript compiles with zero errors, and no item in the
@@ -400,9 +417,9 @@ TypeScript compiles with zero errors, and no item in the
 |---|---|
 | API | Azure App Service (Docker container, multi-stage build → Azure Container Registry) |
 | Frontend | Azure Static Web Apps (Vite build output, served from CDN — not containerised) |
-| Database | Azure Database for PostgreSQL — Flexible Server |
+| Database | Azure Database for PostgreSQL — Flexible Server (PostgreSQL 18) |
 | File storage | Azure Blob Storage (BBBEE certs, signatures, report exports, forwarded email) |
-| Secrets | Azure Key Vault, read at runtime via Managed Identity |
+| Secrets | Azure Key Vault, surfaced as Key Vault references in App Service settings (resolved by the Web App's managed identity) |
 
 No secret ever appears in `appsettings.json`, a Docker image, or a committed `.env`.
 

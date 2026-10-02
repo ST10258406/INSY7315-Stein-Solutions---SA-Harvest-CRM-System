@@ -1,0 +1,66 @@
+name: Frontend Deploy
+
+# Builds the Vite SPA in this job and uploads the finished dist/ to Azure Static Web Apps.
+# The build happens here rather than in the action's Oryx builder because Oryx's support for
+# Node 26 is unverified; skip_app_build makes the action a plain upload.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/CRM.Web/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to Static Web Apps
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: ./src/CRM.Web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: ./src/CRM.Web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # VITE_* values are inlined into the bundle at build time. The npm "postbuild" script
+      # (scripts/render-swa-config.mjs) then writes the API and blob origins into the CSP in
+      # dist/staticwebapp.config.json; SWA_STRICT=1 fails the build if the API origin is missing.
+      - name: Production build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net
+          SWA_STRICT: '1'
+          SWA_CSP_MODE: report-only
+          SWA_BLOB_ORIGIN: https://stcrmk7x2.blob.core.windows.net
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          # With skip_app_build, app_location is the already-built static content, and
+          # staticwebapp.config.json must sit at its root (render-swa-config.mjs writes it there).
+          app_location: src/CRM.Web/dist
+          output_location: ''
+          skip_app_build: true
+          skip_api_build: true
