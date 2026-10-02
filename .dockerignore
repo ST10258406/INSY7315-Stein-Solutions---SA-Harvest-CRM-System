@@ -8,6 +8,8 @@
 **/.env.*
 **/*.user
 **/appsettings.*.local.json
+# Development-only overrides (localhost CORS, dev signing key, Azurite connection string)
+**/appsettings.Development.json
 **/secrets.json
 
 # Source control and tooling
