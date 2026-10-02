@@ -5,7 +5,7 @@
 This is a donor management CRM for a South African non-profit (SA Harvest).
 It replaces Monday.com. Built as a final year project.
 
-- **Backend:** ASP.NET Core 9 Web API, C# 13, .NET 10
+- **Backend:** ASP.NET Core 10 Web API, C# 14, .NET 10
 - **Architecture:** Modular Monolith + Clean Architecture (4 layers)
 - **Database:** PostgreSQL 18 via Entity Framework Core 10 + Npgsql
 - **Frontend:** React 19 + TypeScript 5 + Vite
