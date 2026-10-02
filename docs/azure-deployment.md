@@ -77,10 +77,9 @@ Leave these **unset** in Azure: `Azure__BlobStorage__PublicEndpoint` (only for A
 
 ### Platform settings (not app settings)
 
-- **Always On**: on (**not yet confirmed as set**). Without it the in-process Hangfire server
-  sleeps and the 04:00 UTC task-due job is missed.
-- **HTTPS Only**: on (**not yet confirmed as set**). TLS ends at the App Service front end, and
-  the container only sees HTTP.
+- **Always On**: on. Without it the in-process Hangfire server sleeps and the 04:00 UTC
+  task-due job is missed.
+- **HTTPS Only**: on. TLS ends at the App Service front end, and the container only sees HTTP.
 - **Health check path**: `/health`.
 - **Identity**: system-assigned managed identity on. It needs *Key Vault Secrets User* on
   `kv-crm-k7x2` and *AcrPull* on `acrcrmk7x2`.
@@ -182,8 +181,8 @@ the pull fails.
 | AcrPull for the Web App's identity on `acrcrmk7x2` | Done |
 | `main` container pulling `crm-api` from ACR with managed identity (steps 1–3) | **Not done.** It still runs the MCR sample |
 | `WEBSITES_PORT=8080` and health check path `/health` | Done |
-| Always On | **Unconfirmed** |
-| HTTPS Only | **Unconfirmed** |
+| Always On | Done |
+| HTTPS Only | Done |
 
 ---
 
