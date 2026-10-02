@@ -1,35 +1,49 @@
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
-import type { PaginationMeta } from '../types';
 import { Button } from '@/components/ui/button';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const MAX_PAGE_BUTTONS = 7;
 
-interface UserPaginationProps {
+interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+interface ListPaginationProps {
   pagination: PaginationMeta;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  /** Plural noun for the summary text, e.g. "donors" → "Showing 1–20 of 54 donors". */
+  itemLabel: string;
 }
 
-export function UserPagination({ pagination, onPageChange, onPageSizeChange }: UserPaginationProps) {
+/**
+ * The one pagination footer for every paged list (donors, users, tasks, approvals): range
+ * summary, rows-per-page select, and numbered pages (or "Page x of y" past 7 pages).
+ * Originally the donor list's; shared so every list pages the same way.
+ */
+export function ListPagination({ pagination, onPageChange, onPageSizeChange, itemLabel }: ListPaginationProps) {
   const { page, pageSize, totalCount, totalPages } = pagination;
   const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, totalCount);
   const showNumberedPages = totalPages > 0 && totalPages <= MAX_PAGE_BUTTONS;
 
   return (
-    <div className="mt-4 flex flex-wrap items-center justify-end gap-4.5 border-t border-[var(--border)] pt-4">
+    <div className="flex flex-wrap items-center justify-end gap-4.5 mt-4 pt-4 border-t border-[var(--border)]">
       <span className="text-[12.5px] font-medium text-[var(--muted-c)]">
-        {totalCount ? `Showing ${rangeStart}–${rangeEnd} of ${totalCount} users` : 'Showing 0 of 0 users'}
+        {totalCount ? `Showing ${rangeStart}–${rangeEnd} of ${totalCount} ${itemLabel}` : `Showing 0 of 0 ${itemLabel}`}
       </span>
 
       <div className="flex items-center gap-2">
         <span className="text-[12.5px] font-medium text-[var(--muted-c)]">Rows</span>
         <div className="relative">
           <select
+            aria-label="Rows per page"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-8.5 appearance-none rounded-full border border-[var(--border)] bg-[var(--card)] pr-7 pl-3 text-[12.5px] font-bold text-[var(--ink)] outline-none transition-colors focus:border-[var(--ink)]"
+            className="h-8.5 appearance-none rounded-full border border-[var(--border)] bg-[var(--card)] pr-7 pl-3 text-[12.5px] font-bold text-[var(--ink)] outline-none focus:border-[var(--ink)] transition-colors cursor-pointer"
           >
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>

@@ -5,8 +5,10 @@ using CRM.Domain.Enums;
 
 /// <summary>
 /// Wraps an email body fragment in the branded header/footer. Table layout with inline styles
-/// because Outlook and Gmail ignore most modern CSS. Staff-composed mail gets a "just reply" note
-/// and a supporter footer; system mail gets a minimal "automated message" footer.
+/// because Outlook and Gmail ignore most modern CSS. Every email shares the same header, body
+/// spacing and organisation footer; staff-composed mail additionally gets a "just reply" note, and
+/// system mail's footer closes with "automated message, please don't reply". Bodies are built with
+/// CRM.Application's EmailBodyHtml so their paragraphs and link buttons match too.
 /// </summary>
 internal static class EmailLayout
 {
@@ -48,19 +50,19 @@ internal static class EmailLayout
             ? ""
             : $"""<div>{WebUtility.HtmlEncode(settings.FooterDetails)}</div>""";
 
-        var footer = staffComposed
-            ? $"""
-              <tr><td style="background:#F4F2EC;border-top:1px solid #E4DECE;padding:26px 40px;font-size:13.5px;line-height:1.6;color:#8A8374;">
-                <div style="font-weight:700;color:#3F3A2E;margin-bottom:4px;">{org}</div>
-                {details}
-                <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E4DECE;font-size:12.5px;color:#A69E8B;">Sent via SA Harvest CRM.</div>
-              </td></tr>
-              """
-            : $"""
-              <tr><td style="background:#F4F2EC;border-top:1px solid #E4DECE;padding:20px 40px;font-size:12.5px;line-height:1.6;color:#A69E8B;">
-                {org} &middot; Automated message, please don&#39;t reply.
-              </td></tr>
-              """;
+        // One footer for every email so system mail (password reset) looks the same as
+        // staff-composed mail — only the closing line differs, since system mail has no one to reply to.
+        var footerNote = staffComposed
+            ? "Sent via SA Harvest CRM."
+            : "Sent via SA Harvest CRM &middot; Automated message, please don&#39;t reply.";
+
+        var footer = $"""
+            <tr><td style="background:#F4F2EC;border-top:1px solid #E4DECE;padding:26px 40px;font-size:13.5px;line-height:1.6;color:#8A8374;">
+              <div style="font-weight:700;color:#3F3A2E;margin-bottom:4px;">{org}</div>
+              {details}
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E4DECE;font-size:12.5px;color:#A69E8B;">{footerNote}</div>
+            </td></tr>
+            """;
 
         return $$"""
             <!doctype html>
@@ -85,7 +87,7 @@ internal static class EmailLayout
                   </tr></table>
                 </td></tr>
                 <tr><td style="height:4px;line-height:4px;font-size:0;background:{{Yellow}};">&nbsp;</td></tr>
-                <tr><td style="padding:36px 40px {{(staffComposed ? 30 : 36)}}px;font-size:16.5px;line-height:1.7;color:{{Ink}};">
+                <tr><td style="padding:36px 40px 30px;font-size:16.5px;line-height:1.7;color:{{Ink}};">
                   {{bodyHtml}}
                 </td></tr>
                 {{replyNote}}

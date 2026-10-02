@@ -50,7 +50,7 @@ export function EditUserModal({ user, onOpenChange }: EditUserModalProps) {
   });
 
   return (
-    <Dialog open={!!user} onOpenChange={handleOpenChange}>
+    <Dialog open={!!user} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Details</DialogTitle>

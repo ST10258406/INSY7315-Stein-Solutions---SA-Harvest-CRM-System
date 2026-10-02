@@ -57,6 +57,10 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
         return new ForgotPasswordResponseDto { Message = GenericMessage };
     }
 
+    /// <summary>Same paragraph + button building blocks as the staff-composed emails (see
+    /// <see cref="EmailBodyHtml"/>), so every email the CRM sends looks alike.</summary>
     private static string BuildResetEmailBody(string firstName, string resetLink) =>
-        $"<p>Hi {firstName},</p><p>Click below to reset your password. This link expires in 1 hour.</p><p><a href=\"{resetLink}\">Reset Password</a></p><p>If you didn't request this, ignore this email.</p>";
+        EmailBodyHtml.Paragraphs($"Hi {firstName},\nWe received a request to reset your SA Harvest CRM password. Click the button below to choose a new one. This link expires in 1 hour.")
+        + EmailBodyHtml.Button(resetLink, "Reset password")
+        + EmailBodyHtml.Paragraphs("If you didn't request this, you can safely ignore this email. Your password won't change.");
 }

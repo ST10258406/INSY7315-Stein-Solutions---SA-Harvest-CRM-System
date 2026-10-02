@@ -75,7 +75,8 @@ public class SendPublicFormInviteCommandHandlerTests
         Assert.NotNull(capturedHtmlBody);
         Assert.DoesNotContain("<script>", capturedHtmlBody);
         Assert.Contains("&lt;script&gt;", capturedHtmlBody);
-        Assert.Contains($"<a href=\"{command.PublicFormUrl}\">", capturedHtmlBody);
+        Assert.Contains($"<a href=\"{command.PublicFormUrl}\"", capturedHtmlBody);
+        Assert.Contains("Complete the donor registration form</a>", capturedHtmlBody);
     }
 
     [Fact]

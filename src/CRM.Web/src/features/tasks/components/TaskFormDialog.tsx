@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Lock } from 'lucide-react';
+import { DatePicker } from '@/components/common/DatePicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -112,7 +113,7 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? 'New task' : 'Edit task'}</DialogTitle>
@@ -196,14 +197,20 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
               <label htmlFor="task-due" className="text-xs font-bold text-foreground">
                 Due date <span aria-hidden className="text-destructive">*</span>
               </label>
-              <input
-                id="task-due"
-                type="date"
-                min={taskMinDueDate()}
-                {...register('dueDate')}
-                className={`h-11 w-full rounded-2xl border bg-field px-3.75 text-[13.5px] font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${
-                  errors.dueDate ? 'border-destructive/70' : 'border-border'
-                }`}
+              <Controller
+                control={control}
+                name="dueDate"
+                render={({ field }) => (
+                  <DatePicker
+                    id="task-due"
+                    variant="field"
+                    value={field.value}
+                    onChange={field.onChange}
+                    min={taskMinDueDate()}
+                    placeholder="Select a due date"
+                    invalid={!!errors.dueDate}
+                  />
+                )}
               />
               {errors.dueDate ? (
                 <span className="text-xs text-destructive">{errors.dueDate.message}</span>

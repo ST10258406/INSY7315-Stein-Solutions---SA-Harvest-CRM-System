@@ -34,13 +34,13 @@ function paginatedResult(totalCount: number): PaginatedResult<DonorListItemDto> 
   };
 }
 
-function renderCards() {
+function renderCards(props: Parameters<typeof DonorKpiCards>[0] = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <DonorKpiCards />
+      <DonorKpiCards {...props} />
     </QueryClientProvider>
   );
 }
@@ -99,5 +99,18 @@ describe('DonorKpiCards', () => {
 
     expect((await screen.findAllByText('5')).length).toBeGreaterThan(0);
     expect(await screen.findByTitle("Couldn't load this count")).toBeInTheDocument();
+  });
+
+  it('applies dashboard filters to every count', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: paginatedResult(0) });
+
+    renderCards({ filters: { regionCode: 'WC', donationTypeId: 3 } });
+
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    for (const status of [undefined, 'Active', 'PendingReview', 'Lapsed']) {
+      expect(api.get).toHaveBeenCalledWith('/api/v1/donors', {
+        params: { regionCode: 'WC', donationTypeId: 3, status, pageSize: 1 },
+      });
+    }
   });
 });

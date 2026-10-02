@@ -55,7 +55,7 @@ export function PublicPageShell({ children }: PublicPageShellProps) {
   return (
     <div
       className="flex min-h-screen flex-col bg-white text-[#16160F]"
-      style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", ...LIGHT_SCOPE_VARS }}
+      style={LIGHT_SCOPE_VARS}
     >
       <header className="flex flex-col items-center gap-3.5 px-6 pt-11 pb-2.5 text-center">
         <img src={logoImg} alt="" className="h-[78px] w-[78px] rounded-[18px] object-cover" />

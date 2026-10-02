@@ -63,7 +63,7 @@ export function SendPublicFormInviteDialog({ open, onOpenChange }: SendPublicFor
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Send public form</DialogTitle>

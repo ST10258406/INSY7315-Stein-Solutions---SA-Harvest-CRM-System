@@ -3,6 +3,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recha
 import { useDonorsByStatusReport } from '../hooks/useDonorsByStatusReport';
 import { sortByStatusOrder, statusColor, statusLabel } from '../lib/statusColors';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
+import { CHART_TOOLTIP_PROPS } from '../lib/chartTooltip';
 
 export function DonorsByStatusChart() {
   const { data, isPending, isError, refetch } = useDonorsByStatusReport();
@@ -33,7 +34,7 @@ export function DonorsByStatusChart() {
               <Cell key={r.status} fill={statusColor(r.status)} />
             ))}
           </Pie>
-          <Tooltip formatter={(v, name) => [v, name]} />
+          <Tooltip {...CHART_TOOLTIP_PROPS} formatter={(v, name) => [v, name]} />
           <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12 }} />
         </PieChart>
       </ResponsiveContainer>

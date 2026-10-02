@@ -1,17 +1,17 @@
-import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useManagerActivity } from './hooks';
+import { PERIOD_LABEL } from './lib/period';
 import type { ManagerActivityPeriod } from './types';
 
-const PERIOD_LABEL: Record<ManagerActivityPeriod, string> = {
-  weekly: 'Last 7 days',
-  monthly: 'Last 30 days',
-};
+interface ManagerActivityChartProps {
+  /** Owned by DashboardPage so the dashboard export can include the period on screen. */
+  period: ManagerActivityPeriod;
+  onPeriodChange: (period: ManagerActivityPeriod) => void;
+}
 
 /** Donors contacted per team member, from real interaction logs (not sample data). */
-export function ManagerActivityChart() {
-  const [period, setPeriod] = useState<ManagerActivityPeriod>('weekly');
+export function ManagerActivityChart({ period, onPeriodChange }: ManagerActivityChartProps) {
   const { data, isLoading, isError } = useManagerActivity(period);
 
   const items = data?.items ?? [];
@@ -32,7 +32,7 @@ export function ManagerActivityChart() {
           variant="secondary"
           size="sm"
           aria-label={`Showing ${PERIOD_LABEL[period]}. Switch period`}
-          onClick={() => setPeriod((p) => (p === 'weekly' ? 'monthly' : 'weekly'))}
+          onClick={() => onPeriodChange(period === 'weekly' ? 'monthly' : 'weekly')}
         >
           <span>{PERIOD_LABEL[period]}</span>
           <ChevronDown className="w-3.25 h-3.25 text-[var(--icon)]" />

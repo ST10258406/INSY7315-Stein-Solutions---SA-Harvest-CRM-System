@@ -30,7 +30,7 @@ export function NotificationBell() {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-background bg-[var(--ink)] px-1 text-[9.5px] font-bold text-[var(--brand-yellow)]">
+          <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-background bg-[var(--ink)] px-1 text-[9.5px] font-bold text-[var(--brand-yellow)] dark:bg-[var(--brand-yellow)] dark:text-[#16160F]">
             {badge}
           </span>
         )}

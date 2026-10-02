@@ -31,11 +31,11 @@ function result(rows: DonorListItemDto[], totalCount = rows.length): PaginatedRe
   return { data: rows, pagination: { page: 1, pageSize: 6, totalCount, totalPages: Math.ceil(totalCount / 6) } };
 }
 
-function renderWidget() {
+function renderWidget(props: Parameters<typeof OverdueFollowUpsWidget>[0] = {}) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
-        <OverdueFollowUpsWidget />
+        <OverdueFollowUpsWidget {...props} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -83,5 +83,16 @@ describe('OverdueFollowUpsWidget', () => {
     });
     renderWidget();
     expect(await screen.findByRole('link', { name: /view all 20/i })).toBeInTheDocument();
+  });
+
+  it('narrows the query by the dashboard scope and carries the region into "View all"', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: result([donor({ followUpDate: daysAgoDate(2) })], 20),
+    });
+    renderWidget({ filters: { relationshipManagerId: 'rm-1', regionCode: 'WC' } });
+
+    const link = await screen.findByRole('link', { name: /view all 20/i });
+    expect(link.getAttribute('href')).toContain('regionCode=WC');
+    expect(vi.mocked(api.get).mock.calls[0][1]?.params).toMatchObject({ relationshipManagerId: 'rm-1', regionCode: 'WC' });
   });
 });

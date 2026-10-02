@@ -220,7 +220,7 @@ public class EmailServiceTests
     }
 
     [Fact]
-    public async Task SendAsync_SystemEmail_UsesMinimalFooterAndNoReplyNote_AndTextOnlyHeaderWithoutLogoUrl()
+    public async Task SendAsync_SystemEmail_UsesSharedFooterWithNoReplyLine_AndNoReplyNote_AndTextOnlyHeaderWithoutLogoUrl()
     {
         _settings.LogoUrl = null;
         var (handler, sent) = CapturingHandler();
@@ -230,6 +230,7 @@ public class EmailServiceTests
 
         var html = Assert.Single(sent).GetProperty("htmlContent").GetString()!;
         Assert.Contains("Automated message", html);
+        Assert.Contains("Sent via SA Harvest CRM", html); // same organisation footer as staff-composed mail
         Assert.DoesNotContain("Just hit", html);
         Assert.DoesNotContain("<img", html);
     }
