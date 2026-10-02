@@ -139,4 +139,22 @@ public class ForgotPasswordCommandHandlerTests
         Assert.NotEqual(rawToken, user.PasswordResetTokenHash);
         Assert.Equal(SecureTokens.Hash(rawToken), user.PasswordResetTokenHash);
     }
+
+    [Fact]
+    public async Task Handle_ExistingEmail_RendersAResetButton_AndEncodesTheUsersName()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "name-check@example.com", FirstName = "<b>Jo</b>" };
+        _usersMock.GetByEmailAsync(user.Email, Arg.Any<CancellationToken>()).Returns(user);
+        string? emailBody = null;
+        await _emailServiceMock.SendAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Do<string>(b => emailBody = b),
+            Arg.Any<EmailType>(), Arg.Any<Guid?>(), Arg.Any<Guid?>());
+
+        await _handler.Handle(MakeCommand(user.Email), CancellationToken.None);
+
+        Assert.NotNull(emailBody);
+        Assert.Contains("Hi &lt;b&gt;Jo&lt;/b&gt;,", emailBody);
+        Assert.DoesNotContain("<b>Jo</b>", emailBody);
+        Assert.Contains(">Reset password</a>", emailBody);
+    }
 }

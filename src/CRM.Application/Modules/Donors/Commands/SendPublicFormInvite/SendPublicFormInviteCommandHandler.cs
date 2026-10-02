@@ -1,8 +1,8 @@
 namespace CRM.Application.Modules.Donors.Commands.SendPublicFormInvite;
 
-using System.Net;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Enums;
 using MediatR;
@@ -54,17 +54,11 @@ public class SendPublicFormInviteCommandHandler : IRequestHandler<SendPublicForm
     }
 
     /// <summary>
-    /// Plain-text-only compose body — HTML-encode every line and wrap each in its
-    /// own paragraph, same discipline as SendDonorEmailCommandHandler. The link
-    /// itself is never part of the user-editable text: it's appended here as a
-    /// fixed, server-built anchor, so it is always correct and always clickable
-    /// regardless of what the sender typed in the message.
+    /// Plain-text-only compose body, built exactly like SendDonorEmailCommandHandler's
+    /// (see <see cref="EmailBodyHtml.Paragraphs"/>). The link itself is never part of
+    /// the user-editable text: it's appended here as a fixed, server-built button, so
+    /// it is always correct and always clickable regardless of what the sender typed.
     /// </summary>
-    private static string BuildHtmlBody(string plainTextBody, string publicFormUrl)
-    {
-        var lines = plainTextBody.Replace("\r\n", "\n").Split('\n');
-        var encodedParagraphs = string.Concat(lines.Select(line => $"<p>{WebUtility.HtmlEncode(line)}</p>"));
-        var linkParagraph = $"<p><a href=\"{WebUtility.HtmlEncode(publicFormUrl)}\">Complete the donor registration form</a></p>";
-        return encodedParagraphs + linkParagraph;
-    }
+    private static string BuildHtmlBody(string plainTextBody, string publicFormUrl) =>
+        EmailBodyHtml.Paragraphs(plainTextBody) + EmailBodyHtml.Button(publicFormUrl, "Complete the donor registration form");
 }

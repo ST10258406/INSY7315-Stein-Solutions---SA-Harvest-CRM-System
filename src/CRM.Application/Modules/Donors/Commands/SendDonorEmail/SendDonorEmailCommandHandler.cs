@@ -1,8 +1,8 @@
 namespace CRM.Application.Modules.Donors.Commands.SendDonorEmail;
 
-using System.Net;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Interactions.Dtos;
 using CRM.Domain.Entities;
 using CRM.Domain.Enums;
@@ -97,9 +97,5 @@ public class SendDonorEmailCommandHandler : IRequestHandler<SendDonorEmailComman
     /// line and wrap each in its own paragraph, so a submitted "&lt;script&gt;..."
     /// (or any other tag) reaches Brevo as inert text, never as live markup.
     /// </summary>
-    private static string BuildHtmlBody(string plainTextBody)
-    {
-        var lines = plainTextBody.Replace("\r\n", "\n").Split('\n');
-        return string.Concat(lines.Select(line => $"<p>{WebUtility.HtmlEncode(line)}</p>"));
-    }
+    private static string BuildHtmlBody(string plainTextBody) => EmailBodyHtml.Paragraphs(plainTextBody);
 }
