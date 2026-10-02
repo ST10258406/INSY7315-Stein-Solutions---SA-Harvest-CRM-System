@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal, ChevronDown, FilterX } from 'lucide-react';
 import { useCompanyTypes, useOperationalRegions, useDonationTypes, useDonationFrequencies } from '@/features/lookups';
 import type { DonorFilters, DonorStatus } from '../types';
 import type { DonorFilterKey } from '../hooks/useDonorListFilters';
+import { DatePicker } from '@/components/common/DatePicker';
 import { Button } from '@/components/ui/button';
 
 const STATUS_OPTIONS: { value: DonorStatus; label: string }[] = [
@@ -187,15 +188,14 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
 
           <div className="flex items-center gap-2">
             <span className="text-[12.5px] font-semibold text-[var(--muted-c)] ml-1">Follow-up before:</span>
-            <input
-              type="date"
-              value={filters.followUpBefore ?? ''}
-              onChange={(e) => onFilterChange('followUpBefore', e.target.value || undefined)}
-              className={`h-[42px] rounded-full border px-3.5 text-[12.5px] font-semibold outline-none transition-colors ${
-                filters.followUpBefore 
-                  ? 'border-brand bg-brand text-primary-foreground' 
-                  : 'border-[var(--border)] bg-[var(--card)] text-[var(--ink)] focus-visible:border-[var(--ink)]'
-              }`}
+            <DatePicker
+              variant="pill"
+              value={filters.followUpBefore}
+              onChange={(date) => onFilterChange('followUpBefore', date || undefined)}
+              active={!!filters.followUpBefore}
+              placeholder="Any date"
+              clearable
+              aria-label="Follow-up before"
             />
           </div>
         </div>

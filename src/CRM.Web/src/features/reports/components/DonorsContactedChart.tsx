@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useDonorsContactedReport, defaultDonorsContactedFilters } from '../hooks/useDonorsContactedReport';
 import type { DonorsContactedFilters, ManagerContacted } from '../types';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
+import { CHART_TOOLTIP_PROPS } from '../lib/chartTooltip';
 
 interface DonorsContactedChartProps {
   /** Supplied by ReportFilters (next issue). Defaults to the last 30 days until then. */
@@ -66,7 +67,7 @@ export function DonorsContactedChart({ filters = defaultDonorsContactedFilters()
             textAnchor={angled ? 'end' : 'middle'}
           />
           <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: 'var(--muted-c)' }} />
-          <Tooltip cursor={{ fillOpacity: 0.1 }} formatter={(v) => [v, 'Donors contacted']} />
+          <Tooltip {...CHART_TOOLTIP_PROPS} cursor={{ fillOpacity: 0.1 }} formatter={(v) => [v, 'Donors contacted']} />
           <Bar dataKey="donorsContacted" fill="var(--brand)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>

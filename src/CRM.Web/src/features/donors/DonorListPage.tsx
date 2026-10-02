@@ -6,7 +6,7 @@ import { useDonors, useExportDonors } from './hooks';
 import { useDonorListFilters } from './hooks/useDonorListFilters';
 import { DonorFiltersBar } from './components/DonorFiltersBar';
 import { DonorTable } from './components/DonorTable';
-import { DonorPagination } from './components/DonorPagination';
+import { ListPagination } from '@/components/common/ListPagination';
 import { SendPublicFormInviteDialog } from './components/SendPublicFormInviteDialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 
@@ -83,7 +83,12 @@ export default function DonorListPage() {
         />
 
         {data && data.pagination.totalCount > 0 && (
-          <DonorPagination pagination={data.pagination} onPageChange={setPage} onPageSizeChange={setPageSize} />
+          <ListPagination
+            pagination={data.pagination}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="donors"
+          />
         )}
       </section>
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle } from 'lucide-react';
+import { DatePicker } from '@/components/common/DatePicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -158,14 +159,21 @@ export function LogInteractionDialog({ donorId, open, onOpenChange }: LogInterac
             <label htmlFor="interaction-followup" className="text-xs font-bold text-foreground">
               Follow-up date <span className="font-medium text-muted-foreground">(optional)</span>
             </label>
-            <input
-              id="interaction-followup"
-              type="date"
-              min={minFollowUpDate()}
-              {...register('followUpDate')}
-              className={`h-11 w-full rounded-2xl border bg-field px-3.75 text-[13.5px] font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${
-                errors.followUpDate ? 'border-destructive/70' : 'border-border'
-              }`}
+            <Controller
+              control={control}
+              name="followUpDate"
+              render={({ field }) => (
+                <DatePicker
+                  id="interaction-followup"
+                  variant="field"
+                  value={field.value}
+                  onChange={field.onChange}
+                  min={minFollowUpDate()}
+                  placeholder="No follow-up date"
+                  clearable
+                  invalid={!!errors.followUpDate}
+                />
+              )}
             />
             {errors.followUpDate ? (
               <span className="text-xs text-destructive">{errors.followUpDate.message}</span>

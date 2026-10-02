@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import { useUsers, useUserListFilters, useSetUserActiveStatus, useUnlockUser } from './hooks';
 import { UserFiltersBar } from './components/UserFiltersBar';
 import { UserTable } from './components/UserTable';
-import { UserPagination } from './components/UserPagination';
+import { ListPagination } from '@/components/common/ListPagination';
 import { NewUserModal } from './components/NewUserModal';
 import { EditUserModal } from './components/EditUserModal';
 import { ChangeRoleModal } from './components/ChangeRoleModal';
@@ -75,7 +75,12 @@ export default function UserListPage() {
         />
 
         {data && data.pagination.totalCount > 0 && (
-          <UserPagination pagination={data.pagination} onPageChange={setPage} onPageSizeChange={setPageSize} />
+          <ListPagination
+            pagination={data.pagination}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            itemLabel="users"
+          />
         )}
       </section>
 

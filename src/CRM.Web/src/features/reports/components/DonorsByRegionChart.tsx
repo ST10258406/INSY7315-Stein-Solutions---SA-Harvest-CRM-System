@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useDonorsByRegionReport } from '../hooks/useDonorsByRegionReport';
 import { CHART_HEIGHT, ChartSection } from './ChartSection';
+import { CHART_TOOLTIP_PROPS } from '../lib/chartTooltip';
 
 /** Horizontal bars: region names are longer than a Y-axis count needs to be legible on. */
 export function DonorsByRegionChart() {
@@ -31,7 +32,7 @@ export function DonorsByRegionChart() {
             interval={0}
             tick={{ fontSize: 12, fill: 'var(--muted-c)' }}
           />
-          <Tooltip cursor={{ fillOpacity: 0.1 }} formatter={(v) => [v, 'Donors']} />
+          <Tooltip {...CHART_TOOLTIP_PROPS} cursor={{ fillOpacity: 0.1 }} formatter={(v) => [v, 'Donors']} />
           <Bar dataKey="donorCount" fill="var(--brand)" radius={[0, 4, 4, 0]} minPointSize={0} />
         </BarChart>
       </ResponsiveContainer>

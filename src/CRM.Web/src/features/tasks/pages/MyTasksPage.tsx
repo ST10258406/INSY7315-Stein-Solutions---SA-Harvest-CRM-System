@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { ListPagination } from '@/components/common/ListPagination';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { useMyTasks } from '../hooks';
@@ -9,7 +10,7 @@ import { taskMinDueDate } from '../schemas/taskForm.schema';
 import type { MyTasksFilters, TaskDto } from '../types';
 
 const PROCUREMENT_ROLES = ['Procurement', 'Admin', 'SuperAdmin'];
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
 const SEGMENTS = [
   { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
@@ -21,6 +22,7 @@ export default function MyTasksPage() {
   const [segment, setSegment] = useState<Segment>('open');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<TaskDto | null>(null);
 
@@ -30,16 +32,21 @@ export default function MyTasksPage() {
   const filters = useMemo<MyTasksFilters>(
     () => ({
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       isCompleted: segment === 'completed',
       ...(overdueOnly && segment === 'open' ? { dueBefore: taskMinDueDate() } : {}),
     }),
-    [page, segment, overdueOnly],
+    [page, pageSize, segment, overdueOnly],
   );
 
   const { data, isPending, isError, error, refetch } = useMyTasks(filters);
   const tasks = data?.data ?? [];
   const pagination = data?.pagination;
+
+  const changePageSize = (next: number) => {
+    setPageSize(next);
+    setPage(1);
+  };
 
   const changeSegment = (next: Segment) => {
     setSegment(next);
@@ -129,37 +136,12 @@ export default function MyTasksPage() {
       />
 
       {pagination && pagination.totalCount > 0 && (
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-[14px_20px]">
-          <span className="text-[12.5px] font-medium text-[var(--muted-c)]">
-            Showing {(pagination.page - 1) * pagination.pageSize + 1}–
-            {Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount} tasks
-          </span>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={pagination.page <= 1}
-              aria-label="Previous page"
-              className="h-8.5 w-8.5"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="px-1 text-[12.5px] font-semibold text-[var(--ink)]">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-              disabled={pagination.page >= pagination.totalPages}
-              aria-label="Next page"
-              className="h-8.5 w-8.5"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        <ListPagination
+          pagination={pagination}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+          itemLabel="tasks"
+        />
       )}
 
       {canManage && <TaskFormDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />}

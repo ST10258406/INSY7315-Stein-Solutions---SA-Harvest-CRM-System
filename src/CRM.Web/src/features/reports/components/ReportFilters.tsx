@@ -1,13 +1,8 @@
 import { useMemo } from 'react';
-import { CalendarBlank } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/common/DatePicker';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRelationshipManagers } from '@/features/lookups';
-import { formatDate } from '@/features/donors/lib/donorFormatters';
-import { fromYmd, toYmd } from '../lib/date';
 import type { DonorsContactedFilters } from '../types';
 
 const ALL_MANAGERS_VALUE = 'all';
@@ -29,8 +24,6 @@ interface ReportFiltersProps {
  */
 export function ReportFilters({ value, onChange }: ReportFiltersProps) {
   const managers = useRelationshipManagers();
-  const startDate = fromYmd(value.startDate);
-  const endDate = fromYmd(value.endDate);
 
   // Base UI's <Select.Value> shows the raw value string unless Root's `items` gives it a
   // value→label lookup — without this it would render the manager's GUID (or "all") verbatim
@@ -41,14 +34,14 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
     return items;
   }, [managers.data]);
 
-  function handleStartSelect(date: Date | undefined) {
-    if (!date || !endDate || date > endDate) return;
-    onChange({ ...value, startDate: toYmd(date) });
+  function handleStartSelect(date: string) {
+    if (!date || date > value.endDate) return;
+    onChange({ ...value, startDate: date });
   }
 
-  function handleEndSelect(date: Date | undefined) {
-    if (!date || !startDate || date < startDate) return;
-    onChange({ ...value, endDate: toYmd(date) });
+  function handleEndSelect(date: string) {
+    if (!date || date < value.startDate) return;
+    onChange({ ...value, endDate: date });
   }
 
   function handleManagerChange(managerId: string | null) {
@@ -62,36 +55,12 @@ export function ReportFilters({ value, onChange }: ReportFiltersProps) {
     <section className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--soft)] p-4">
       <div className="flex flex-col gap-1.5">
         <Label className="text-[11.5px] font-semibold text-[var(--muted-c)]">Start date</Label>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
-                <CalendarBlank className="h-3.5 w-3.5" />
-                {formatDate(value.startDate)}
-              </Button>
-            }
-          />
-          <PopoverContent className="w-auto p-0">
-            <Calendar mode="single" selected={startDate} onSelect={handleStartSelect} disabled={{ after: endDate }} />
-          </PopoverContent>
-        </Popover>
+        <DatePicker value={value.startDate} max={value.endDate} onChange={handleStartSelect} aria-label="Start date" />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label className="text-[11.5px] font-semibold text-[var(--muted-c)]">End date</Label>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button type="button" variant="secondary" size="sm" className="justify-start gap-1.5">
-                <CalendarBlank className="h-3.5 w-3.5" />
-                {formatDate(value.endDate)}
-              </Button>
-            }
-          />
-          <PopoverContent className="w-auto p-0">
-            <Calendar mode="single" selected={endDate} onSelect={handleEndSelect} disabled={{ before: startDate }} />
-          </PopoverContent>
-        </Popover>
+        <DatePicker value={value.endDate} min={value.startDate} onChange={handleEndSelect} aria-label="End date" />
       </div>
 
       <div className="flex flex-col gap-1.5">
