@@ -7,7 +7,7 @@ It replaces Monday.com. Built as a final year project.
 
 - **Backend:** ASP.NET Core 9 Web API, C# 13, .NET 10
 - **Architecture:** Modular Monolith + Clean Architecture (4 layers)
-- **Database:** PostgreSQL 16 via Entity Framework Core 9 + Npgsql
+- **Database:** PostgreSQL 18 via Entity Framework Core 10 + Npgsql
 - **Frontend:** React 19 + TypeScript 5 + Vite
 - **State:** TanStack Query (server state) + Zustand (client state)
 - **Forms:** React Hook Form + Zod validation

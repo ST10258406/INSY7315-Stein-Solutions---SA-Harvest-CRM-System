@@ -58,7 +58,7 @@ Donors never log in. The primary users are the NPO's procurement and marketing t
 - ASP.NET Core 10 Web API on **.NET 10**, C# 13
 - **Modular Monolith** + **Clean Architecture** (Domain → Application → Infrastructure → API)
 - **CQRS** via MediatR, with three pipeline behaviours: `LoggingBehaviour` → `ValidationBehaviour` → `AuditBehaviour`
-- **PostgreSQL 16** via EF Core 10 + Npgsql (code-first migrations, Fluent API only)
+- **PostgreSQL 18** via EF Core 10 + Npgsql (code-first migrations, Fluent API only)
 - **FluentValidation** for all command/query validation
 - **AutoMapper** for entity → DTO projection
 - **Hangfire** (+ `Hangfire.PostgreSql`) for scheduled/background jobs
@@ -214,6 +214,11 @@ On first run against an empty database the seeders create:
 Each seeder is idempotent (guards on "any rows already exist"), so restarting the API
 won't duplicate data. To start completely fresh, drop the volume:
 `docker compose down -v` (this also wipes Azurite blobs), then bring the stack back up.
+
+> **Upgrading from PostgreSQL 16:** the stack now runs `postgres:18`, which stores its data in
+> a different layout and cannot open a volume created by `postgres:16`. Run
+> `docker compose down -v` once, then `docker compose up --build`; migrations and the seeders
+> rebuild the database on startup. Any local-only data in the old volume is lost.
 
 > These credentials are for **local development only**. In production `ADMIN_DEFAULT_PASSWORD`
 > comes from Key Vault and must be rotated immediately after the first sign-in.
@@ -385,7 +390,7 @@ and `npx tsc --noEmit` before opening a PR.
 
 GitHub Actions run on push and PR to `main` and `Development`:
 
-- **`backend.yml`** — spins up a Postgres 16 service, then `dotnet restore` / `build --configuration Release` / `test` against `CRM.slnx` on .NET 10.
+- **`backend.yml`** — spins up a Postgres 18 service, then `dotnet restore` / `build --configuration Release` / `test` against `CRM.slnx` on .NET 10.
 - **`frontend.yml`** — `npm ci`, `npx tsc --noEmit`, `npm run build` in `src/CRM.Web` on Node 26.
 
 A PR is mergeable only when both pipelines pass, the solution builds with **zero warnings**,
