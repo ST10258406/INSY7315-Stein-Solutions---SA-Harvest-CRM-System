@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Models;
 using CRM.Application.Modules.Auth.Commands.Login;
 using CRM.Application.Modules.Auth.Dtos;
 using CRM.Domain.Entities;
@@ -34,6 +35,7 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
 
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
@@ -115,7 +117,7 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
         return client;
     }
 
-    private static async Task<DonorDocument> SeedDonorWithDocumentAsync(CrmDbContext context, DocumentType documentType)
+    private static async Task<DonorDocument> SeedDonorWithDocumentAsync(CrmDbContext context, DocumentType documentType, bool isActive = true)
     {
         var companyType = new LookupCompanyType { Id = 1, Name = "Manufacturer", IsActive = true };
         var entityType = new LookupEntityType { Id = 1, Name = "Pty Ltd", IsActive = true };
@@ -148,7 +150,7 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
             DocumentType = documentType,
             FileName = "file.pdf",
             BlobStoragePath = $"donors/{donor.Id}/{documentType}/file.pdf",
-            IsActive = true
+            IsActive = isActive
         };
         context.DonorDocuments.Add(document);
 
@@ -212,5 +214,82 @@ public class DonorDocumentDownloadTests : IClassFixture<WebApplicationFactory<Pr
         var response = await client.GetAsync($"/api/v1/donors/{Guid.NewGuid()}/documents/{Guid.NewGuid()}/download");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // Security review F-06: a soft-deleted document is gone for EVERY role — 404 (not 403,
+    // so its existence isn't confirmed), and no SAS URL is ever generated for it.
+    [Theory]
+    [InlineData("Procurement", DocumentType.Signature)]
+    [InlineData("Procurement", DocumentType.BBBEECertificate)]
+    [InlineData("Admin", DocumentType.BBBEECertificate)]
+    [InlineData("SuperAdmin", DocumentType.BBBEECertificate)]
+    [InlineData("SuperAdmin", DocumentType.Signature)]
+    public async Task Download_SoftDeletedDocument_Returns404ForEveryRole(string role, DocumentType documentType)
+    {
+        var client = await CreateAuthenticatedClient(role);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var document = await SeedDonorWithDocumentAsync(context, documentType, isActive: false);
+        _blobStorageMock.ClearReceivedCalls();
+
+        var response = await client.GetAsync($"/api/v1/donors/{document.DonorId}/documents/{document.Id}/download");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await _blobStorageMock.DidNotReceive().GenerateSasUrlAsync(Arg.Any<string>(), Arg.Any<TimeSpan>());
+    }
+
+    [Fact]
+    public async Task Download_AfterAdminDeletesTheDocument_Returns404AndTheRowIsKept()
+    {
+        var client = await CreateAuthenticatedClient("SuperAdmin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var document = await SeedDonorWithDocumentAsync(context, DocumentType.BBBEECertificate);
+        var url = $"/api/v1/donors/{document.DonorId}/documents/{document.Id}";
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"{url}/download")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(url)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"{url}/download")).StatusCode);
+        // Deleting it again doesn't confirm it ever existed either.
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync(url)).StatusCode);
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var row = await verifyContext.DonorDocuments.IgnoreQueryFilters().SingleAsync(d => d.Id == document.Id);
+        Assert.False(row.IsActive); // soft delete — the row stays
+    }
+
+    [Fact]
+    public async Task Download_ReplacedBbbeeCertificate_OldOneIs404AndOnlyTheNewOneIsListed()
+    {
+        var client = await CreateAuthenticatedClient("Admin");
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var original = await SeedDonorWithDocumentAsync(context, DocumentType.BBBEECertificate);
+
+        _blobStorageMock
+            .UploadAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(ci => Task.FromResult(new BlobUploadResult(ci.ArgAt<string>(1), "https://storage.blob.core.windows.net/" + ci.ArgAt<string>(1))));
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("BBBEECertificate"), "documentType");
+        var file = new ByteArrayContent("%PDF-1.7 replacement"u8.ToArray());
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "file", "bbbee_2026.pdf");
+
+        var uploadResponse = await client.PostAsync($"/api/v1/donors/{original.DonorId}/documents", form);
+        Assert.Equal(HttpStatusCode.Created, uploadResponse.StatusCode);
+        var replacementId = JsonDocument.Parse(await uploadResponse.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var oldDownload = await client.GetAsync($"/api/v1/donors/{original.DonorId}/documents/{original.Id}/download");
+        var newDownload = await client.GetAsync($"/api/v1/donors/{original.DonorId}/documents/{replacementId}/download");
+        Assert.Equal(HttpStatusCode.NotFound, oldDownload.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, newDownload.StatusCode);
+
+        var detail = JsonDocument.Parse(await client.GetStringAsync($"/api/v1/donors/{original.DonorId}")).RootElement;
+        var listed = detail.GetProperty("data").GetProperty("compliance").GetProperty("documents");
+        Assert.Equal(replacementId, Assert.Single(listed.EnumerateArray()).GetProperty("id").GetGuid());
     }
 }

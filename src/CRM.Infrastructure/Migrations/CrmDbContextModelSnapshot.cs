@@ -157,6 +157,12 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("operations_logistics_details");
 
+                    b.Property<string>("ReferenceNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("reference_number");
+
                     b.Property<string>("RegisteredCompanyName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -178,6 +184,15 @@ namespace CRM.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("submission_source");
+
+                    b.Property<string>("SubmissionToken")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("submission_token");
+
+                    b.Property<DateTimeOffset?>("SubmissionTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submission_token_expires_at");
 
                     b.Property<string>("TradingName")
                         .HasMaxLength(255)
@@ -215,11 +230,20 @@ namespace CRM.Infrastructure.Migrations
                         .HasDatabaseName("idx_donors_foodspace_id")
                         .HasFilter("foodspace_company_id IS NOT NULL");
 
+                    b.HasIndex("ReferenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("idx_donors_reference_number");
+
                     b.HasIndex("RelationshipManagerId")
                         .HasDatabaseName("idx_donors_relationship_manager");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("idx_donors_status");
+
+                    b.HasIndex("SubmissionToken")
+                        .IsUnique()
+                        .HasDatabaseName("idx_donors_submission_token")
+                        .HasFilter("submission_token IS NOT NULL");
 
                     b.ToTable("donors", null, t =>
                         {
@@ -555,6 +579,72 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("donor_tasks", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.EmailLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DonorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("donor_id");
+
+                    b.Property<string>("EmailType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("email_type");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("provider_message_id");
+
+                    b.Property<Guid?>("SentByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sent_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("ToAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("to_address");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonorId");
+
+                    b.HasIndex("SentByUserId");
+
+                    b.ToTable("email_logs", (string)null);
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.InteractionLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -588,6 +678,15 @@ namespace CRM.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("interaction_type");
+
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_entity_id");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("related_entity_type");
 
                     b.Property<string>("Subject")
                         .HasMaxLength(255)
@@ -951,22 +1050,38 @@ namespace CRM.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("FamilyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("GraceReplayedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsRevoked")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("Token")
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("Token");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Token")
+                    b.HasIndex("FamilyId");
+
+                    b.HasIndex("TokenHash")
                         .IsUnique();
 
                     b.HasIndex("UserId");
@@ -1025,6 +1140,12 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("email");
 
+                    b.Property<int>("FailedLoginCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("failed_login_count");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1043,19 +1164,29 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("last_name");
 
+                    b.Property<DateTimeOffset?>("LockoutEndUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lockout_end_utc");
+
+                    b.Property<bool>("MustChangePassword")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("must_change_password");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
 
-                    b.Property<string>("PasswordResetToken")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("password_reset_token");
-
                     b.Property<DateTimeOffset?>("PasswordResetTokenExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("password_reset_token_expires_at");
+
+                    b.Property<string>("PasswordResetTokenHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("password_reset_token");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1299,6 +1430,23 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Donor");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.EmailLog", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Donor", "Donor")
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CRM.Domain.Entities.User", "SentByUser")
+                        .WithMany()
+                        .HasForeignKey("SentByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Donor");
+
+                    b.Navigation("SentByUser");
                 });
 
             modelBuilder.Entity("CRM.Domain.Entities.InteractionLog", b =>

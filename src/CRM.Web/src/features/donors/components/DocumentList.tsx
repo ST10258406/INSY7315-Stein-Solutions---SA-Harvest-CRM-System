@@ -60,11 +60,6 @@ export function DocumentList({ donorId, documents }: DocumentListProps) {
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
-                {!doc.isActive && (
-                  <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    Archived
-                  </span>
-                )}
                 {isRestrictedDocumentType(doc.documentType) ? (
                   <RoleGuard allowedRoles={ADMIN_ROLES}>{downloadButton}</RoleGuard>
                 ) : (

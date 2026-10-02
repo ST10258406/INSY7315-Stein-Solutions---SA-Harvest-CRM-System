@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     container_name: crm-postgres
     restart: unless-stopped
     environment:
@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: crmdb
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # postgres:18+ keeps PGDATA in a version subdirectory (/var/lib/postgresql/18/docker)
+      # and declares its VOLUME at /var/lib/postgresql, so mount the parent. A volume created
+      # by postgres:16 cannot be reused: run `docker compose down -v` once and let it re-seed.
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
@@ -42,11 +45,14 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      BREVO_API_KEY: ${BREVO_API_KEY}
       Azure__BlobStorage__ConnectionString: ${AZURE_STORAGE_CONNECTION_STRING}
       Azure__BlobStorage__ContainerName: donor-documents
+      # Download links are opened by the browser, which can't resolve the internal "azurite" host.
+      Azure__BlobStorage__PublicEndpoint: http://localhost:10000
       AZURE_KEY_VAULT_URI: ${AZURE_KEY_VAULT_URI}
       ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@crm.local}
     depends_on:
       postgres:
         condition: service_healthy

@@ -11,12 +11,10 @@ import type { ApiError, NotificationFilters, NotificationListDto } from '../type
  */
 export function useNotifications(filters: NotificationFilters = {}) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const isDevBypass = useAuthStore((s) => s.isDevBypass);
 
   return useQuery<NotificationListDto, ApiError>({
     queryKey: notificationKeys.list(filters),
-    // The dev landing-page bypass has no real token, so every call 401s.
-    enabled: isAuthenticated && !isDevBypass,
+    enabled: isAuthenticated,
     queryFn: async () => {
       const { data } = await api.get<NotificationListDto>('/api/v1/notifications', { params: filters });
       return data;

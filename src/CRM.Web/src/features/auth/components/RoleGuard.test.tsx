@@ -10,7 +10,6 @@ describe('RoleGuard Component', () => {
     useAuthStore.setState({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isHydrating: false,
     });

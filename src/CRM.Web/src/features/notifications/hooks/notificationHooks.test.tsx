@@ -45,7 +45,7 @@ function createWrapper() {
 describe('notification hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthStore.setState({ isAuthenticated: true, isDevBypass: false });
+    useAuthStore.setState({ isAuthenticated: true });
   });
 
   it('useNotifications → GETs /api/v1/notifications and exposes unreadCount', async () => {
@@ -60,7 +60,7 @@ describe('notification hooks', () => {
   });
 
   it('useNotifications → stays idle when not authenticated', () => {
-    useAuthStore.setState({ isAuthenticated: false, isDevBypass: false });
+    useAuthStore.setState({ isAuthenticated: false });
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useNotifications(), { wrapper });
     expect(result.current.fetchStatus).toBe('idle');

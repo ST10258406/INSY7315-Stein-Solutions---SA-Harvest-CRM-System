@@ -26,5 +26,15 @@ public class DonorDocumentConfiguration : IEntityTypeConfiguration<DonorDocument
 
         builder.HasOne(x => x.Donor).WithMany(x => x.Documents).HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.UploadedByUser).WithMany().HasForeignKey(x => x.UploadedByUserId).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
+
+        // GLOBAL QUERY FILTER — soft-deleted documents are invisible to EVERY query on this
+        // entity, including Donor.Documents in the donor-detail projection, the download
+        // lookup and the authorization filter's type lookup (security review F-06). "Deleted"
+        // has to mean gone from the user's point of view: no listing, no fresh SAS URL, for
+        // any role. A filter rather than per-query `IsActive` checks so a future query can't
+        // forget it. The rows stay in the table (soft delete). Code that genuinely needs
+        // inactive rows — an audit/history view, a test asserting the soft delete — must opt
+        // out explicitly with .IgnoreQueryFilters().
+        builder.HasQueryFilter(x => x.IsActive);
     }
 }

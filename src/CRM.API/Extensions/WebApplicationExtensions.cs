@@ -11,6 +11,21 @@ public static class WebApplicationExtensions
 {
     public static WebApplication UseApiMiddleware(this WebApplication app)
     {
+        // Must run first, before anything reads Connection.RemoteIpAddress (the rate
+        // limiter included). Which peers' X-Forwarded-For is trusted is decided in
+        // ForwardedHeadersSetup — never "any client", outside Azure App Service's own front end.
+        app.UseForwardedHeaders(ForwardedHeadersSetup.Create(app.Configuration));
+
+        // First after forwarded headers, so even error responses carry the security headers.
+        app.UseMiddleware<SecurityHeadersMiddleware>(app.Environment.IsDevelopment());
+
+        // HSTS only outside Development (never on localhost), 1 year, no preload: preload is
+        // effectively permanent and should only be opted into deliberately.
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 
         app.UseSerilogRequestLogging();
@@ -20,6 +35,12 @@ public static class WebApplicationExtensions
         app.UseCors("DefaultCorsPolicy");
 
         app.UseAuthentication();
+
+        // After authentication (the forced-change claim is known) but BEFORE authorization, which
+        // would otherwise short-circuit role-restricted endpoints with a generic 403 and hide the
+        // PASSWORD_CHANGE_REQUIRED code from a flagged user.
+        app.UseMiddleware<PasswordChangeRequiredMiddleware>();
+
         app.UseAuthorization();
 
         app.UseRateLimiter();

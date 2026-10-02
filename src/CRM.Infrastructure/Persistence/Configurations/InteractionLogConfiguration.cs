@@ -22,6 +22,9 @@ public class InteractionLogConfiguration : IEntityTypeConfiguration<InteractionL
         builder.Property(x => x.Body).HasColumnName("body").HasColumnType("text").IsRequired();
         builder.Property(x => x.EmailAttachmentUrl).HasColumnName("email_attachment_url").HasColumnType("text");
 
+        builder.Property(x => x.RelatedEntityId).HasColumnName("related_entity_id");
+        builder.Property(x => x.RelatedEntityType).HasColumnName("related_entity_type").HasMaxLength(50);
+
         builder.HasOne(x => x.Donor).WithMany(x => x.InteractionLogs).HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.CreatedByUser).WithMany().HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict).IsRequired();
     }

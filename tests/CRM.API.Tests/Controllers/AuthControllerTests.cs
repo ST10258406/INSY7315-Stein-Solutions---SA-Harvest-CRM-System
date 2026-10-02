@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Utilities;
 using CRM.Application.Modules.Auth.Commands.ChangePassword;
-using CRM.Application.Modules.Auth.Commands.ForgotPassword;
 using CRM.Application.Modules.Auth.Commands.Login;
-using CRM.Application.Modules.Auth.Commands.Logout;
 using CRM.Application.Modules.Auth.Commands.Refresh;
 using CRM.Application.Modules.Auth.Commands.ResetPassword;
 using CRM.Application.Modules.Auth.Dtos;
@@ -16,7 +16,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Hangfire;
+using NSubstitute;
 
 namespace CRM.API.Tests.Controllers;
 
@@ -28,6 +30,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
         
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
@@ -61,6 +64,12 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
                 {
                     options.UseInMemoryDatabase("InMemoryDbForTesting");
                 });
+
+                // Swap the real Brevo-backed EmailService for a no-op fake so
+                // ForgotPassword integration tests never make a real outbound
+                // HTTP call.
+                services.RemoveAll<IEmailService>();
+                services.AddScoped<IEmailService>(_ => Substitute.For<IEmailService>());
             });
         });
     }
@@ -104,8 +113,25 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         var result = JsonSerializer.Deserialize<LoginResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(result);
         Assert.NotEmpty(result.AccessToken);
-        Assert.NotEmpty(result.RefreshToken);
         Assert.Equal(user.Id, result.User.Id);
+
+        // The refresh token is only ever in the HttpOnly cookie — never in the JSON body,
+        // where JavaScript (and so XSS) could read it.
+        Assert.DoesNotContain("refreshToken", content, StringComparison.OrdinalIgnoreCase);
+        var setCookie = AuthCookieTestHelpers.GetRefreshSetCookieHeader(response);
+        Assert.NotNull(setCookie);
+        Assert.Contains("httponly", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=strict", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/api/auth", setCookie, StringComparison.OrdinalIgnoreCase);
+
+        // Only the hash is stored.
+        var raw = AuthCookieTestHelpers.GetRefreshCookie(response)!;
+        using var verifyScope = _factory.Services.CreateScope();
+        var stored = await verifyScope.ServiceProvider.GetRequiredService<CrmDbContext>()
+            .RefreshTokens.AsNoTracking().SingleAsync(rt => rt.UserId == user.Id);
+        Assert.NotEqual(raw, stored.TokenHash);
+        Assert.Equal(SecureTokens.Hash(raw), stored.TokenHash);
     }
 
     [Fact]
@@ -135,81 +161,209 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("Invalid email or password.", result.GetProperty("message").GetString());
     }
 
-    [Fact]
-    public async Task Refresh_WithValidToken_Returns200AndExpectedShape()
+    private async Task<User> ResetDbWithUserAsync(string email, string password = "TestPassword123", bool isActive = true)
     {
-        // Arrange
-        var client = _factory.CreateClient();
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
-
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
 
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Email = "refresh-api@example.com",
-            FirstName = "API",
+            Email = email,
+            FirstName = "Cookie",
             LastName = "Test",
-            PasswordHash = "hash",
+            PasswordHash = new PasswordHasher<User>().HashPassword(null!, password),
+            IsActive = isActive,
             UserRoles = new List<UserRole>()
         };
         context.Users.Add(user);
+        await context.SaveChangesAsync();
+        return user;
+    }
 
-        var refreshToken = new RefreshToken
+    private async Task<User> AddUserAsync(string email, string password = "TestPassword123")
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var user = new User
         {
             Id = Guid.NewGuid(),
-            UserId = user.Id,
-            User = user,
-            Token = "integration-valid-refresh-token",
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
-            IsRevoked = false,
-            CreatedAt = DateTimeOffset.UtcNow
+            Email = email,
+            FirstName = "Second",
+            LastName = "User",
+            PasswordHash = new PasswordHasher<User>().HashPassword(null!, password),
+            UserRoles = new List<UserRole>()
         };
-        context.RefreshTokens.Add(refreshToken);
+        context.Users.Add(user);
         await context.SaveChangesAsync();
+        return user;
+    }
 
-        var command = new RefreshTokenCommand("integration-valid-refresh-token");
+    private async Task<List<RefreshToken>> TokensForAsync(Guid userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<CrmDbContext>()
+            .RefreshTokens.AsNoTracking().Where(rt => rt.UserId == userId).ToListAsync();
+    }
 
-        // Act
-        var response = await client.PostAsJsonAsync("/api/auth/refresh", command);
+    [Fact]
+    public async Task Refresh_WithValidCookie_Returns200WithUserAndRotatesCookie()
+    {
+        var user = await ResetDbWithUserAsync("refresh-api@example.com");
+        var (_, original) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
 
-        // Assert
+        var response = await _factory.RefreshWithCookieAsync(original);
+
         var content = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected OK, but got {response.StatusCode}. Content: {content}");
-
         var result = JsonSerializer.Deserialize<RefreshTokenResponseDto>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(result);
         Assert.NotEmpty(result.AccessToken);
         Assert.Equal(3600, result.ExpiresIn);
+        Assert.Equal(user.Id, result.User.Id); // enough for the SPA to restore its session
+        Assert.DoesNotContain("refreshToken", content, StringComparison.OrdinalIgnoreCase);
+
+        // Rotation: a new cookie value, the old token retired in favour of it, same family.
+        var rotated = AuthCookieTestHelpers.GetRefreshCookie(response);
+        Assert.NotNull(rotated);
+        Assert.NotEqual(original, rotated);
+        var tokens = await TokensForAsync(user.Id);
+        var old = tokens.Single(t => t.TokenHash == SecureTokens.Hash(original));
+        var replacement = tokens.Single(t => t.TokenHash == SecureTokens.Hash(rotated));
+        Assert.True(old.IsRevoked);
+        Assert.Equal(replacement.TokenHash, old.ReplacedByTokenHash);
+        Assert.Equal(old.FamilyId, replacement.FamilyId);
+        Assert.False(replacement.IsRevoked);
     }
 
     [Fact]
-    public async Task Refresh_WithBadToken_Returns401WithStandardEnvelope()
+    public async Task Refresh_PageReload_RestoresSessionFromCookieAlone()
     {
-        // Arrange
-        var client = _factory.CreateClient();
-        using var scope = _factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        // What the SPA does on page load: no access token in memory, only the cookie the
+        // browser kept from login.
+        var user = await ResetDbWithUserAsync("reload@example.com");
+        var browser = _factory.CreateBrowserClient();
+        (await browser.PostAsJsonAsync("/api/auth/login", new LoginCommand(user.Email, "TestPassword123"))).EnsureSuccessStatusCode();
 
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
+        var first = await browser.PostAsync("/api/auth/refresh", null);
+        var second = await browser.PostAsync("/api/auth/refresh", null); // next reload, rotated cookie
 
-        var command = new RefreshTokenCommand("invalid-or-expired-token");
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        var restored = JsonSerializer.Deserialize<RefreshTokenResponseDto>(
+            await second.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Equal(user.Email, restored.User.Email);
+    }
 
-        // Act
-        var response = await client.PostAsJsonAsync("/api/auth/refresh", command);
+    [Fact]
+    public async Task Refresh_WithBadCookie_Returns401WithStandardEnvelopeAndClearsCookie()
+    {
+        await ResetDbWithUserAsync("bad-cookie@example.com");
 
-        // Assert
+        var response = await _factory.RefreshWithCookieAsync("invalid-or-expired-token");
+
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-
-        var responseString = await response.Content.ReadAsStringAsync();
-        var result = JsonSerializer.Deserialize<JsonElement>(responseString);
-
+        var result = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
         Assert.Equal(401, result.GetProperty("status").GetInt32());
         Assert.Equal("UNAUTHORIZED", result.GetProperty("code").GetString());
         Assert.Equal("Refresh token is invalid or expired.", result.GetProperty("message").GetString());
+        Assert.True(result.TryGetProperty("traceId", out _));
+
+        var setCookie = AuthCookieTestHelpers.GetRefreshSetCookieHeader(response);
+        Assert.NotNull(setCookie);
+        Assert.Contains("expires=Thu, 01 Jan 1970", setCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Refresh_WithoutCookie_Returns401()
+    {
+        var response = await _factory.RefreshWithCookieAsync(refreshToken: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_WithoutCsrfHeader_Returns403()
+    {
+        var user = await ResetDbWithUserAsync("csrf@example.com");
+        var (_, cookie) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
+
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh");
+        request.Headers.Add("Cookie", $"{AuthCookieTestHelpers.CookieName}={Uri.EscapeDataString(cookie)}");
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // Nothing rotated: the session is untouched.
+        Assert.All(await TokensForAsync(user.Id), t => Assert.False(t.IsRevoked));
+    }
+
+    [Fact]
+    public async Task Refresh_WithDeactivatedUser_Returns401()
+    {
+        var user = await ResetDbWithUserAsync("deactivated-refresh@example.com");
+        var (_, cookie) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+            (await context.Users.SingleAsync(u => u.Id == user.Id)).IsActive = false;
+            await context.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.RefreshWithCookieAsync(cookie)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_ReplayedOldCookieWithinGraceWindow_StillWorks()
+    {
+        // Two tabs reloading at once both send the same cookie; neither may be logged out.
+        var user = await ResetDbWithUserAsync("two-tabs@example.com");
+        var (_, original) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
+
+        var tabA = await _factory.RefreshWithCookieAsync(original);
+        var tabB = await _factory.RefreshWithCookieAsync(original);
+
+        Assert.Equal(HttpStatusCode.OK, tabA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, tabB.StatusCode);
+        // Both tabs' new cookies keep working afterwards.
+        Assert.Equal(HttpStatusCode.OK, (await _factory.RefreshWithCookieAsync(AuthCookieTestHelpers.GetRefreshCookie(tabA))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _factory.RefreshWithCookieAsync(AuthCookieTestHelpers.GetRefreshCookie(tabB))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_ReplayedOldCookieAfterGraceWindow_RevokesWholeFamily()
+    {
+        // F-04 reuse detection. Grace window set to 0 on this host so "later" is immediate.
+        using var factory = _factory.WithWebHostBuilder(b => b.UseSetting("Auth:RefreshToken:ReuseGraceSeconds", "0"));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            context.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                Email = "stolen@example.com",
+                FirstName = "Stolen",
+                LastName = "Cookie",
+                PasswordHash = new PasswordHasher<User>().HashPassword(null!, "TestPassword123")
+            });
+            await context.SaveChangesAsync();
+        }
+
+        var (_, original) = await factory.LoginForCookieAsync("stolen@example.com", "TestPassword123");
+        var legit = await factory.RefreshWithCookieAsync(original);
+        Assert.Equal(HttpStatusCode.OK, legit.StatusCode);
+        var current = AuthCookieTestHelpers.GetRefreshCookie(legit)!;
+        await Task.Delay(1100); // past the (zero-second) grace window
+
+        // The attacker replays the copied original...
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.RefreshWithCookieAsync(original)).StatusCode);
+
+        // ...which kills the whole chain, including the legitimate user's current cookie.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.RefreshWithCookieAsync(current)).StatusCode);
     }
 
     [Fact]
@@ -234,10 +388,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         context.Users.Add(user);
         await context.SaveChangesAsync();
 
-        var command = new ForgotPasswordCommand("forgot-pass@example.com");
-
         // Act
-        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "forgot-pass@example.com" });
 
         // Assert
         var content = await response.Content.ReadAsStringAsync();
@@ -259,10 +411,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
 
-        var command = new ForgotPasswordCommand("doesnotexist@example.com");
-
         // Act
-        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", command);
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "doesnotexist@example.com" });
 
         // Assert
         var content = await response.Content.ReadAsStringAsync();
@@ -274,61 +424,53 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task Logout_WithValidAccessToken_Returns204()
+    public async Task Logout_WithValidAccessToken_Returns204RevokesSessionAndClearsCookie()
     {
-        // Arrange
-        var client = _factory.CreateClient();
-        using var scope = _factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+        var user = await ResetDbWithUserAsync("logout-integration@example.com");
+        var browser = _factory.CreateBrowserClient();
+        var loginResponse = await browser.PostAsJsonAsync("/api/auth/login", new LoginCommand(user.Email, "TestPassword123"));
+        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(
+            await loginResponse.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        var cookie = AuthCookieTestHelpers.GetRefreshCookie(loginResponse)!;
+        browser.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult.AccessToken);
 
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
+        var response = await browser.PostAsync("/api/auth/logout", null);
 
-        var password = "TestPassword123";
-        var hasher = new PasswordHasher<User>();
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = "logout-integration@example.com",
-            FirstName = "Logout",
-            LastName = "Test",
-            PasswordHash = hasher.HashPassword(null!, password),
-            UserRoles = new List<UserRole>()
-        };
-
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
-
-        var loginCommand = new LoginCommand(user.Email, password);
-        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", loginCommand);
-        var loginContent = await loginResponse.Content.ReadAsStringAsync();
-        var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(loginContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", loginResult!.AccessToken);
-
-        var logoutCommand = new LogoutCommand(loginResult.RefreshToken);
-
-        // Act
-        var response = await client.PostAsJsonAsync("/api/auth/logout", logoutCommand);
-
-        // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Contains("expires=Thu, 01 Jan 1970", AuthCookieTestHelpers.GetRefreshSetCookieHeader(response)!, StringComparison.OrdinalIgnoreCase);
+        Assert.All(await TokensForAsync(user.Id), t => Assert.True(t.IsRevoked));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.RefreshWithCookieAsync(cookie)).StatusCode);
 
-        // Verify the token was revoked in the DB
-        var tokenInDb = await context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == loginResult.RefreshToken);
-        Assert.NotNull(tokenInDb);
-        Assert.True(tokenInDb.IsRevoked);
+        // The access token belonged to that session, so it stops working immediately.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await browser.PostAsync("/api/auth/logout", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_PresentingAnotherUsersCookie_LeavesTheirSessionAlone()
+    {
+        // F-21: logout must only ever revoke the caller's own session.
+        var victim = await ResetDbWithUserAsync("victim-session@example.com");
+        var attacker = await AddUserAsync("attacker-session@example.com");
+        var (_, victimCookie) = await _factory.LoginForCookieAsync(victim.Email, "TestPassword123");
+        var (attackerLogin, _) = await _factory.LoginForCookieAsync(attacker.Email, "TestPassword123");
+
+        var client = _factory.CreateBrowserClient(handleCookies: false);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", attackerLogin.AccessToken);
+        request.Headers.Add("Cookie", $"{AuthCookieTestHelpers.CookieName}={Uri.EscapeDataString(victimCookie)}");
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.All(await TokensForAsync(victim.Id), t => Assert.False(t.IsRevoked));
+        Assert.Equal(HttpStatusCode.OK, (await _factory.RefreshWithCookieAsync(victimCookie)).StatusCode);
     }
 
     [Fact]
     public async Task Logout_WithoutAccessToken_Returns401()
     {
-        // Arrange
-        var client = _factory.CreateClient();
-        var command = new LogoutCommand("some-refresh-token");
+        var client = _factory.CreateBrowserClient();
 
-        // Act
-        var response = await client.PostAsJsonAsync("/api/auth/logout", command);
+        var response = await client.PostAsync("/api/auth/logout", null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -352,7 +494,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
             FirstName = "Reset",
             LastName = "Test",
             PasswordHash = hasher.HashPassword(null!, "OldPassword123!"),
-            PasswordResetToken = "integration-reset-token",
+            PasswordResetTokenHash = SecureTokens.Hash("integration-reset-token"),
             PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
             UserRoles = new List<UserRole>()
         };
@@ -361,7 +503,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            Token = "active-refresh",
+            TokenHash = SecureTokens.Hash("active-refresh"),
+            FamilyId = Guid.NewGuid(),
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             IsRevoked = false
         };
@@ -391,7 +534,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         var assertContext = assertScope.ServiceProvider.GetRequiredService<CrmDbContext>();
 
         var userInDb = await assertContext.Users.FindAsync(user.Id);
-        Assert.Null(userInDb!.PasswordResetToken);
+        Assert.Null(userInDb!.PasswordResetTokenHash);
         Assert.Null(userInDb.PasswordResetTokenExpiresAt);
 
         var verifyResult = hasher.VerifyHashedPassword(userInDb, userInDb.PasswordHash, "NewPassword123!");
@@ -480,5 +623,73 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_EndsOtherSessionsButKeepsTheCallersOwn()
+    {
+        // F-05: a stolen session must not survive a password change.
+        var user = await ResetDbWithUserAsync("two-devices@example.com", "CurrentPassword123!");
+        var (otherDeviceLogin, otherDeviceCookie) = await _factory.LoginForCookieAsync(user.Email, "CurrentPassword123!");
+
+        var thisDevice = _factory.CreateBrowserClient();
+        var login = await thisDevice.PostAsJsonAsync("/api/auth/login", new LoginCommand(user.Email, "CurrentPassword123!"));
+        var accessToken = JsonSerializer.Deserialize<LoginResponseDto>(
+            await login.Content.ReadAsStringAsync(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!.AccessToken;
+        thisDevice.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        var change = await thisDevice.PatchAsJsonAsync("/api/auth/change-password",
+            new ChangePasswordCommand("CurrentPassword123!", "NewPassword123!", "NewPassword123!"));
+
+        Assert.Equal(HttpStatusCode.NoContent, change.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.RefreshWithCookieAsync(otherDeviceCookie)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await thisDevice.PostAsync("/api/auth/refresh", null)).StatusCode);
+
+        // The other device's live access token is cut off at once.
+        var otherDevice = _factory.CreateBrowserClient(handleCookies: false);
+        otherDevice.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", otherDeviceLogin.AccessToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await otherDevice.PatchAsJsonAsync("/api/auth/change-password",
+            new ChangePasswordCommand("NewPassword123!", "Another123!", "Another123!"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_SameLinkUsedTwice_SecondAttemptFails()
+    {
+        var user = await ResetDbWithUserAsync("single-use@example.com");
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+            var tracked = await context.Users.SingleAsync(u => u.Id == user.Id);
+            tracked.PasswordResetTokenHash = SecureTokens.Hash("one-time-token");
+            tracked.PasswordResetTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+            await context.SaveChangesAsync();
+        }
+        var client = _factory.CreateClient();
+        var command = new ResetPasswordCommand("one-time-token", user.Email, "NewPassword123!", "NewPassword123!");
+
+        var first = await client.PostAsJsonAsync("/api/auth/reset-password", command);
+        var second = await client.PostAsJsonAsync("/api/auth/reset-password", command with { NewPassword = "Another123!", ConfirmPassword = "Another123!" });
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_OldCookieReplayedAThirdTime_RevokesWholeFamily()
+    {
+        // Two tabs racing is fine (one grace replay); a further replay of the same old cookie
+        // inside the window is not, and must not keep minting new sessions.
+        var user = await ResetDbWithUserAsync("third-replay@example.com");
+        var (_, original) = await _factory.LoginForCookieAsync(user.Email, "TestPassword123");
+
+        var tabA = await _factory.RefreshWithCookieAsync(original);
+        var tabB = await _factory.RefreshWithCookieAsync(original);
+        var third = await _factory.RefreshWithCookieAsync(original);
+
+        Assert.Equal(HttpStatusCode.OK, tabA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, tabB.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, third.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await _factory.RefreshWithCookieAsync(AuthCookieTestHelpers.GetRefreshCookie(tabA))).StatusCode);
     }
 }

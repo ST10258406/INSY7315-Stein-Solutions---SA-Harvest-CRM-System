@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
 import { lookupKeys } from './lookupKeys';
-import type { LookupDto, ProvinceDto, RegionDto } from '@/features/donors/types';
+import type { LookupDto, ProvinceDto, RegionDto, RelationshipManagerDto } from '@/features/donors/types';
 
 // Reference data changes rarely (admin-managed lookup tables) — per the
 // project's caching strategy this is fetched once on login and shared across
@@ -90,6 +90,21 @@ export function useBbbeeStatuses() {
     queryKey: lookupKeys.bbbeeStatuses(),
     queryFn: async () => {
       const { data } = await api.get<{ data: LookupDto[] }>('/api/v1/lookups/bbbee-statuses');
+      return data.data;
+    },
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+  });
+}
+
+/** Active relationship managers (users holding the Procurement role) — used by the reports
+ * "Relationship manager" filter. Not part of `useDonorLookups`: nothing on the donor form
+ * consumes it yet. */
+export function useRelationshipManagers() {
+  return useQuery<RelationshipManagerDto[]>({
+    queryKey: lookupKeys.relationshipManagers(),
+    queryFn: async () => {
+      const { data } = await api.get<{ data: RelationshipManagerDto[] }>('/api/v1/lookups/relationship-managers');
       return data.data;
     },
     staleTime: STALE_TIME,

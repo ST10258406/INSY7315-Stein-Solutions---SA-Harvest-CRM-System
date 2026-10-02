@@ -38,7 +38,7 @@ public class RefreshTokenConfigurationTests
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            Token = tokenString,
+            TokenHash = tokenString,
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -49,7 +49,7 @@ public class RefreshTokenConfigurationTests
         {
             Id = Guid.NewGuid(),
             UserId = user.Id, // same user or different user doesn't matter
-            Token = tokenString, // duplicate!
+            TokenHash = tokenString, // duplicate!
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -80,7 +80,7 @@ public class RefreshTokenConfigurationTests
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
-            Token = "unique-token-for-user",
+            TokenHash = "unique-token-for-user",
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
             CreatedAt = DateTimeOffset.UtcNow
         };

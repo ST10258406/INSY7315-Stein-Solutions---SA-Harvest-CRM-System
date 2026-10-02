@@ -1,0 +1,64 @@
+using CRM.Application.Modules.Reports.Commands.ExportReport;
+using CRM.Application.Modules.Reports.Dtos;
+using CRM.Application.Modules.Reports.Queries.GetDonorsByRegionReport;
+using CRM.Application.Modules.Reports.Queries.GetDonorsByStatusReport;
+using CRM.Application.Modules.Reports.Queries.GetDonorsByTypeReport;
+using CRM.Application.Modules.Reports.Queries.GetDonorsContactedReport;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace CRM.API.Controllers;
+
+[ApiController]
+[Route("api/v1/reports")]
+[Authorize(Policy = "AdminOrAbove")] // reporting is Admin-only
+public class ReportsController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public ReportsController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    [HttpGet("donors-contacted")]
+    public async Task<IActionResult> GetDonorsContacted([FromQuery] GetDonorsContactedReportQuery query)
+    {
+        var result = await _mediator.Send(query);
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("donors-by-region")]
+    public async Task<IActionResult> GetDonorsByRegion()
+    {
+        var result = await _mediator.Send(new GetDonorsByRegionReportQuery());
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("donors-by-type")]
+    public async Task<IActionResult> GetDonorsByType()
+    {
+        var result = await _mediator.Send(new GetDonorsByTypeReportQuery());
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("donors-by-status")]
+    public async Task<IActionResult> GetDonorsByStatus()
+    {
+        var result = await _mediator.Send(new GetDonorsByStatusReportQuery());
+        return Ok(new { data = result });
+    }
+
+    [HttpPost("export")]
+    public async Task<IActionResult> Export([FromBody] ExportReportRequest request)
+    {
+        var result = await _mediator.Send(new ExportReportCommand
+        {
+            ReportType = request.ReportType,
+            Format = request.Format,
+            Filters = request.Filters
+        });
+        return Ok(new { data = result });
+    }
+}

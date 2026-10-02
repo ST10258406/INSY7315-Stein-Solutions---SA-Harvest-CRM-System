@@ -1,4 +1,5 @@
 export { InteractionFeed } from './components/InteractionFeed';
 export { LogInteractionDialog } from './components/LogInteractionDialog';
-export { useInteractions, useLogInteraction, interactionKeys } from './hooks';
-export type { InteractionLogDto, InteractionFilters, LogInteractionRequest, InteractionType } from './types';
+export { EmailPanel } from './components/EmailPanel';
+export { useInteractions, useLogInteraction, useSendDonorEmail, interactionKeys } from './hooks';
+export type { InteractionLogDto, InteractionFilters, LogInteractionRequest, SendDonorEmailRequest, InteractionType } from './types';

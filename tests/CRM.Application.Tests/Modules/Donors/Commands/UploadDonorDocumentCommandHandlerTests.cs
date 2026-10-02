@@ -1,3 +1,4 @@
+using CRM.Application.Tests.Common;
 using AutoMapper;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
@@ -63,7 +64,7 @@ public class UploadDonorDocumentCommandHandlerTests
     {
         DonorId = donorId,
         DocumentType = "BBBEECertificate",
-        FileStream = new MemoryStream([1, 2, 3]),
+        FileStream = TestFiles.PdfStream(),
         OriginalFileName = "cert.pdf",
         ContentType = "application/pdf",
         FileSizeBytes = 1024
@@ -150,7 +151,7 @@ public class UploadDonorDocumentCommandHandlerTests
 
         await _blobStorageMock.Received(1).UploadAsync(
             Arg.Any<Stream>(),
-            Arg.Is<string>(p => p.StartsWith($"donors/{donorId}/BBBEECertificate/") && p.EndsWith("cert.pdf")),
+            Arg.Is<string>(p => p.StartsWith($"donors/{donorId}/BBBEECertificate/") && p.EndsWith(".pdf") && !p.Contains("cert")),
             "application/pdf");
     }
 }

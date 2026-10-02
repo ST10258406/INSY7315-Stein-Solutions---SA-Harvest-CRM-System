@@ -64,7 +64,7 @@ public class DonorRepositoryTests
         context.DonorDonationTypes.RemoveRange(context.DonorDonationTypes);
         context.DonorLegalAddresses.RemoveRange(context.DonorLegalAddresses);
         context.DonorContacts.RemoveRange(context.DonorContacts);
-        context.DonorDocuments.RemoveRange(context.DonorDocuments);
+        context.DonorDocuments.RemoveRange(context.DonorDocuments.IgnoreQueryFilters());
         context.DonorApprovals.RemoveRange(context.DonorApprovals);
         context.Donors.RemoveRange(context.Donors);
         await context.SaveChangesAsync();
@@ -115,6 +115,7 @@ public class DonorRepositoryTests
         var donor = new Donor
         {
             Id = Guid.NewGuid(),
+            ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
             CompanyName = companyName,
             CompanyTypeId = CompanyTypeId,
             EntityTypeId = EntityTypeId,
@@ -329,6 +330,41 @@ public class DonorRepositoryTests
     }
 
     [Fact]
+    public async Task GetDetailByIdAsync_ListsOnlyActiveDocuments()
+    {
+        // Security review F-06: a soft-deleted or superseded document must not appear in the
+        // donor detail response — the global query filter on DonorDocument applies to the
+        // Donor.Documents navigation inside the projection too.
+        using var context = await CreateSeededContextAsync();
+
+        var donor = MakeDonor("FoodCorp SA", _creatorId);
+        var active = MakeDocument(donor.Id, DocumentType.BBBEECertificate, isActive: true);
+        var deleted = MakeDocument(donor.Id, DocumentType.Signature, isActive: false);
+        context.Donors.Add(donor);
+        context.DonorDocuments.AddRange(active, deleted);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        var result = await repository.GetDetailByIdAsync(donor.Id);
+
+        Assert.Equal(active.Id, Assert.Single(result!.Compliance.Documents).Id);
+    }
+
+    private static DonorDocument MakeDocument(Guid donorId, DocumentType type, bool isActive) => new()
+    {
+        Id = Guid.NewGuid(),
+        DonorId = donorId,
+        DocumentType = type,
+        FileName = "file.pdf",
+        BlobStoragePath = $"donors/{donorId}/{type}/{Guid.NewGuid()}_file.pdf",
+        MimeType = "application/pdf",
+        FileSizeBytes = 1024,
+        IsActive = isActive
+    };
+
+    [Fact]
     public async Task GetDetailByIdAsync_UnknownId_ReturnsNull()
     {
         using var context = await CreateSeededContextAsync();
@@ -395,6 +431,114 @@ public class DonorRepositoryTests
 
         Assert.True(await repository.ExistsAsync(donor.Id));
         Assert.False(await repository.ExistsAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task ClaimBySubmissionTokenAsync_MatchingUnexpiredToken_ReturnsDonorIdAndBurnsTheToken()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var donor = MakeDonor("Doc Test Pty Ltd", _creatorId);
+        donor.SubmissionToken = "matching-token";
+        donor.SubmissionTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        context.Donors.Add(donor);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        var claimedId = await repository.ClaimBySubmissionTokenAsync("matching-token");
+
+        Assert.Equal(donor.Id, claimedId);
+
+        context.ChangeTracker.Clear();
+        var reloaded = await context.Donors.FindAsync(donor.Id);
+        Assert.Null(reloaded!.SubmissionToken);
+        Assert.Null(reloaded.SubmissionTokenExpiresAt);
+    }
+
+    [Fact]
+    public async Task ClaimBySubmissionTokenAsync_NoMatch_ReturnsNull()
+    {
+        using var context = await CreateSeededContextAsync();
+        var repository = new DonorRepository(context, _mapper);
+
+        Assert.Null(await repository.ClaimBySubmissionTokenAsync("does-not-exist"));
+    }
+
+    [Fact]
+    public async Task ClaimBySubmissionTokenAsync_ExpiredToken_ReturnsNullAndLeavesItUnburned()
+    {
+        using var context = await CreateSeededContextAsync();
+
+        var donor = MakeDonor("Expired Token Co", _creatorId);
+        donor.SubmissionToken = "expired-token";
+        donor.SubmissionTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        context.Donors.Add(donor);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        Assert.Null(await repository.ClaimBySubmissionTokenAsync("expired-token"));
+
+        // Not touched — an expired claim attempt shouldn't mutate the row at all.
+        context.ChangeTracker.Clear();
+        var reloaded = await context.Donors.FindAsync(donor.Id);
+        Assert.Equal("expired-token", reloaded!.SubmissionToken);
+    }
+
+    [Fact]
+    public async Task ClaimBySubmissionTokenAsync_TwoDonorsWithNullToken_NeitherMatchesAnEmptyLookup()
+    {
+        // Two donors both with a null SubmissionToken (the common case once a
+        // token has been consumed, or before one was ever issued) must never
+        // both match an empty/null lookup — this confirms the claim compares
+        // against the real token string, not an accidental "IS NULL" match.
+        using var context = await CreateSeededContextAsync();
+        context.Donors.AddRange(
+            MakeDonor("Donor A", _creatorId),
+            MakeDonor("Donor B", _creatorId));
+        await context.SaveChangesAsync();
+
+        var repository = new DonorRepository(context, _mapper);
+
+        Assert.Null(await repository.ClaimBySubmissionTokenAsync(string.Empty));
+    }
+
+    [Fact]
+    public async Task ClaimBySubmissionTokenAsync_ManyConcurrentCallersForTheSameToken_ExactlyOneWins()
+    {
+        // This is the regression test for the race this method exists to close:
+        // a separate "read the donor, check expiry, null the token, SaveChanges"
+        // sequence lets two concurrent requests for the same token both read it
+        // as valid before either write lands, so both proceed to upload a
+        // document — violating the single-use guarantee. A single-threaded test
+        // can't catch that class of bug (same reasoning as
+        // DonorRepositoryReferenceNumberTests), so this fires many callers at
+        // once, each against its own DbContext/connection — the same shape as
+        // separate concurrent HTTP requests each with their own scoped context —
+        // against real Postgres, and asserts exactly one of them ever gets the
+        // donor id back.
+        using (var seedContext = await CreateSeededContextAsync())
+        {
+            var donor = MakeDonor("Concurrency Test Co", _creatorId);
+            donor.SubmissionToken = "contended-token";
+            donor.SubmissionTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+            seedContext.Donors.Add(donor);
+            await seedContext.SaveChangesAsync();
+        }
+
+        const int concurrentCallers = 20;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, concurrentCallers).Select(async _ =>
+        {
+            using var context = new CrmDbContext(_options);
+            var repository = new DonorRepository(context, _mapper);
+            return await repository.ClaimBySubmissionTokenAsync("contended-token");
+        }));
+
+        Assert.Single(results, r => r is not null);
     }
 
     [Fact]

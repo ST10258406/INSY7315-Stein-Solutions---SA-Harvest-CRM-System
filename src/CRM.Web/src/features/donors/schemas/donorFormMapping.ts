@@ -46,9 +46,7 @@ export function donorToFormValues(donor: DonorDetailDto): DonorFormValues {
       regionIds: donor.donations.operationalRegions.map((region) => String(region.id)),
     },
     bbbeeStatusId: donor.compliance.bbbeeStatus ? String(donor.compliance.bbbeeStatus.id) : '',
-    // Shell field — see donorFormSchema.ts. Not populated from the existing
-    // donor's relationshipManager until Issue 45's lookup lands.
-    relationshipManagerId: '',
+    relationshipManagerId: donor.crm.relationshipManager?.id ?? '',
     marketingConsent: donor.crm.marketingConsent,
     impactReportingPreferences: donor.crm.impactReportingPreferences ?? '',
     additionalInformation: donor.crm.additionalInformation ?? '',
@@ -103,8 +101,7 @@ export function formValuesToCreateRequest(values: DonorFormValues): CreateDonorR
       bbbeeStatusId: values.bbbeeStatusId ? Number(values.bbbeeStatusId) : null,
     },
     crm: {
-      // Shell field — see donorFormSchema.ts; wired up once Issue 45 ships.
-      relationshipManagerId: null,
+      relationshipManagerId: values.relationshipManagerId || null,
       marketingConsent: values.marketingConsent,
       impactReportingPreferences: values.impactReportingPreferences?.trim() || null,
       additionalInformation: values.additionalInformation?.trim() || null,
@@ -145,7 +142,7 @@ export function formValuesToUpdateRequest(values: DonorFormValues): UpdateDonorR
       bbbeeStatusId: values.bbbeeStatusId ? Number(values.bbbeeStatusId) : null,
     },
     crm: {
-      relationshipManagerId: null,
+      relationshipManagerId: values.relationshipManagerId || null,
       marketingConsent: values.marketingConsent,
       impactReportingPreferences: values.impactReportingPreferences?.trim() || null,
       additionalInformation: values.additionalInformation?.trim() || null,

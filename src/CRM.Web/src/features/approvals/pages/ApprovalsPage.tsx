@@ -1,21 +1,27 @@
 import { useState } from 'react';
-import { Lock, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Lock } from 'lucide-react';
+import { ListPagination } from '@/components/common/ListPagination';
 import { useApprovals } from '../hooks';
 import { ApprovalQueue } from '../components/ApprovalQueue';
 import { RejectDonorDialog } from '../components/RejectDonorDialog';
 import { APPROVAL_STATUSES, type ApprovalDto, type ApprovalStatus } from '../types';
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
 
 export default function ApprovalsPage() {
   const [status, setStatus] = useState<ApprovalStatus>('Pending');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [rejecting, setRejecting] = useState<ApprovalDto | null>(null);
 
-  const { data, isPending, isError, error, refetch } = useApprovals({ status, page, pageSize: PAGE_SIZE });
+  const { data, isPending, isError, error, refetch } = useApprovals({ status, page, pageSize });
   const approvals = data?.data ?? [];
   const pagination = data?.pagination;
+
+  const changePageSize = (next: number) => {
+    setPageSize(next);
+    setPage(1);
+  };
 
   const changeStatus = (next: ApprovalStatus) => {
     setStatus(next);
@@ -85,37 +91,12 @@ export default function ApprovalsPage() {
       />
 
       {pagination && pagination.totalCount > 0 && (
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-[14px_20px]">
-          <span className="text-[12.5px] font-medium text-[var(--muted-c)]">
-            Showing {(pagination.page - 1) * pagination.pageSize + 1}–
-            {Math.min(pagination.page * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={pagination.page <= 1}
-              aria-label="Previous page"
-              className="h-8.5 w-8.5"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="px-1 text-[12.5px] font-semibold text-[var(--ink)]">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-              disabled={pagination.page >= pagination.totalPages}
-              aria-label="Next page"
-              className="h-8.5 w-8.5"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        <ListPagination
+          pagination={pagination}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+          itemLabel="approvals"
+        />
       )}
 
       <RejectDonorDialog approval={rejecting} open={!!rejecting} onOpenChange={(next) => !next && setRejecting(null)} />

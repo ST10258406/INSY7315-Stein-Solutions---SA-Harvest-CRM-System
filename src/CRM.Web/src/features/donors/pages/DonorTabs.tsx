@@ -15,7 +15,7 @@ const TABS = [
   { value: 'activity', label: 'Activity' },
 ] as const;
 
-const TAB_LIST_CLASSES = 'flex items-center gap-1 mt-5 overflow-x-auto no-scrollbar w-full flex-nowrap justify-start rounded-none border-none bg-transparent p-0';
+const TAB_LIST_CLASSES = 'flex items-center gap-1 mt-5 overflow-x-auto no-scrollbar w-full flex-nowrap justify-start rounded-none border-none bg-transparent px-0 pt-0 pb-3.5';
 
 interface DonorTabsProps {
   donor: DonorDetailDto;
@@ -27,14 +27,17 @@ interface DonorTabsProps {
  * panels render below it on the page background — matching the reference
  * design's two-tier layout. */
 export function DonorTabs({ donor, children }: DonorTabsProps) {
+  // Primary contact is required; marketing and accounts contacts are optional.
+  const contactCount = 1 + (donor.marketingContact ? 1 : 0) + (donor.accountsContact ? 1 : 0);
+
   return (
     <Tabs defaultValue="overview">
       <section className="rounded-2xl border border-[var(--border)] bg-[var(--soft)] p-[20px_22px_0]">
         {children}
         <TabsList className={TAB_LIST_CLASSES}>
           {TABS.map((tab) => {
-            const badgeCount = tab.value === 'contacts' ? '2' : null;
-              
+            const badgeCount = tab.value === 'contacts' ? contactCount : null;
+
             return (
               <TabsTab 
                 key={tab.value} 

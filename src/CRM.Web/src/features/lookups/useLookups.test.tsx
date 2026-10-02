@@ -11,6 +11,7 @@ import {
   useDonationFrequencies,
   useProvinces,
   useBbbeeStatuses,
+  useRelationshipManagers,
   useDonorLookups,
 } from './useLookups';
 
@@ -133,5 +134,21 @@ describe('donor lookup hooks', () => {
     expect(individual.result.current.data).toEqual(ENDPOINTS['/api/v1/lookups/company-types']);
 
     expect(api.get).toHaveBeenCalledTimes(callsAfterWarm);
+  });
+
+  // Kept separate from the `cases`/`ENDPOINTS` tables above: useRelationshipManagers isn't
+  // part of useDonorLookups, so folding it into those shared fixtures would silently change
+  // what "all 7 lookups" and its call-count assertions mean.
+  it('useRelationshipManagers → GETs /api/v1/lookups/relationship-managers and returns the unwrapped list', async () => {
+    const relationshipManagers = [{ id: 'mgr-1', fullName: 'Jane Doe' }];
+    vi.mocked(api.get).mockResolvedValue({ data: { data: relationshipManagers } });
+    const { wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useRelationshipManagers(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.get).toHaveBeenCalledWith('/api/v1/lookups/relationship-managers');
+    expect(result.current.data).toEqual(relationshipManagers);
   });
 });

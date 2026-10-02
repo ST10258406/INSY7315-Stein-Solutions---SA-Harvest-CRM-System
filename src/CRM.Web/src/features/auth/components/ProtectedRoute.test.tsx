@@ -16,7 +16,6 @@ describe('ProtectedRoute Component', () => {
     useAuthStore.setState({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isHydrating: false,
     });
@@ -37,20 +36,20 @@ describe('ProtectedRoute Component', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('redirects to / when unauthenticated and done hydrating', () => {
+  it('redirects to /login when unauthenticated and done hydrating', () => {
     useAuthStore.setState({ isHydrating: false, isAuthenticated: false });
 
     render(
       <MemoryRouter initialEntries={['/protected']}>
         <Routes>
           <Route path="/protected" element={<ProtectedRoute><div data-testid="protected-content">Content</div></ProtectedRoute>} />
-          <Route path="/" element={<LocationDisplay />} />
+          <Route path="/login" element={<LocationDisplay />} />
         </Routes>
       </MemoryRouter>
     );
 
     expect(screen.queryByTestId('protected-content')).toBeNull();
-    expect(screen.getByTestId('location-display').textContent).toBe('/');
+    expect(screen.getByTestId('location-display').textContent).toBe('/login');
   });
 
   it('renders children when authenticated and no allowedRoles prop provided', () => {
@@ -89,6 +88,44 @@ describe('ProtectedRoute Component', () => {
 
     expect(screen.queryByTestId('protected-content')).toBeNull();
     expect(screen.getByTestId('location-display').textContent).toBe('/not-authorized');
+  });
+
+  it('redirects a user on a temporary password to /change-password', () => {
+    useAuthStore.setState({
+      isHydrating: false,
+      isAuthenticated: true,
+      user: { id: '1', firstName: 'Test', lastName: 'User', email: 'test@example.com', roles: ['Admin'], mustChangePassword: true },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/protected']}>
+        <Routes>
+          <Route path="/protected" element={<ProtectedRoute><div data-testid="protected-content">Content</div></ProtectedRoute>} />
+          <Route path="/change-password" element={<LocationDisplay />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTestId('protected-content')).toBeNull();
+    expect(screen.getByTestId('location-display').textContent).toBe('/change-password');
+  });
+
+  it('lets a user on a temporary password reach /change-password itself', () => {
+    useAuthStore.setState({
+      isHydrating: false,
+      isAuthenticated: true,
+      user: { id: '1', firstName: 'Test', lastName: 'User', email: 'test@example.com', roles: ['Admin'], mustChangePassword: true },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/change-password']}>
+        <Routes>
+          <Route path="/change-password" element={<ProtectedRoute><div data-testid="protected-content">Content</div></ProtectedRoute>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('protected-content')).toBeDefined();
   });
 
   it('renders children when authenticated with correct role', () => {

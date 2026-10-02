@@ -27,7 +27,6 @@ const ForgotPasswordPage: React.FC = () => {
   return (
     <div
       className="flex h-screen w-full overflow-hidden bg-[#F4F2EC] text-[#17140F]"
-      style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
     >
       <AuthBrandPanel />
 

@@ -1,0 +1,38 @@
+# Build context is the repository root (see src/CRM.API/Dockerfile), so anything
+# not listed here is copied into the build-stage layer by `COPY . .` and can end
+# up in a pushed build cache. Secrets must never appear in any layer.
+
+# Secrets and local configuration
+.env
+**/.env
+**/.env.*
+**/*.user
+**/appsettings.*.local.json
+# Development-only overrides (localhost CORS, dev signing key, Azurite connection string)
+**/appsettings.Development.json
+**/secrets.json
+
+# Source control and tooling
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.vscode
+.idea
+.claude
+
+# Build output
+**/bin
+**/obj
+**/TestResults
+
+# Not needed to build the API image
+src/CRM.Web
+tests
+docs
+**/node_modules
+**/*.md
+docker-compose*.yml
+**/Dockerfile*
+**/.dockerignore

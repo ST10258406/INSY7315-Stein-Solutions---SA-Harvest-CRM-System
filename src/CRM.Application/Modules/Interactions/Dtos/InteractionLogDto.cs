@@ -12,6 +12,8 @@ public class InteractionLogDto
     public string? Subject { get; set; }
     public string Body { get; set; } = string.Empty;
     public string? EmailAttachmentUrl { get; set; }
+    public Guid? RelatedEntityId { get; set; }
+    public string? RelatedEntityType { get; set; }
     public DateTime CreatedAt { get; set; }
     public InteractionUserDto CreatedBy { get; set; } = null!;
 }

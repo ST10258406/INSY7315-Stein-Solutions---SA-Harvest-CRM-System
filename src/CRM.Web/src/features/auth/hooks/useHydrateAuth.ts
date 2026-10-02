@@ -1,31 +1,22 @@
 import { useEffect } from 'react';
-import { api } from '@/lib/axios';
+import { refreshSession } from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 
+/**
+ * Restores the session after a page reload. The access token lived only in memory and is
+ * gone, but the browser still holds the HttpOnly refresh cookie — so ask the API for a
+ * fresh access token. No cookie / expired session → stay logged out, without redirecting
+ * (public pages like the landing page and donor form also run this).
+ */
 export function useHydrateAuth() {
-  const setUser = useAuthStore((s) => s.setUser);
   const setHydrating = useAuthStore((s) => s.setHydrating);
-  const accessToken = useAuthStore((s) => s.accessToken);
 
   useEffect(() => {
-    async function hydrate() {
-      if (!accessToken) {
-        setHydrating(false);
-        return;
-      }
-
-      try {
-        const { data } = await api.get('/api/users/me');
-        setUser(data); // Assuming a flat response like the login DTO
-      } catch {
-        // Token's no good — the axios interceptor will already have
-        // attempted a refresh and logged out if that failed too.
-      } finally {
-        setHydrating(false);
-      }
-    }
-
-    hydrate();
+    refreshSession()
+      .catch(() => {
+        // Not signed in — that's a normal state, not an error.
+      })
+      .finally(() => setHydrating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

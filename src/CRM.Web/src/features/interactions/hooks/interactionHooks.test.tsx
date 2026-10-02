@@ -6,11 +6,16 @@ import { api } from '@/lib/axios';
 import { donorKeys } from '@/features/donors/hooks/donorKeys';
 import { useInteractions } from './useInteractions';
 import { useLogInteraction } from './useLogInteraction';
+import { useSendDonorEmail } from './useSendDonorEmail';
 import { interactionKeys } from './interactionKeys';
 import type { InteractionLogDto, PaginatedResult } from '../types';
 
 vi.mock('@/lib/axios', () => ({
   api: { get: vi.fn(), post: vi.fn() },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 const row: InteractionLogDto = {
@@ -20,6 +25,8 @@ const row: InteractionLogDto = {
   subject: 'Surplus forecast',
   body: 'Confirmed weekly volume.',
   emailAttachmentUrl: null,
+  relatedEntityId: null,
+  relatedEntityType: null,
   createdAt: '2026-08-01T09:00:00Z',
   createdBy: { id: 'user-1', fullName: 'Nomsa Khumalo' },
 };
@@ -97,5 +104,47 @@ describe('interaction hooks', () => {
     expect(result.current.data).toEqual(row);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: interactionKeys.donor('donor-1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: donorKeys.detail('donor-1') });
+  });
+
+  it('useSendDonorEmail → POSTs to the email sub-route, unwraps { data }, invalidates timeline + donor detail, toasts success', async () => {
+    const emailRow: InteractionLogDto = { ...row, interactionType: 'Email' };
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { data: emailRow } });
+    const { toast } = await import('sonner');
+
+    const { wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useSendDonorEmail('donor-1'), { wrapper });
+
+    result.current.mutate({ to: 'donor@example.com', subject: 'Thanks', body: 'Body text.' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.post).toHaveBeenCalledWith('/api/v1/donors/donor-1/interactions/email', {
+      to: 'donor@example.com',
+      subject: 'Thanks',
+      body: 'Body text.',
+    });
+    expect(result.current.data).toEqual(emailRow);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: interactionKeys.donor('donor-1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: donorKeys.detail('donor-1') });
+    expect(toast.success).toHaveBeenCalledWith('Email sent.');
+  });
+
+  it('useSendDonorEmail → on failure, toasts the server error message and does not invalidate', async () => {
+    vi.mocked(api.post).mockRejectedValueOnce({
+      response: { data: { message: 'The email could not be sent. Please try again, or contact the donor another way.' } },
+    });
+    const { toast } = await import('sonner');
+
+    const { wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useSendDonorEmail('donor-1'), { wrapper });
+
+    result.current.mutate({ to: 'donor@example.com', subject: 'Thanks', body: 'Body text.' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(toast.error).toHaveBeenCalledWith('The email could not be sent. Please try again, or contact the donor another way.');
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   MessageSquare,
   AlertCircle,
-  Search,
   type LucideIcon,
 } from 'lucide-react';
 import { paths } from '@/routes/paths';
@@ -22,6 +21,7 @@ import {
   useDonationFrequencies,
   useProvinces,
   useBbbeeStatuses,
+  useRelationshipManagers,
 } from '@/features/lookups';
 import { useDonor } from '../hooks/useDonor';
 import { useCreateDonor } from '../hooks/useCreateDonor';
@@ -71,6 +71,7 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
   const donationTypes = useDonationTypes();
   const operationalRegions = useOperationalRegions();
   const bbbeeStatuses = useBbbeeStatuses();
+  const relationshipManagers = useRelationshipManagers();
 
   const {
     register,
@@ -534,21 +535,15 @@ export function DonorForm({ mode, donorId }: DonorFormProps) {
           </FormSection>
 
           <FormSection id="crm" title="CRM & Internal Details" description="Ownership, consent, and follow-up tracking." icon={MessageSquare}>
-            <label className="flex flex-col gap-2 sm:col-span-2">
-              <span className="flex items-center gap-1 text-xs font-bold text-foreground">
-                <span>Relationship manager</span>
-              </span>
-              <div className="flex h-11 items-center gap-2.5 rounded-full border border-border bg-field px-3.75 opacity-50">
-                <Search className="h-3.75 w-3.75 shrink-0 text-muted-foreground" />
-                <select
-                  {...register('relationshipManagerId')}
-                  disabled
-                  className="w-full cursor-not-allowed border-none bg-transparent text-[13.5px] font-medium text-foreground outline-none"
-                >
-                  <option value="">Not yet available</option>
-                </select>
-              </div>
-            </label>
+            <FormSelect
+              label="Relationship manager"
+              fullWidth
+              placeholder="Unassigned"
+              registration={register('relationshipManagerId')}
+              options={(relationshipManagers.data ?? []).map((m) => ({ value: m.id, label: m.fullName }))}
+              isLoading={relationshipManagers.isPending}
+              error={errors.relationshipManagerId?.message}
+            />
 
             <FormCheckbox
               label="Marketing consent given"

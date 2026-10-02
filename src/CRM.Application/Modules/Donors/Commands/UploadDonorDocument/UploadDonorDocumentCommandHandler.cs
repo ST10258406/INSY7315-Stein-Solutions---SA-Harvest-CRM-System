@@ -2,6 +2,7 @@ namespace CRM.Application.Modules.Donors.Commands.UploadDonorDocument;
 
 using AutoMapper;
 using CRM.Application.Common.Exceptions;
+using CRM.Application.Common.Files;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Modules.Donors.Dtos;
 using CRM.Domain.Entities;
@@ -54,17 +55,21 @@ public class UploadDonorDocumentCommandHandler : IRequestHandler<UploadDonorDocu
         // fails, we don't want a DB record pointing at a file that doesn't exist.
         // An orphaned blob from a subsequent failed SaveChanges is a cheap, safe
         // failure mode; an orphaned DB reference isn't.
-        var blobPath = $"donors/{request.DonorId}/{documentType}/{Guid.NewGuid()}_{request.OriginalFileName}";
-        await _blobStorage.UploadAsync(request.FileStream, blobPath, request.ContentType);
+        // The blob name and content type come from the sniffed file type, never from
+        // client-supplied values; the client filename is kept only as a sanitised display name.
+        var sniffed = UploadedFileInspector.Sniff(request.FileStream)
+            ?? throw new InvalidOperationException("Upload reached the handler without a recognised file signature.");
+        var blobPath = $"donors/{request.DonorId}/{documentType}/{Guid.NewGuid()}{sniffed.Extension}";
+        await _blobStorage.UploadAsync(request.FileStream, blobPath, sniffed.MimeType);
 
         var document = new DonorDocument
         {
             Id = Guid.NewGuid(),
             DonorId = request.DonorId,
             DocumentType = documentType,
-            FileName = request.OriginalFileName,
-            FileSizeBytes = request.FileSizeBytes,
-            MimeType = request.ContentType,
+            FileName = UploadedFileInspector.SanitizeDisplayName(request.OriginalFileName),
+            FileSizeBytes = UploadedFileInspector.RealLength(request.FileStream, request.FileSizeBytes),
+            MimeType = sniffed.MimeType,
             BlobStoragePath = blobPath,
             UploadedByUserId = _currentUserService.GetCurrentUserId(),
             IsActive = true

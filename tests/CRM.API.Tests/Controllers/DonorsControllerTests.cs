@@ -24,6 +24,7 @@ public class DonorsControllerTests : IClassFixture<WebApplicationFactory<Program
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
         Environment.SetEnvironmentVariable("JWT_SECRET", "12345678901234567890123456789012");
+        Environment.SetEnvironmentVariable("BREVO_API_KEY", "test-brevo-key");
         Environment.SetEnvironmentVariable("ConnectionStrings__Default", "Host=localhost;Database=fake;Username=postgres;Password=password");
 
         Environment.SetEnvironmentVariable("Jwt__SigningKey", "12345678901234567890123456789012");
@@ -283,6 +284,18 @@ public class DonorsControllerTests : IClassFixture<WebApplicationFactory<Program
             CreatedAt = new DateTime(2026, 1, 15, 8, 0, 0, DateTimeKind.Utc)
         });
 
+        // Soft-deleted by an Admin — must not appear in the detail response (security review F-06).
+        context.DonorDocuments.Add(new DonorDocument
+        {
+            Id = Guid.NewGuid(),
+            DonorId = donor.Id,
+            DocumentType = DocumentType.Signature,
+            FileName = "deleted_signature.png",
+            BlobStoragePath = "blob://donors/private/deleted_signature.png",
+            IsActive = false,
+            CreatedAt = new DateTime(2026, 1, 10, 8, 0, 0, DateTimeKind.Utc)
+        });
+
         await context.SaveChangesAsync();
 
         return donor;
@@ -323,7 +336,8 @@ public class DonorsControllerTests : IClassFixture<WebApplicationFactory<Program
         Assert.True(data.TryGetProperty("compliance", out var compliance));
         var documents = compliance.GetProperty("documents");
         Assert.Equal(1, documents.GetArrayLength());
-        Assert.True(documents[0].TryGetProperty("originalFileName", out _));
+        Assert.Equal("bbbee_cert_2025.pdf", documents[0].GetProperty("originalFileName").GetString());
+        Assert.DoesNotContain("deleted_signature.png", content);
 
         Assert.True(data.TryGetProperty("crm", out var crm));
         Assert.Equal("Jane Doe", crm.GetProperty("relationshipManager").GetProperty("fullName").GetString());

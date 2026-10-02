@@ -5,9 +5,9 @@
 This is a donor management CRM for a South African non-profit (SA Harvest).
 It replaces Monday.com. Built as a final year project.
 
-- **Backend:** ASP.NET Core 9 Web API, C# 13, .NET 10
+- **Backend:** ASP.NET Core 10 Web API, C# 14, .NET 10
 - **Architecture:** Modular Monolith + Clean Architecture (4 layers)
-- **Database:** PostgreSQL 16 via Entity Framework Core 9 + Npgsql
+- **Database:** PostgreSQL 18 via Entity Framework Core 10 + Npgsql
 - **Frontend:** React 19 + TypeScript 5 + Vite
 - **State:** TanStack Query (server state) + Zustand (client state)
 - **Forms:** React Hook Form + Zod validation
@@ -273,9 +273,13 @@ explicitly — do not let them pass because the code otherwise looks clean.
   `AuditBehaviour` does this automatically for any command
   implementing `IAuditableCommand`.
   If a handler contains `context.AuditLogs.Add(...)`, flag it.
-  The one deliberate exception is the public donor form submission
-  handler, which writes its own audit entry manually since there is
-  no authenticated `user_id` to attach via the normal pipeline.
+  The deliberate exceptions are the two unauthenticated public-form
+  handlers — `SubmitPublicDonorCommandHandler` and
+  `SubmitPublicDonorDocumentCommandHandler` — both of which write their
+  own audit entry manually (via `IAuditLogRepository.AddAsync`, still
+  going through `IUnitOfWork.SaveChangesAsync`, never a direct
+  `context.AuditLogs.Add(...)`) since there is no authenticated
+  `user_id` to attach via the normal `IAuditableCommand` pipeline.
 
 - Handlers must NOT call `INotificationService` for follow-up reminders
   unless the handler is `LogInteractionCommandHandler` — that is the

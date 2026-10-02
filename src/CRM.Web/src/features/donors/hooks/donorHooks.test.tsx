@@ -7,6 +7,7 @@ import { useDonors } from './useDonors';
 import { useDonor } from './useDonor';
 import { useCreateDonor } from './useCreateDonor';
 import { useUpdateDonor } from './useUpdateDonor';
+import { useSendPublicFormInvite } from './useSendPublicFormInvite';
 import { donorKeys } from './donorKeys';
 import type { DonorDetailDto, DonorListItemDto, PaginatedResult } from '../types';
 
@@ -16,6 +17,10 @@ vi.mock('@/lib/axios', () => ({
     post: vi.fn(),
     patch: vi.fn(),
   },
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 const donorListItem: DonorListItemDto = {
@@ -191,5 +196,41 @@ describe('donor query hooks', () => {
       field: 'sortBy',
       message: 'sortBy must be one of: followUpDate, companyName, createdAt, lastInteractionDate',
     });
+  });
+
+  it('useSendPublicFormInvite → POSTs the request, unwraps { data }, toasts success', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { data: { message: 'Invitation sent.' } } });
+    const { toast } = await import('sonner');
+
+    const { wrapper } = createWrapper();
+    const { result: hookResult } = renderHook(() => useSendPublicFormInvite(), { wrapper });
+
+    hookResult.current.mutate({ to: 'prospect@example.com', subject: 'Join us', body: 'Body text.' });
+
+    await waitFor(() => expect(hookResult.current.isSuccess).toBe(true));
+
+    expect(api.post).toHaveBeenCalledWith('/api/v1/donors/public-form-invite', {
+      to: 'prospect@example.com',
+      subject: 'Join us',
+      body: 'Body text.',
+    });
+    expect(hookResult.current.data).toEqual({ message: 'Invitation sent.' });
+    expect(toast.success).toHaveBeenCalledWith('Invitation sent.');
+  });
+
+  it('useSendPublicFormInvite → on failure, toasts the server error message', async () => {
+    vi.mocked(api.post).mockRejectedValueOnce({
+      response: { data: { message: 'The invitation could not be sent. Please try again, or share the link with them another way.' } },
+    });
+    const { toast } = await import('sonner');
+
+    const { wrapper } = createWrapper();
+    const { result: hookResult } = renderHook(() => useSendPublicFormInvite(), { wrapper });
+
+    hookResult.current.mutate({ to: 'prospect@example.com', subject: 'Join us', body: 'Body text.' });
+
+    await waitFor(() => expect(hookResult.current.isError).toBe(true));
+
+    expect(toast.error).toHaveBeenCalledWith('The invitation could not be sent. Please try again, or share the link with them another way.');
   });
 });

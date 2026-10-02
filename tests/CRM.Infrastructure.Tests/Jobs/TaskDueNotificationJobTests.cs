@@ -51,6 +51,7 @@ public class TaskDueNotificationJobTests
         var donor = new Donor
         {
             Id = Guid.NewGuid(),
+            ReferenceNumber = Guid.NewGuid().ToString("N")[..20],
             CompanyName = "Due Co",
             CompanyTypeId = 1,
             EntityTypeId = 1,

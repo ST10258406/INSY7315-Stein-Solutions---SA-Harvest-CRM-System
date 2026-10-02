@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAuthStore } from './authStore';
 
 describe('authStore', () => {
@@ -12,7 +12,6 @@ describe('authStore', () => {
 
   const mockLoginResult = {
     accessToken: 'access-token',
-    refreshToken: 'refresh-token',
     expiresIn: 3600,
     user: mockUser,
   };
@@ -22,10 +21,8 @@ describe('authStore', () => {
     useAuthStore.setState({
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isHydrating: true,
-      isDevBypass: false,
     });
   });
 
@@ -34,7 +31,6 @@ describe('authStore', () => {
     expect(state.isAuthenticated).toBe(false);
     expect(state.user).toBeNull();
     expect(state.accessToken).toBeNull();
-    expect(state.refreshToken).toBeNull();
     expect(state.isHydrating).toBe(true);
   });
 
@@ -44,7 +40,6 @@ describe('authStore', () => {
 
     expect(state.user).toEqual(mockUser);
     expect(state.accessToken).toBe('access-token');
-    expect(state.refreshToken).toBe('refresh-token');
     expect(state.isAuthenticated).toBe(true);
   });
 
@@ -55,18 +50,16 @@ describe('authStore', () => {
 
     expect(state.user).toBeNull();
     expect(state.accessToken).toBeNull();
-    expect(state.refreshToken).toBeNull();
     expect(state.isAuthenticated).toBe(false);
   });
 
-  it('setAccessToken() updates only the access token, leaves user and refreshToken untouched', () => {
+  it('setAccessToken() updates only the access token, leaves user untouched', () => {
     useAuthStore.getState().login(mockLoginResult);
     useAuthStore.getState().setAccessToken('new-access-token');
     const state = useAuthStore.getState();
 
     expect(state.accessToken).toBe('new-access-token');
     expect(state.user).toEqual(mockUser);
-    expect(state.refreshToken).toBe('refresh-token');
     expect(state.isAuthenticated).toBe(true);
   });
 
@@ -77,48 +70,16 @@ describe('authStore', () => {
     expect(state.user).toEqual(mockUser);
     expect(state.isAuthenticated).toBe(true);
   });
+});
 
-  describe('enableDevBypass (landing page "To CRM" dev shortcut)', () => {
-    afterEach(() => vi.unstubAllEnvs());
-
-    it('sets isAuthenticated, isDevBypass, and a synthetic user — but never a real token', () => {
-      useAuthStore.getState().enableDevBypass();
-      const state = useAuthStore.getState();
-
-      expect(state.isAuthenticated).toBe(true);
-      expect(state.isDevBypass).toBe(true);
-      expect(state.user).not.toBeNull();
-      expect(state.accessToken).toBeNull();
-      expect(state.refreshToken).toBeNull();
+describe('authStore refresh-token handling', () => {
+  it('never holds a refresh token — it lives only in the HttpOnly cookie', () => {
+    useAuthStore.getState().login({
+      accessToken: 'access-token',
+      expiresIn: 3600,
+      user: { id: '1', firstName: 'A', lastName: 'B', email: 'a@b.test', roles: [] },
     });
 
-    it('is a no-op outside a dev build (import.meta.env.DEV === false)', () => {
-      vi.stubEnv('DEV', false);
-
-      useAuthStore.getState().enableDevBypass();
-      const state = useAuthStore.getState();
-
-      expect(state.isAuthenticated).toBe(false);
-      expect(state.isDevBypass).toBe(false);
-      expect(state.user).toBeNull();
-    });
-
-    it('logout() clears isDevBypass along with everything else', () => {
-      useAuthStore.getState().enableDevBypass();
-      useAuthStore.getState().logout();
-      const state = useAuthStore.getState();
-
-      expect(state.isDevBypass).toBe(false);
-      expect(state.isAuthenticated).toBe(false);
-    });
-
-    it('a real login() also clears any stale isDevBypass flag', () => {
-      useAuthStore.getState().enableDevBypass();
-      useAuthStore.getState().login(mockLoginResult);
-      const state = useAuthStore.getState();
-
-      expect(state.isDevBypass).toBe(false);
-      expect(state.accessToken).toBe('access-token');
-    });
+    expect(Object.keys(useAuthStore.getState())).not.toContain('refreshToken');
   });
 });

@@ -277,3 +277,15 @@ export interface UpdateDonorRequest {
   compliance?: UpdateDonorComplianceRequest;
   crm?: UpdateDonorCrmRequest;
 }
+
+/** Request body for POST /api/v1/donors/public-form-invite. */
+export interface SendPublicFormInviteRequest {
+  /** Single recipient only — no comma/semicolon lists, no CC/BCC. */
+  to: string;
+  subject: string;
+  body: string;
+}
+
+export interface SendPublicFormInviteResponseDto {
+  message: string;
+}

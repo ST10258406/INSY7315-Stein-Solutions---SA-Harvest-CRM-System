@@ -1,0 +1,128 @@
+namespace CRM.Infrastructure.Persistence.Repositories;
+
+using CRM.Application.Common.Interfaces;
+using CRM.Application.Modules.Reports.Dtos;
+using CRM.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
+public class ReportsRepository : IReportsRepository
+{
+    // Pie-chart display order per the design doc — fixed regardless of enum declaration
+    // order so slice/color assignment doesn't jump between requests.
+    private static readonly DonorStatus[] StatusDisplayOrder =
+    {
+        DonorStatus.Active,
+        DonorStatus.PendingReview,
+        DonorStatus.Lapsed,
+        DonorStatus.Rejected
+    };
+
+    private readonly CrmDbContext _context;
+
+    public ReportsRepository(CrmDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<(int TotalDonorsContacted, List<ManagerContactedDto> ByManager)> GetDonorsContactedAsync(
+        DateTime startUtc,
+        DateTime endUtc,
+        Guid? relationshipManagerId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.InteractionLogs
+            .AsNoTracking()
+            .Where(i => i.CreatedAt >= startUtc && i.CreatedAt <= endUtc);
+
+        if (relationshipManagerId.HasValue)
+            query = query.Where(i => i.Donor.RelationshipManagerId == relationshipManagerId.Value);
+
+        // Project the (small, date-bounded) row set once and aggregate in memory below.
+        // A COUNT(DISTINCT donor_id) alongside a plain COUNT(*) in the same GroupBy
+        // projection is a translation pattern that's been unreliable across EF Core
+        // provider versions, so we avoid depending on it here.
+        var rows = await query
+            .Select(i => new
+            {
+                i.DonorId,
+                ManagerId = i.Donor.RelationshipManagerId,
+                ManagerFirstName = i.Donor.RelationshipManager!.FirstName,
+                ManagerLastName = i.Donor.RelationshipManager!.LastName
+            })
+            .ToListAsync(cancellationToken);
+
+        // COUNT(DISTINCT donor_id) across ALL matching interactions — independent of the
+        // per-manager breakdown below, so it can never be a (double-counting) sum of it.
+        var totalDonorsContacted = rows.Select(r => r.DonorId).Distinct().Count();
+
+        var byManager = rows
+            .Where(r => r.ManagerId.HasValue)
+            .GroupBy(r => r.ManagerId!.Value)
+            .Select(g => new ManagerContactedDto
+            {
+                Manager = new ReportManagerDto
+                {
+                    Id = g.Key,
+                    FullName = $"{g.First().ManagerFirstName} {g.First().ManagerLastName}"
+                },
+                DonorsContacted = g.Select(r => r.DonorId).Distinct().Count(),
+                TotalInteractions = g.Count()
+            })
+            .OrderByDescending(m => m.DonorsContacted)
+            .ToList();
+
+        return (totalDonorsContacted, byManager);
+    }
+
+    public async Task<List<DonorsByRegionDto>> GetDonorsByRegionAsync(CancellationToken cancellationToken = default)
+    {
+        // Driven from the region lookup (LEFT JOIN via the count subquery below), not from
+        // donor_operational_regions, so a region with zero donors still appears with count 0.
+        return await _context.LookupOperationalRegions
+            .AsNoTracking()
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.SortOrder)
+            .Select(r => new DonorsByRegionDto
+            {
+                Region = r.Code,
+                RegionName = r.Name,
+                DonorCount = _context.DonorOperationalRegions.Count(d => d.OperationalRegionId == r.Id)
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<DonorsByTypeDto>> GetDonorsByTypeAsync(CancellationToken cancellationToken = default)
+    {
+        // Driven from the donation type lookup (LEFT JOIN via the count subquery below), not
+        // from donor_donation_types, so a type with zero donors still appears with count 0.
+        return await _context.LookupDonationTypes
+            .AsNoTracking()
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .Select(t => new DonorsByTypeDto
+            {
+                DonationType = t.Name,
+                DonorCount = _context.DonorDonationTypes.Count(d => d.DonationTypeId == t.Id)
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<DonorsByStatusDto>> GetDonorsByStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var counts = await _context.Donors
+            .AsNoTracking()
+            .GroupBy(d => d.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
+
+        // Iterate over every enum value — not just statuses with existing rows — so a status
+        // with zero donors still appears in the response instead of silently vanishing.
+        return StatusDisplayOrder
+            .Select(status => new DonorsByStatusDto
+            {
+                Status = status.ToString(),
+                DonorCount = counts.GetValueOrDefault(status)
+            })
+            .ToList();
+    }
+}

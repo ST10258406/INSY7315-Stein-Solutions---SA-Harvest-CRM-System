@@ -1,6 +1,9 @@
 namespace CRM.API.Extensions;
 
+using CRM.API.Authentication;
 using CRM.API.Authorization;
+using CRM.API.Middleware;
+using CRM.Application.Modules.Auth;
 using CRM.Application.Common.Behaviours;
 using CRM.Application.Common.Interfaces;
 using CRM.Application.Interfaces;
@@ -11,6 +14,7 @@ using CRM.Infrastructure.Persistence;
 using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
 using CRM.Infrastructure.Services;
+using CRM.Infrastructure.Services.Email;
 using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -26,7 +30,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.RateLimiting;
 
 public static class ServiceCollectionExtensions
 {
@@ -64,14 +67,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+        services.AddScoped<IEmailLogRepository, EmailLogRepository>();
         services.AddScoped<IDonorRepository, DonorRepository>();
         services.AddScoped<IDonorDocumentRepository, DonorDocumentRepository>();
         services.AddScoped<IInteractionLogRepository, InteractionLogRepository>();
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IApprovalRepository, ApprovalRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IReportsRepository, ReportsRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IUserPasswordHasher, UserPasswordHasher>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
 
         var jwtSecret = configuration["JWT_SECRET"]
@@ -95,6 +102,9 @@ public static class ServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
+                    // Pin to the algorithm JwtTokenService signs with, so a token claiming any
+                    // other "alg" is rejected outright rather than negotiated (F-20).
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                     ValidIssuer = configuration["Jwt:Issuer"],
                     ValidAudience = configuration["Jwt:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(
@@ -102,10 +112,98 @@ public static class ServiceCollectionExtensions
                     ClockSkew = TimeSpan.Zero,
                     RoleClaimType = ClaimTypes.Role
                 };
+
+                // The signature/lifetime checks above only prove the token hasn't been
+                // tampered with and hasn't expired — they say nothing about whether the
+                // user is still active or still holds the roles baked into the token at
+                // login time. Re-check both against the current DB state on every
+                // authenticated request, so a deactivation or role change takes effect
+                // immediately instead of waiting up to AccessTokenExpiryMinutes.
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var userId))
+                        {
+                            context.Fail("Token has no valid subject.");
+                            return;
+                        }
+
+                        var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                        var user = await users.GetByIdWithRolesReadOnlyAsync(userId, context.HttpContext.RequestAborted);
+
+                        if (user is null || !user.IsActive)
+                        {
+                            context.Fail("User is deactivated or no longer exists.");
+                            return;
+                        }
+
+                        // Every access token belongs to one session (refresh-token family,
+                        // the "sid" claim). Once that session is revoked — logout, password
+                        // reset/change, email change, deactivation, or refresh-token reuse —
+                        // its access tokens stop working on the next request instead of
+                        // living out their remaining minutes.
+                        var sessionClaim = context.Principal!.FindFirst(ClaimTypes.Sid)?.Value
+                            ?? context.Principal.FindFirst("sid")?.Value;
+                        var refreshTokens = context.HttpContext.RequestServices.GetRequiredService<IRefreshTokenRepository>();
+                        if (sessionClaim is null
+                            || !Guid.TryParse(sessionClaim, out var sessionId)
+                            || !await refreshTokens.IsSessionActiveAsync(sessionId, userId, context.HttpContext.RequestAborted))
+                        {
+                            context.Fail("Session has ended.");
+                            return;
+                        }
+
+                        // Rebuild the role claims from the DB rather than trusting whatever
+                        // was embedded in the token — a ChangeUserRole call doesn't (and
+                        // can't) reach out and mint the holder a new access token.
+                        var identity = (ClaimsIdentity)context.Principal!.Identity!;
+                        foreach (var staleRoleClaim in identity.FindAll(ClaimTypes.Role).ToList())
+                        {
+                            identity.RemoveClaim(staleRoleClaim);
+                        }
+                        foreach (var stale in identity.FindAll(PasswordChangeRequiredMiddleware.ClaimName).ToList())
+                        {
+                            identity.RemoveClaim(stale);
+                        }
+                        if (user.MustChangePassword)
+                        {
+                            identity.AddClaim(new Claim(PasswordChangeRequiredMiddleware.ClaimName, "true"));
+                        }
+                        foreach (var roleName in user.UserRoles.Select(ur => ur.Role.Name))
+                        {
+                            identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+                        }
+                    }
+                };
             });
 
         services.AddCrmAuthorizationPolicies();
         services.AddSingleton<IAuthorizationHandler, DocumentTypeAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, RoleAssignmentAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationHandler, UserTargetAuthorizationHandler>();
+
+        var brevoApiKey = configuration["BREVO_API_KEY"]
+            ?? throw new InvalidOperationException(
+                "BREVO_API_KEY is not set. Add it to .env (local) or Azure Key Vault (production).");
+
+        services.Configure<BrevoSettings>(opts =>
+        {
+            configuration.GetSection("Brevo").Bind(opts);
+            opts.ApiKey = brevoApiKey;
+            // Email clients need an absolute URL for the header logo; reuse the frontend's public asset.
+            var frontendBaseUrl = configuration["Frontend:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(opts.LogoUrl) && !string.IsNullOrWhiteSpace(frontendBaseUrl))
+                opts.LogoUrl = $"{frontendBaseUrl.TrimEnd('/')}/sa-harvest-logo.png";
+        });
+
+        services.AddHttpClient<IEmailService, EmailService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.brevo.com/v3/");
+            client.DefaultRequestHeaders.Add("api-key", brevoApiKey);
+            client.DefaultRequestHeaders.Add("accept", "application/json");
+        });
 
 
         // Hangfire — same Postgres connection string, own schema
@@ -120,7 +218,7 @@ public static class ServiceCollectionExtensions
         // Service implementations
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IBlobStorageService, BlobStorageService>();
-        services.AddScoped<IEmailService, EmailService>();       // skeleton, SendGrid later
+        services.AddScoped<IReportExportService, ReportExportService>(); // QuestPDF + ClosedXML, synchronous for now
         services.AddScoped<INotificationService, NotificationService>();
 
         // Recurring background jobs
@@ -134,12 +232,24 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor(); // required by CurrentUserService
 
+        services.AddHsts(options =>
+        {
+            options.MaxAge = TimeSpan.FromDays(365);
+            options.IncludeSubDomains = false;
+            options.Preload = false;
+        });
+
         services.AddControllers();
+
+        // Exact origins from config (Cors:AllowedOrigins / Cors__AllowedOrigins__N) — never a
+        // wildcard, since credentials are allowed. Localhost lives only in
+        // appsettings.Development.json; ProductionConfigurationGuard rejects it elsewhere.
+        var allowedOrigins = ProductionConfigurationGuard.GetAllowedOrigins(configuration);
 
         services.AddCors(options =>
         {
             options.AddPolicy("DefaultCorsPolicy", policy =>
-                policy.WithOrigins("http://localhost:3000")
+                policy.WithOrigins(allowedOrigins)
                       .AllowAnyHeader()
                       .AllowAnyMethod()
                       .AllowCredentials());
@@ -181,42 +291,16 @@ public static class ServiceCollectionExtensions
         services.AddHealthChecks()
             .AddNpgSql(configuration.GetConnectionString("Default")!, name: "postgresql");
 
-        services.AddRateLimiter(options =>
-        {
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 100,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
+        // All rate limit policies (global + named per-tier) are configured in
+        // RateLimitingExtensions.cs, not inline here.
+        services.AddPublicApiRateLimiting();
+        services.AddAuthenticatedApiRateLimiting(configuration);
+        services.AddAuthEndpointRateLimiting(configuration);
 
-            options.AddPolicy("PublicFormPolicy", context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 10,
-                        Window = TimeSpan.FromHours(1),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
-
-            options.OnRejected = async (context, cancellationToken) =>
-            {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                await context.HttpContext.Response.WriteAsJsonAsync(new
-                {
-                    status = 429,
-                    code = "RATE_LIMITED",
-                    message = "Too many requests. Please try again later.",
-                    traceId = context.HttpContext.TraceIdentifier
-                }, cancellationToken);
-            };
-        });
+        services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
+        services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.SectionName));
+        services.Configure<RefreshCookieOptions>(configuration.GetSection(RefreshCookieOptions.SectionName));
+        services.AddSingleton<RefreshTokenCookie>();
 
         return services;
     }

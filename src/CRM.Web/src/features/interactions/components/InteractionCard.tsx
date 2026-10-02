@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Paperclip } from 'lucide-react';
 import { getInitials, getAvatarColor } from '@/features/donors/lib/avatar';
+import { toSafeHttpUrl } from '@/lib/safeUrl';
 import { formatRelativeTime, interactionTypeLabel } from '../lib/interactionMeta';
 import { InteractionTypeIcon } from './InteractionTypeIcon';
 import type { InteractionLogDto } from '../types';
@@ -15,6 +16,8 @@ export function InteractionCard({ interaction, isLast }: InteractionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const authorName = interaction.createdBy?.fullName ?? 'System';
   const subject = interaction.subject?.trim() || interactionTypeLabel(interaction.interactionType);
+  // Only http(s) — never render a javascript:/data: value from the API as a link.
+  const safeAttachmentUrl = toSafeHttpUrl(interaction.emailAttachmentUrl);
 
   return (
     <div className="flex gap-4 border-t border-[var(--hair)] py-5 first:border-t-0">
@@ -65,9 +68,9 @@ export function InteractionCard({ interaction, isLast }: InteractionCardProps) {
             </button>
           )}
 
-          {interaction.emailAttachmentUrl && (
+          {safeAttachmentUrl && (
             <a
-              href={interaction.emailAttachmentUrl}
+              href={safeAttachmentUrl}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted-c)] hover:text-[var(--ink)]"

@@ -3,17 +3,12 @@ import { CalendarCheck, TriangleAlert } from 'lucide-react';
 import { paths } from '@/routes/paths';
 import { useDonors } from '@/features/donors/hooks';
 import { getInitials, getAvatarColor } from '@/features/donors/lib/avatar';
+import type { DonorFilters } from '@/features/donors/types';
 import { formatDate } from '@/features/donors/lib/donorFormatters';
+import { overdueFollowUpFilters } from './lib/overdue';
+import type { DashboardScopeFilters } from './types';
 
 const ROW_LIMIT = 6;
-
-/** yyyy-MM-dd for yesterday — the backend treats `followUpBefore` inclusively,
- * so this returns donors whose follow-up date is strictly before today. */
-function yesterdayYmd(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function daysOverdue(value: string | null): number {
   if (!value) return 0;
@@ -27,18 +22,25 @@ function daysOverdue(value: string | null): number {
   return Math.max(0, Math.round((today.getTime() - due.getTime()) / 86_400_000));
 }
 
+/** Donor list URL for the full overdue list. The list page has no
+ * relationship-manager filter, so only the filters it understands are carried over. */
+function viewAllHref({ followUpBefore, sortBy, sortDir, regionCode }: DonorFilters): string {
+  const params = new URLSearchParams();
+  if (followUpBefore) params.set('followUpBefore', followUpBefore);
+  if (sortBy) params.set('sortBy', sortBy);
+  if (sortDir) params.set('sortDir', sortDir);
+  if (regionCode) params.set('regionCode', regionCode);
+  return `${paths.donors}?${params.toString()}`;
+}
+
 /**
  * Deferred from Sprint 3 (Issue #111). Donors whose follow-up date is in the
  * past, newest-overdue first, straight off the donor list endpoint's
  * `followUpBefore` filter — no dedicated endpoint.
  */
-export function OverdueFollowUpsWidget() {
-  const { data, isPending, isError, refetch } = useDonors({
-    followUpBefore: yesterdayYmd(),
-    sortBy: 'followUpDate',
-    sortDir: 'asc',
-    pageSize: ROW_LIMIT,
-  });
+export function OverdueFollowUpsWidget({ filters = {} }: { filters?: DashboardScopeFilters }) {
+  const listFilters = overdueFollowUpFilters(filters, ROW_LIMIT);
+  const { data, isPending, isError, refetch } = useDonors(listFilters);
 
   const rows = data?.data ?? [];
   const totalCount = data?.pagination.totalCount ?? 0;
@@ -146,7 +148,7 @@ export function OverdueFollowUpsWidget() {
             {totalCount > rows.length && (
               <div className="flex justify-end pt-2.5">
                 <Link
-                  to={`${paths.donors}?followUpBefore=${yesterdayYmd()}&sortBy=followUpDate&sortDir=asc`}
+                  to={viewAllHref(listFilters)}
                   className="text-[12px] font-bold text-[var(--ink)] hover:text-[var(--brand)]"
                 >
                   View all {totalCount} →
