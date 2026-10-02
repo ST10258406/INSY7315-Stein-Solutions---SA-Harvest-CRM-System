@@ -16,13 +16,14 @@ Resource group `rg-crm-prod`, region **South Africa North**.
 | Name | Type | Purpose |
 |---|---|---|
 | `rg-crm-prod` | Resource group | Holds every production resource below |
-| `app-crm-api-cfhsdefdhdegenc3` | App Service (Linux, B1), Web App for Containers, sidecar mode | Runs the API container. The main container is named `main`. Hostname `https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net` |
+| `app-crm-api` | App Service (Linux, B1), Web App for Containers, sidecar mode | Runs the API container. The main container is named `main`. The resource name is `app-crm-api`, but its hostname carries a random suffix: `https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net` |
 | App Service plan of the Web App | App Service plan (B1) | Compute for the Web App. B1 has no deployment slots |
 | `acrcrmk7x2` | Azure Container Registry | Stores the API images that the Web App pulls |
 | `psql-crm-k7x2` | Azure Database for PostgreSQL Flexible Server, **version 18** | Application database `crmdb`. It also holds the Hangfire schema `hangfire` |
 | `stcrmk7x2` | Storage account | Donor documents, in the private blob container `donor-documents` |
 | `kv-crm-k7x2` | Key Vault (RBAC) | Holds the secrets. They reach the app as Key Vault references in App Service settings |
 | `swa-crm-k7x2` | Static Web App (Free) | Hosts the React/Vite SPA at `https://lemon-smoke-0ec399c03.3.azurestaticapps.net` |
+| `id-gh-crm-deploy` | User-assigned managed identity | The deploy identity for `backend-deploy.yml`. GitHub Actions signs in to it with OIDC through a federated credential that trusts the `production` environment. There is no app registration and no client secret |
 
 ---
 
@@ -76,9 +77,10 @@ Leave these **unset** in Azure: `Azure__BlobStorage__PublicEndpoint` (only for A
 
 ### Platform settings (not app settings)
 
-- **Always On**: on. Without it the in-process Hangfire server sleeps and the 04:00 UTC
-  task-due job is missed.
-- **HTTPS Only**: on. TLS ends at the App Service front end, and the container only sees HTTP.
+- **Always On**: on (**not yet confirmed as set**). Without it the in-process Hangfire server
+  sleeps and the 04:00 UTC task-due job is missed.
+- **HTTPS Only**: on (**not yet confirmed as set**). TLS ends at the App Service front end, and
+  the container only sees HTTP.
 - **Health check path**: `/health`.
 - **Identity**: system-assigned managed identity on. It needs *Key Vault Secrets User* on
   `kv-crm-k7x2` and *AcrPull* on `acrcrmk7x2`.
@@ -97,11 +99,13 @@ feature/*  ──PR──▶  Development  ──PR──▶  main
 - **A merge to `main` deploys to production.** There is no staging step in between.
   - **API:** `backend-deploy.yml` runs on pushes to `main` that touch anything except
     `src/CRM.Web/**`, `docs/**` and `*.md`, or on manual dispatch (from `main` only). It logs
-    in to Azure with OIDC (the federated credential trusts the GitHub `production`
-    environment). It then builds `src/CRM.API/Dockerfile` with the repo root as context,
+    in to Azure with OIDC as the user-assigned identity `id-gh-crm-deploy` (its federated
+    credential trusts the GitHub `production` environment). It then builds `src/CRM.API/Dockerfile` with the repo root as context,
     pushes `acrcrmk7x2.azurecr.io/crm-api:<short-sha>`, and points the `main` sitecontainer
     at the new tag with `az webapp sitecontainers update` (always passing `--target-port 8080`).
-    Finally it restarts the app and polls `/health`.
+    It checks that the stored container config now names the new image, restarts the app,
+    waits (best effort, warning only) for the container status to report the new tag, and
+    polls `/health` for up to 10 minutes.
   - **Frontend:** `frontend-deploy.yml` runs on pushes to `main` that touch `src/CRM.Web/**`,
     or on manual dispatch. It builds the SPA in the job on Node 26. The production API origin
     and blob origin are inlined at build time and written into the CSP in
@@ -150,7 +154,7 @@ Re-run `frontend-deploy.yml` from the previous good commit on `main` (or revert 
 
 This has to be done once, by hand, before the first automated deploy:
 
-1. Web App `app-crm-api-cfhsdefdhdegenc3` → **Identity** → System assigned → **On**.
+1. Web App `app-crm-api` → **Identity** → System assigned → **On**.
 2. Container registry `acrcrmk7x2` → **Access control (IAM)** → add role assignment
    **AcrPull** → the Web App's managed identity.
 3. Web App → **Deployment Center** (sidecar containers) → select the `main` container:
@@ -163,6 +167,23 @@ This has to be done once, by hand, before the first automated deploy:
 
 Role assignments can take several minutes to propagate. An image-pull 401 right after step 2
 is usually just timing.
+
+**Do this before the first deploy.** `az webapp sitecontainers update` keeps the container's
+existing pull-auth setting. If `main` is still configured for an anonymous public image (the
+MCR sample), the first deploy points it at the private ACR without managed-identity auth, and
+the pull fails.
+
+### Setup status (as reported on 2026-10-02)
+
+| Item | Status |
+|---|---|
+| `id-gh-crm-deploy` federated credential + the four `production` environment secrets | Done |
+| GitHub `production` environment: required reviewer, limited to `main` | Done |
+| AcrPull for the Web App's identity on `acrcrmk7x2` | Done |
+| `main` container pulling `crm-api` from ACR with managed identity (steps 1–3) | **Not done.** It still runs the MCR sample |
+| `WEBSITES_PORT=8080` and health check path `/health` | Done |
+| Always On | **Unconfirmed** |
+| HTTPS Only | **Unconfirmed** |
 
 ---
 

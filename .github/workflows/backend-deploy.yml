@@ -6,9 +6,10 @@
 # Production only: there is no staging environment (uni project decision).
 # Branch rules keep main green, so this runs on every merge to main.
 #
-# Auth: Azure OIDC federated credential (no stored passwords). The job runs in
-# the GitHub Environment `production`, which is what the federated credential
-# trusts, and which pauses for a required reviewer before anything happens.
+# Auth: OIDC against the user-assigned managed identity `id-gh-crm-deploy` (no
+# stored passwords; AZURE_CLIENT_ID is that identity's client ID). The job runs in
+# the GitHub Environment `production`, which is what the identity's federated
+# credential trusts, and which pauses for a required reviewer before anything happens.
 #
 # Rollback: Actions -> Backend Deploy (Production) -> Run workflow, and enter an
 # existing image tag (a short commit SHA) in "rollback_tag". It skips the build
@@ -42,7 +43,7 @@ concurrency:
 env:
   RESOURCE_GROUP: rg-crm-prod
   ACR_NAME: acrcrmk7x2
-  WEB_APP_NAME: app-crm-api-cfhsdefdhdegenc3
+  WEB_APP_NAME: app-crm-api
   CONTAINER_NAME: main
   IMAGE_REPOSITORY: crm-api
   API_BASE_URL: https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net
@@ -60,7 +61,7 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ !inputs.rollback_tag }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -141,17 +142,56 @@ jobs:
             --image "$IMAGE" \
             --target-port 8080
 
+          # Fail fast if the stored config did not take the new image. `show` returns
+          # the SiteContainer resource (the same model `update` writes), so `image`
+          # is the configured image, not necessarily the one running yet.
+          CONFIGURED=$(az webapp sitecontainers show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEB_APP_NAME" \
+            --container-name "$CONTAINER_NAME" \
+            --query image -o tsv)
+          if [ "$CONFIGURED" != "$IMAGE" ]; then
+            echo "::error::main container is configured with '$CONFIGURED', expected '$IMAGE'"
+            exit 1
+          fi
+          echo "Configured image: $CONFIGURED"
+
           az webapp restart \
             --resource-group "$RESOURCE_GROUP" \
             --name "$WEB_APP_NAME"
 
-      # Startup runs EF migrations and seeding, and the first image pull is slow,
-      # so allow up to ~10 minutes (30 tries, 20s apart) before calling it failed.
+      # UNVERIFIED: `az webapp sitecontainers status` returns the raw JSON of the
+      # SCM endpoint /api/sitecontainers/<name>, whose shape is not documented. This
+      # step looks for the new tag anywhere in that JSON so /health below is less
+      # likely to be answered by the old container. If the tag never appears it only
+      # warns (the format may simply not include the image); it never fails the deploy.
+      - name: Wait for the new image to be running (best effort)
+        env:
+          TAG: ${{ steps.img.outputs.tag }}
+        run: |
+          set -uo pipefail
+          for attempt in $(seq 1 30); do
+            STATUS=$(az webapp sitecontainers status \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$WEB_APP_NAME" \
+              --container-name "$CONTAINER_NAME" -o json 2>/dev/null || true)
+            if printf '%s' "$STATUS" | grep -qF ":$TAG"; then
+              echo "Status reports tag $TAG (attempt $attempt)"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::warning::Could not confirm from sitecontainer status that tag $TAG is running. Last status:"
+          printf '%s\n' "$STATUS"
+
+      # Startup runs EF migrations and seeding, and the first image pull is slow.
+      # --retry-max-time caps the whole retry loop at 10 minutes.
       - name: Smoke test /health
         run: |
           set -euo pipefail
           curl --fail --silent --show-error \
             --retry 30 --retry-delay 20 --retry-all-errors \
+            --retry-max-time 600 \
             --max-time 20 \
             "$API_BASE_URL/health"
           echo
