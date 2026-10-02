@@ -37,7 +37,7 @@ export function DeactivateUserDialog({ user, onOpenChange }: DeactivateUserDialo
   };
 
   return (
-    <Dialog open={!!user} onOpenChange={handleOpenChange}>
+    <Dialog open={!!user} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Deactivate {user ? `${user.firstName} ${user.lastName}` : 'user'}?</DialogTitle>

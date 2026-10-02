@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildDashboardCsv, csvCell, type DashboardSnapshot } from './dashboardCsv';
+import { csvCell } from '@/lib/csv';
+import { buildDashboardCsv, type DashboardSnapshot } from './dashboardCsv';
 
 function snapshot(overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot {
   return {

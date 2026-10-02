@@ -74,7 +74,7 @@ export function LogInteractionDialog({ donorId, open, onOpenChange }: LogInterac
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Log interaction</DialogTitle>

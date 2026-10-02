@@ -75,7 +75,7 @@ export function NewUserModal({ open, onOpenChange }: NewUserModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         {created ? (
           <>

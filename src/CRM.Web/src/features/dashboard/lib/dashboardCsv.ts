@@ -1,3 +1,4 @@
+import { csvJoin, csvRow as row } from '@/lib/csv';
 import type { DonorListItemDto } from '@/features/donors/types';
 import type { DashboardStatsDto, ManagerActivityDto } from '../types';
 
@@ -13,21 +14,6 @@ export interface DashboardSnapshot {
   activity: ManagerActivityDto;
   overdue: DonorListItemDto[];
   overdueTotal: number;
-}
-
-/**
- * One CSV cell: always quoted, quotes doubled, and a leading = + - @ (or tab/CR)
- * neutralised with an apostrophe so a donor named e.g. "=HYPERLINK(...)" can't
- * run as a formula when the file is opened in Excel (CSV injection).
- */
-export function csvCell(value: string | number | null | undefined): string {
-  let text = value === null || value === undefined ? '' : String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function row(...cells: (string | number | null | undefined)[]): string {
-  return cells.map(csvCell).join(',');
 }
 
 /** The dashboard as on screen, flattened into one sectioned CSV. */
@@ -70,6 +56,5 @@ export function buildDashboardCsv(s: DashboardSnapshot): string {
     ),
   );
 
-  // CRLF per RFC 4180 — Excel on Windows is the most likely consumer.
-  return lines.join('\r\n');
+  return csvJoin(lines);
 }

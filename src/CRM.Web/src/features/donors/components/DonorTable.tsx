@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowDown, ArrowUp, ArrowUpDown, FilterX, TriangleAlert, 
@@ -8,6 +7,12 @@ import { paths } from '@/routes/paths';
 import type { ApiError, DonorListItemDto, DonorSortField } from '../types';
 import { formatDate, isOverdue } from '../lib/donorFormatters';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 function getInitials(name: string) {
   if (!name) return '??';
@@ -49,6 +54,8 @@ const renderLastInteractionIcon = (type: string | undefined | null) => {
       return <Phone className="w-3.75 h-3.75 text-muted-foreground" />;
   }
 };
+
+const MENU_ITEM_CLASSES = 'h-9 gap-2.5 px-3 text-13 font-semibold text-[var(--ink)] cursor-pointer whitespace-nowrap';
 
 interface Column {
   key: string;
@@ -94,11 +101,10 @@ export function DonorTable({
   onRetry,
 }: DonorTableProps) {
   const navigate = useNavigate();
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   return (
     <div className={`bg-[var(--card)] rounded-xl shadow-[0_1px_3px_var(--shadow)] overflow-visible ${isFetching && !isPending ? 'opacity-60' : ''}`}>
-      <div className="overflow-x-auto overflow-y-visible pb-16 -mb-16">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse min-w-[1180px]">
           <thead>
             <tr className="bg-[var(--hair)]">
@@ -263,48 +269,37 @@ export function DonorTable({
                       </span>
                     </td>
 
-                    {/* Row Action Menu */}
-                    <td className="py-3.75 pr-4 pl-2 text-right relative bg-[var(--card)] z-[5]">
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === donor.id ? null : donor.id);
-                        }}
-                        title="Row actions"
-                        className="ml-auto hover:bg-[var(--hover)]"
-                      >
-                        <MoreHorizontal className="w-4 h-4 text-[var(--icon)]" />
-                      </Button>
-
-                      {openMenuId === donor.id && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute top-[46px] right-3.5 z-20 w-52 p-1.5 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-[0_12px_28px_rgba(20,20,15,0.16)] flex flex-col gap-0.5 text-left"
-                        >
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(paths.donorDetail(donor.id));
-                            }}
-                            className="flex items-center gap-2.5 h-9 px-3 border-none rounded-lg bg-transparent text-13 font-semibold text-[var(--ink)] cursor-pointer hover:bg-[var(--hover)] whitespace-nowrap"
-                          >
+                    {/* Row Action Menu — a portalled DropdownMenu, so it renders above every
+                        row instead of inside this cell's stacking context (where the next
+                        row's "…" button used to paint over it). */}
+                    <td className="py-3.75 pr-4 pl-2 text-right" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="secondary"
+                              size="icon"
+                              title="Row actions"
+                              aria-label={`Actions for ${donor.companyName}`}
+                              className="ml-auto hover:bg-[var(--hover)]"
+                            >
+                              <MoreHorizontal className="w-4 h-4 text-[var(--icon)]" />
+                            </Button>
+                          }
+                        />
+                        {/* stopPropagation: React bubbles portal events through the component
+                            tree, so a click here would otherwise also hit the row's onClick. */}
+                        <DropdownMenuContent align="end" className="w-52 p-1.5" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem className={MENU_ITEM_CLASSES} onClick={() => navigate(paths.donorDetail(donor.id))}>
                             <Eye className="w-3.75 h-3.75 text-[var(--icon)] shrink-0" />
                             <span>View Profile</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              navigate(paths.donorEdit(donor.id));
-                            }}
-                            className="flex items-center gap-2.5 h-9 px-3 border-none rounded-lg bg-transparent text-13 font-semibold text-[var(--ink)] cursor-pointer hover:bg-[var(--hover)] whitespace-nowrap"
-                          >
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className={MENU_ITEM_CLASSES} onClick={() => navigate(paths.donorEdit(donor.id))}>
                             <Edit3 className="w-3.75 h-3.75 text-[var(--icon)] shrink-0" />
                             <span>Edit Donor</span>
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 );

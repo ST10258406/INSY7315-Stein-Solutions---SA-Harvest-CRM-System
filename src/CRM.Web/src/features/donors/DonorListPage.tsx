@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Download, Send } from 'lucide-react';
 import { paths } from '@/routes/paths';
-import { useDonors } from './hooks';
+import { useDonors, useExportDonors } from './hooks';
 import { useDonorListFilters } from './hooks/useDonorListFilters';
 import { DonorFiltersBar } from './components/DonorFiltersBar';
 import { DonorTable } from './components/DonorTable';
@@ -14,6 +14,7 @@ export default function DonorListPage() {
   const { filters, setFilter, setSort, setPage, setPageSize, clearFilters } = useDonorListFilters();
   const { data, isPending, isFetching, isError, error, refetch } = useDonors(filters);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const exportDonors = useExportDonors();
 
   const hasActiveFilters =
     !!filters.search ||
@@ -38,9 +39,15 @@ export default function DonorListPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2.5">
-          <Button variant="secondary" size="sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={exportDonors.isPending || isPending || !data?.pagination.totalCount}
+            onClick={() => exportDonors.mutate(filters)}
+            title={hasActiveFilters ? 'Export donors matching the current filters (CSV)' : 'Export all donors (CSV)'}
+          >
             <Download className="w-3.75 h-3.75" />
-            <span>Export</span>
+            <span>{exportDonors.isPending ? 'Exporting…' : 'Export'}</span>
           </Button>
 
           <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>

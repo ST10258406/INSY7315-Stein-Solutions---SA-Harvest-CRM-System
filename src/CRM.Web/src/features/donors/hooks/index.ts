@@ -7,3 +7,4 @@ export { useUploadDonorDocument } from './useUploadDonorDocument';
 export { useDeleteDonorDocument } from './useDeleteDonorDocument';
 export { useDownloadDonorDocument } from './useDownloadDonorDocument';
 export { useSendPublicFormInvite } from './useSendPublicFormInvite';
+export { useExportDonors } from './useExportDonors';

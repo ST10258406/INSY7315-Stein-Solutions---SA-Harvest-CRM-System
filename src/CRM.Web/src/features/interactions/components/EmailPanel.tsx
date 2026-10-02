@@ -118,7 +118,7 @@ export function EmailPanel({ donorId, donorName, contactName, defaultTo, open, o
   });
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <SheetContent className="p-0">
         <SheetHeader>
           <SheetTitle>

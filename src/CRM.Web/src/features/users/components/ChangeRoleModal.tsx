@@ -57,7 +57,7 @@ export function ChangeRoleModal({ user, onOpenChange }: ChangeRoleModalProps) {
   });
 
   return (
-    <Dialog open={!!user} onOpenChange={handleOpenChange}>
+    <Dialog open={!!user} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Change Role</DialogTitle>

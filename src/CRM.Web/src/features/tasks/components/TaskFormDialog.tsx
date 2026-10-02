@@ -112,7 +112,7 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? 'New task' : 'Edit task'}</DialogTitle>

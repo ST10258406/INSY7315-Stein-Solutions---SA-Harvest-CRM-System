@@ -64,7 +64,7 @@ export function RejectDonorDialog({ approval, open, onOpenChange }: RejectDonorD
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange} disablePointerDismissal>
       <DialogContent>
         <DialogHeader>
           <div className="flex items-start gap-3.5">
