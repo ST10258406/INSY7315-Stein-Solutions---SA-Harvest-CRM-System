@@ -1,0 +1,166 @@
+# .github/workflows/backend-deploy.yml
+#
+# Builds the API image, pushes it to Azure Container Registry, points the
+# Web App's `main` container at the new tag, then smoke-tests /health.
+#
+# Production only: there is no staging environment (uni project decision).
+# Branch rules keep main green, so this runs on every merge to main.
+#
+# Auth: Azure OIDC federated credential (no stored passwords). The job runs in
+# the GitHub Environment `production`, which is what the federated credential
+# trusts, and which pauses for a required reviewer before anything happens.
+#
+# Rollback: Actions -> Backend Deploy (Production) -> Run workflow, and enter an
+# existing image tag (a short commit SHA) in "rollback_tag". It skips the build
+# and redeploys that tag.
+
+name: Backend Deploy (Production)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "src/CRM.Web/**"
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
+    inputs:
+      rollback_tag:
+        description: "Existing image tag in ACR to redeploy (leave empty to build from this commit)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write # needed for the Azure OIDC login
+
+# Never run two production deploys at once, and never cancel one half-way.
+concurrency:
+  group: backend-deploy-production
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-crm-prod
+  ACR_NAME: acrcrmk7x2
+  WEB_APP_NAME: app-crm-api-cfhsdefdhdegenc3
+  CONTAINER_NAME: main
+  IMAGE_REPOSITORY: crm-api
+  API_BASE_URL: https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        if: ${{ !inputs.rollback_tag }}
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve image reference
+        id: img
+        env:
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+        run: |
+          set -euo pipefail
+
+          LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
+
+          if [ -n "${ROLLBACK_TAG:-}" ]; then
+            # Passed through an env var (not inlined) so user input can't inject shell.
+            if ! [[ "$ROLLBACK_TAG" =~ ^[A-Za-z0-9_.-]{1,128}$ ]]; then
+              echo "::error::rollback_tag contains invalid characters"
+              exit 1
+            fi
+            TAG="$ROLLBACK_TAG"
+            echo "Rollback requested: redeploying existing tag $TAG"
+          else
+            TAG="${GITHUB_SHA::7}"
+            echo "Building new image tagged $TAG"
+          fi
+
+          echo "login_server=$LOGIN_SERVER"        >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"                          >> "$GITHUB_OUTPUT"
+          echo "image=$LOGIN_SERVER/$IMAGE_REPOSITORY:$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        if: ${{ !inputs.rollback_tag }}
+        env:
+          IMAGE: ${{ steps.img.outputs.image }}
+        run: |
+          set -euo pipefail
+          # Build context is the repo root (the Dockerfile copies the whole solution).
+          docker build -f src/CRM.API/Dockerfile -t "$IMAGE" .
+
+      - name: Push image to ACR
+        if: ${{ !inputs.rollback_tag }}
+        env:
+          IMAGE: ${{ steps.img.outputs.image }}
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+          docker push "$IMAGE"
+
+      - name: Confirm the tag exists in ACR
+        env:
+          TAG: ${{ steps.img.outputs.tag }}
+        run: |
+          set -euo pipefail
+          az acr repository show \
+            --name "$ACR_NAME" \
+            --image "$IMAGE_REPOSITORY:$TAG" \
+            --query name -o tsv
+
+      # UNVERIFIED: the Web App was created in sidecar-container mode (the container
+      # is named `main`), so this uses `az webapp sitecontainers`. If the command
+      # group is missing or the flags differ, the first run will say so. Fallback:
+      # change the image tag by hand in the portal (Deployment Center -> main).
+      - name: Point the Web App at the new image
+        env:
+          IMAGE: ${{ steps.img.outputs.image }}
+        run: |
+          set -euo pipefail
+          az webapp sitecontainers update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEB_APP_NAME" \
+            --container-name "$CONTAINER_NAME" \
+            --image "$IMAGE"
+
+          az webapp restart \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEB_APP_NAME"
+
+      # Startup runs EF migrations and seeding, and the first image pull is slow,
+      # so allow up to ~10 minutes (30 tries, 20s apart) before calling it failed.
+      - name: Smoke test /health
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --retry 30 --retry-delay 20 --retry-all-errors \
+            --max-time 20 \
+            "$API_BASE_URL/health"
+          echo
+          echo "Health check passed"
+
+      - name: Job summary
+        if: ${{ always() }}
+        env:
+          IMAGE: ${{ steps.img.outputs.image }}
+          RESULT: ${{ job.status }}
+        run: |
+          {
+            echo "### Backend deploy"
+            echo ""
+            echo "- Result: **$RESULT**"
+            echo "- Image: \`$IMAGE\`"
+            echo "- Commit: \`${GITHUB_SHA::7}\`"
+            echo "- Rollback: re-run this workflow with the previous tag in \`rollback_tag\`"
+          } >> "$GITHUB_STEP_SUMMARY"
