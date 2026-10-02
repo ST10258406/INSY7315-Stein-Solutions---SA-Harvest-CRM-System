@@ -638,7 +638,7 @@ public class PublicDonorsControllerTests : IClassFixture<WebApplicationFactory<P
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         await _blobStorageMock.Received(1).UploadAsync(
             Arg.Any<Stream>(),
-            Arg.Is<string>(p => System.Text.RegularExpressions.Regex.IsMatch(
+            Arg.Is<string>(p => p != null && System.Text.RegularExpressions.Regex.IsMatch(
                 p, @"^donors/[0-9a-f-]{36}/BBBEECertificate/[0-9a-f-]{36}\.pdf$")),
             "application/pdf");
         var doc = await seedContext.DonorDocuments.AsNoTracking().SingleAsync();

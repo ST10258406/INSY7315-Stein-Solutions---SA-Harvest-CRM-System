@@ -130,6 +130,7 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Western Cape' }));
 }
 
+// These tests drive the full form with userEvent, which can exceed the default 5s under load (CI, full-suite runs).
 describe('DonorForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -225,4 +226,4 @@ describe('DonorForm', () => {
     expect(await screen.findByText('Invalid registration number.')).toBeInTheDocument();
     expect(screen.getByText('Please fix the highlighted fields and try again.')).toBeInTheDocument();
   });
-});
+}, 20000);
