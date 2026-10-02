@@ -139,9 +139,9 @@ public class ReportsExportControllerTests : IClassFixture<WebApplicationFactory<
         Assert.InRange(data.GetProperty("expiresAt").GetDateTime().ToUniversalTime(), before.AddMinutes(15), DateTime.UtcNow.AddMinutes(15));
 
         await _blobStorageMock.Received(1).UploadAsync(
-            Arg.Any<Stream>(), Arg.Is<string>(p => p.StartsWith("reports/donors-contacted/")), "application/pdf");
+            Arg.Any<Stream>(), Arg.Is<string>(p => p != null && p.StartsWith("reports/donors-contacted/")), "application/pdf");
         await _blobStorageMock.Received(1).GenerateSasUrlAsync(
-            Arg.Is<string>(p => p.StartsWith("reports/donors-contacted/")), TimeSpan.FromMinutes(15));
+            Arg.Is<string>(p => p != null && p.StartsWith("reports/donors-contacted/")), TimeSpan.FromMinutes(15));
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
@@ -170,7 +170,7 @@ public class ReportsExportControllerTests : IClassFixture<WebApplicationFactory<
         Assert.Equal($"donors-by-region-{today}.xlsx", Body(response).GetProperty("data").GetProperty("fileName").GetString());
         await _blobStorageMock.Received(1).UploadAsync(
             Arg.Any<Stream>(),
-            Arg.Is<string>(p => p.StartsWith("reports/donors-by-region/")),
+            Arg.Is<string>(p => p != null && p.StartsWith("reports/donors-by-region/")),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 

@@ -12,6 +12,15 @@ internal class BrevoSender
     public string Email { get; set; } = default!;
 }
 
+internal class BrevoReplyTo
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = default!;
+
+    [JsonPropertyName("email")]
+    public string Email { get; set; } = default!;
+}
+
 internal class BrevoRecipient
 {
     [JsonPropertyName("email")]
@@ -22,6 +31,10 @@ internal class BrevoSendEmailRequest
 {
     [JsonPropertyName("sender")]
     public BrevoSender Sender { get; set; } = default!;
+
+    [JsonPropertyName("replyTo")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BrevoReplyTo? ReplyTo { get; set; }
 
     [JsonPropertyName("to")]
     public List<BrevoRecipient> To { get; set; } = new();
