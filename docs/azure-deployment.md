@@ -95,9 +95,13 @@ feature/*  ──PR──▶  Development  ──PR──▶  main
 - `backend.yml` and `frontend.yml` (CI) run on every push and PR to `Development` and `main`.
   They build and test only and never deploy.
 - **A merge to `main` deploys to production.** There is no staging step in between.
-  - **API:** `backend-deploy.yml` builds the image with `src/CRM.API/Dockerfile` (the build
-    context is the repo root), pushes it to `acrcrmk7x2`, and updates the Web App's `main`
-    container to the new tag.
+  - **API:** `backend-deploy.yml` runs on pushes to `main` that touch anything except
+    `src/CRM.Web/**`, `docs/**` and `*.md`, or on manual dispatch (from `main` only). It logs
+    in to Azure with OIDC (the federated credential trusts the GitHub `production`
+    environment). It then builds `src/CRM.API/Dockerfile` with the repo root as context,
+    pushes `acrcrmk7x2.azurecr.io/crm-api:<short-sha>`, and points the `main` sitecontainer
+    at the new tag with `az webapp sitecontainers update` (always passing `--target-port 8080`).
+    Finally it restarts the app and polls `/health`.
   - **Frontend:** `frontend-deploy.yml` runs on pushes to `main` that touch `src/CRM.Web/**`,
     or on manual dispatch. It builds the SPA in the job on Node 26. The production API origin
     and blob origin are inlined at build time and written into the CSP in
@@ -109,9 +113,8 @@ feature/*  ──PR──▶  Development  ──PR──▶  main
 - On container start the API applies EF Core migrations, runs the idempotent seeders, creates
   or updates the Hangfire schema, and registers the recurring job. Then it starts listening.
 
-> The repo did not contain `backend-deploy.yml` when this document was written. The
-> description above is the intended behaviour. Check it against the workflow once it is
-> committed.
+> The backend deploy does not wait for `backend.yml`. It relies on CI passing on the PR into
+> `main` (branch protection).
 
 ---
 
@@ -119,9 +122,16 @@ feature/*  ──PR──▶  Development  ──PR──▶  main
 
 ### API
 
-Images are immutable and tagged per build. To roll back, re-run `backend-deploy.yml` with a
-**previous image tag** (manual dispatch, if the workflow takes a tag input), so the Web App's
-`main` container points at the older image again.
+Every build is tagged with its short commit SHA in the `crm-api` repository of
+`acrcrmk7x2`. To roll back: **Actions → Backend Deploy (Production) → Run workflow** (on
+`main`), and enter the previous tag in `rollback_tag`. The workflow skips the build, checks
+the tag exists in ACR, points `main` at it, restarts the app and polls `/health`.
+
+To find earlier tags:
+
+```bash
+az acr repository show-tags --name acrcrmk7x2 --repository crm-api --orderby time_desc -o table
+```
 
 **Database migrations do not roll back with the image.** The app only migrates forwards on
 startup. If the release you're reverting added a migration, the older image runs against the
@@ -146,7 +156,8 @@ This has to be done once, by hand, before the first automated deploy:
 3. Web App → **Deployment Center** (sidecar containers) → select the `main` container:
    - Registry source: Azure Container Registry, registry `acrcrmk7x2`
    - Authentication: **Managed identity** (system assigned). Not admin credentials.
-   - Image: the API repository, with an existing tag
+   - Image: `crm-api`, with an existing tag (push one first, or run the workflow once and
+     fix the source afterwards)
    - Port: `8080`
 4. Save, then watch the log stream until `/health` returns 200.
 

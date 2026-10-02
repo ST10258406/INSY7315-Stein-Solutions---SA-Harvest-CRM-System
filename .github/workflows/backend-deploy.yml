@@ -49,6 +49,10 @@ env:
 
 jobs:
   deploy:
+    # workflow_dispatch can be started from any branch that carries this file, and the
+    # OIDC credential trusts the `production` environment, not the branch. Only main may
+    # ever reach production.
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 30
@@ -119,10 +123,12 @@ jobs:
             --image "$IMAGE_REPOSITORY:$TAG" \
             --query name -o tsv
 
-      # UNVERIFIED: the Web App was created in sidecar-container mode (the container
-      # is named `main`), so this uses `az webapp sitecontainers`. If the command
-      # group is missing or the flags differ, the first run will say so. Fallback:
-      # change the image tag by hand in the portal (Deployment Center -> main).
+      # The Web App runs in sitecontainer mode (main container `main`). `az webapp
+      # sitecontainers update` is GA, but it always overwrites target_port and
+      # startup command with whatever is passed (None when omitted). So the port
+      # must be passed every time, or the main container loses 8080. Auth type and
+      # is_main are kept when not passed. Fallback: set the tag by hand in the
+      # portal (Deployment Center -> main).
       - name: Point the Web App at the new image
         env:
           IMAGE: ${{ steps.img.outputs.image }}
@@ -132,7 +138,8 @@ jobs:
             --resource-group "$RESOURCE_GROUP" \
             --name "$WEB_APP_NAME" \
             --container-name "$CONTAINER_NAME" \
-            --image "$IMAGE"
+            --image "$IMAGE" \
+            --target-port 8080
 
           az webapp restart \
             --resource-group "$RESOURCE_GROUP" \

@@ -40,7 +40,7 @@ written, so check them against the board.
 | #14 | Migration Strategy and Least-Privilege Database Role | 1 | Not shipped | R-03, R-04 |
 | #16 | Audit Log Gaps (POPIA) | 2 | Not shipped. `AuditBehaviour` still writes `IpAddress`/`UserAgent` as null, and document upload/delete commands aren't auditable | Incomplete POPIA audit trail (F-19) |
 | #18 | Frontend Dependency Remediation + Dead Code Cleanup | 1 | Partly done. Dead `loginApi` still in `authService.ts`. Dependency advisories not re-checked | F-18, F-35 |
-| #19 | CI Security Gates + CD Workflows (OIDC) | 1 | Partly done. `frontend-deploy.yml` added. `backend-deploy.yml` not in the repo yet. CI workflows have no `permissions:` block and no security scanning | F-27 |
+| #19 | CI Security Gates + CD Workflows (OIDC) | 1 | Partly done. `backend-deploy.yml` (OIDC) and `frontend-deploy.yml` added. The CI workflows have no `permissions:` block and no security scanning, and the deploy does not wait for CI on the merge commit | F-27 |
 | #20 | Unit Test Gap-Fill | 2 | Unverified | — |
 | #21 | Integration Tests on Real PostgreSQL + Security Regression Suite | 1 | Partly done. Repository tests run on real Postgres (passing on 18); API tests use the in-memory provider and in-memory Hangfire | F-28 |
 | #22 | Backend Hygiene Cleanup | 3 | Unverified | — |
