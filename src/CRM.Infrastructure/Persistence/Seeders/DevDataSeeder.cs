@@ -95,6 +95,17 @@ public static class DevDataSeeder
         context.Donors.AddRange(donors);
         await context.SaveChangesAsync();
 
+        if (context.Database.IsNpgsql())
+        {
+            var sequenceName = $"donor_reference_seq_{now.Year}";
+            #pragma warning disable EF1002
+            await context.Database.ExecuteSqlRawAsync(
+                $"CREATE SEQUENCE IF NOT EXISTS {sequenceName} START 1");
+            await context.Database.ExecuteSqlRawAsync(
+                $"SELECT setval('{sequenceName}', GREATEST((SELECT last_value FROM {sequenceName}), {donors.Length}))");
+            #pragma warning restore EF1002
+        }
+
         var active = donors[0];
         var pending = donors[1];
         var lapsed = donors[2];
