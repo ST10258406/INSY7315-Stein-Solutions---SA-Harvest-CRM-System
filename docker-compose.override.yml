@@ -2,6 +2,10 @@ services:
   crm-api:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      # appsettings.Development.json is excluded from the image (.dockerignore), so supply its dev values here.
+      Cors__AllowedOrigins__0: http://localhost:3000
+      Frontend__BaseUrl: http://localhost:3000
+      Auth__RefreshCookie__Secure: "false"
     volumes:
       - ./src/CRM.API:/src/src/CRM.API
 
