@@ -301,6 +301,9 @@ public static class ServiceCollectionExtensions
         services.AddAuthenticatedApiRateLimiting(configuration);
         services.AddAuthEndpointRateLimiting(configuration);
 
+        // CRM MCP server (docs/mcp-spec.md) — the agent's tools over /mcp.
+        services.AddCrmMcp();
+
         services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
         services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.SectionName));
         services.Configure<RefreshCookieOptions>(configuration.GetSection(RefreshCookieOptions.SectionName));

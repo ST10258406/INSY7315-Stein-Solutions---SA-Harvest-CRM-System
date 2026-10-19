@@ -49,6 +49,10 @@ explicitly — do not let them pass because the code otherwise looks clean.
 - `CRM.Infrastructure` must NOT be referenced by `CRM.Application`.
   Only CRM.API references Infrastructure (for DI registration only).
 
+- `ModelContextProtocol.*` packages may be referenced by `CRM.API` only (the `/mcp`
+  endpoint, docs/mcp-spec.md). If one appears in Application, Domain or Infrastructure,
+  fail the PR. Tools are defined once in `CrmAgentTools.Definitions` (Application).
+
 - Controllers must be thin — no business logic.
   A controller method must only:
   1. Receive the HTTP request

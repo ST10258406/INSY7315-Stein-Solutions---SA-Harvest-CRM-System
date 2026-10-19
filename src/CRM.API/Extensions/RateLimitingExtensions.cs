@@ -53,6 +53,9 @@ public static class RateLimitingExtensions
     /// </summary>
     public const string AgentPolicy = "Agent";
 
+    /// <summary>Per-user limit on /mcp (docs/mcp-spec.md §9), default 60 calls / 10 minutes.</summary>
+    public const string McpPolicy = "Mcp";
+
     /// <summary>Strict per-IP limit on POST /auth/login (default 10/minute) — F-02.</summary>
     public const string AuthLoginPolicy = "AuthLogin";
 
@@ -103,6 +106,18 @@ public static class RateLimitingExtensions
                     {
                         PermitLimit = configuration.GetValue<int?>("RateLimiting:Agent:PermitLimit") ?? 20,
                         Window = TimeSpan.FromMinutes(configuration.GetValue<int?>("RateLimiting:Agent:WindowMinutes") ?? 10),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Higher than Agent: one MCP client question fans out into several tool calls.
+            options.AddPolicy(McpPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetUserId(context),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = configuration.GetValue<int?>("RateLimiting:Mcp:PermitLimit") ?? 60,
+                        Window = TimeSpan.FromMinutes(configuration.GetValue<int?>("RateLimiting:Mcp:WindowMinutes") ?? 10),
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));

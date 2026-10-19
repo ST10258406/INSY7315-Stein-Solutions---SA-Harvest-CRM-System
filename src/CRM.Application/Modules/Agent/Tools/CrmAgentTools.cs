@@ -1,6 +1,7 @@
 namespace CRM.Application.Modules.Agent.Tools;
 
 using System.ComponentModel;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Modules.Approvals.Queries.GetApprovals;
@@ -36,19 +37,29 @@ public sealed partial class CrmAgentTools(ISender sender)
     private const int InteractionLimit = 20;
     private const int MaxSummaryLength = 500;
 
-    public IList<AITool> AsTools() =>
+    /// <summary>
+    /// The one place tool names are defined. The in-app agent (<see cref="AsTools"/>) and the
+    /// MCP endpoint (CRM.API McpExtensions, docs/mcp-spec.md §7) both build from this list,
+    /// so the two channels can't drift apart.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Name, MethodInfo Method)> Definitions =
     [
-        AIFunctionFactory.Create(SearchDonorsAsync, "search_donors"),
-        AIFunctionFactory.Create(GetDonorAsync, "get_donor"),
-        AIFunctionFactory.Create(GetDonorInteractionsAsync, "get_donor_interactions"),
-        AIFunctionFactory.Create(GetDonorTasksAsync, "get_donor_tasks"),
-        AIFunctionFactory.Create(GetMyTasksAsync, "get_my_tasks"),
-        AIFunctionFactory.Create(ListApprovalsAsync, "list_approvals"),
-        AIFunctionFactory.Create(GetDashboardStatsAsync, "get_dashboard_stats"),
-        AIFunctionFactory.Create(GetManagerActivityAsync, "get_manager_activity"),
-        AIFunctionFactory.Create(RunReportAsync, "run_report"),
-        AIFunctionFactory.Create(ListRelationshipManagersAsync, "list_relationship_managers"),
+        ("search_donors", Method(nameof(SearchDonorsAsync))),
+        ("get_donor", Method(nameof(GetDonorAsync))),
+        ("get_donor_interactions", Method(nameof(GetDonorInteractionsAsync))),
+        ("get_donor_tasks", Method(nameof(GetDonorTasksAsync))),
+        ("get_my_tasks", Method(nameof(GetMyTasksAsync))),
+        ("list_approvals", Method(nameof(ListApprovalsAsync))),
+        ("get_dashboard_stats", Method(nameof(GetDashboardStatsAsync))),
+        ("get_manager_activity", Method(nameof(GetManagerActivityAsync))),
+        ("run_report", Method(nameof(RunReportAsync))),
+        ("list_relationship_managers", Method(nameof(ListRelationshipManagersAsync))),
     ];
+
+    public IList<AITool> AsTools() =>
+        [.. Definitions.Select(d => AIFunctionFactory.Create(d.Method, this, d.Name))];
+
+    private static MethodInfo Method(string name) => typeof(CrmAgentTools).GetMethod(name)!;
 
     [Description("Search donors. Returns at most 25 per page plus totalCount.")]
     public Task<object> SearchDonorsAsync(

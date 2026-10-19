@@ -112,6 +112,28 @@ public class ProductionConfigurationGuardTests
     }
 
     [Fact]
+    public void Validate_McpEnabledInProduction_Throws()
+    {
+        var config = new ConfigurationBuilder()
+            .AddConfiguration(Config())
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Mcp:Enabled"] = "true" })
+            .Build();
+
+        Assert.Contains("Mcp:Enabled", Fails(config).Message);
+    }
+
+    [Fact]
+    public void Validate_McpEnabledInStaging_DoesNotThrow()
+    {
+        var config = new ConfigurationBuilder()
+            .AddConfiguration(Config())
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Mcp:Enabled"] = "true" })
+            .Build();
+
+        ProductionConfigurationGuard.Validate(config, new FakeEnvironment("Staging"));
+    }
+
+    [Fact]
     public void GetAllowedOrigins_TrimsTrailingSlashesAndDropsBlanks()
     {
         var origins = ProductionConfigurationGuard.GetAllowedOrigins(

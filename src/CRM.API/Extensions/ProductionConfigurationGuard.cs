@@ -83,6 +83,11 @@ public static class ProductionConfigurationGuard
         if (configuration.GetValue<bool?>(RefreshCookieSecureKey) == false)
             errors.Add($"{RefreshCookieSecureKey} is false. The refresh-token cookie must be Secure outside Development.");
 
+        // MCP sends CRM data to whatever LLM the client uses, which no setting here controls
+        // (docs/mcp-spec.md D3). Off in Production until a production auth model and POPIA sign-off exist.
+        if (environment.IsProduction() && configuration.GetValue<bool>(McpExtensions.EnabledKey))
+            errors.Add($"{McpExtensions.EnabledKey} is true. The MCP endpoint is not allowed in Production.");
+
         if (errors.Count > 0)
             throw new InvalidOperationException(
                 $"Invalid configuration for the '{environment.EnvironmentName}' environment:{Environment.NewLine}- " +

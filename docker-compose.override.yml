@@ -7,6 +7,7 @@ services:
       Agent__Endpoint: https://api.groq.com/openai/v1/
       Agent__Model: openai/gpt-oss-120b
       AGENT_API_KEY: ${AGENT_API_KEY} # from .env — never paste the key here (this file is tracked)
+      Mcp__Enabled: "true" # local dev only — seed data only (docs/mcp-spec.md); never set in Azure
     
       ASPNETCORE_ENVIRONMENT: Development
       # appsettings.Development.json is excluded from the image (.dockerignore), so supply its dev values here.

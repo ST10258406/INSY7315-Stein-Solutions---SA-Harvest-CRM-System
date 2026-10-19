@@ -3,3 +3,6 @@ obj/
 .env
 *.user
 .vs/
+
+# MCP client configs can hold a bearer token (docs/mcp-spec.md §8)
+.mcp.json

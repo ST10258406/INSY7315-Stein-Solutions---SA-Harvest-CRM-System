@@ -246,6 +246,25 @@ Rules:
 - Document-type restriction (BBBEE cert = Admin+) is applied with the
   `DocumentTypeAuthorizationFilter` / `DocumentTypeAuthorizationHandler`.
 
+### CRM MCP server (local dev only)
+
+`/mcp` exposes the in-app agent's read-only tools (`CrmAgentTools`) to MCP clients such as
+Claude Code (docs/mcp-spec.md). It is `SuperAdminOnly`, rate limited per user, audits every
+tool call, and only exists when `Mcp:Enabled = true` (set in `docker-compose.override.yml`;
+the API refuses to start in Production with it on). Use **seed data only**: the client's own
+LLM receives the tool results.
+
+1. Sign in as a SuperAdmin: `POST http://localhost:5000/api/auth/login`. Copy `accessToken` from the response.
+2. Add the server to Claude Code (the token expires after 60 minutes; sign in again and re-add it):
+
+   ```bash
+   claude mcp add --transport http sa-harvest-crm http://localhost:5000/mcp --header "Authorization: Bearer <accessToken>"
+   ```
+
+Never commit an MCP config that contains a token (`.mcp.json` is git-ignored). New tools go in
+`CrmAgentTools.Definitions`, which feeds both the in-app agent and `/mcp`; they must wrap a
+query whose endpoint policy includes SuperAdmin.
+
 ---
 
 ## 8. API contract
