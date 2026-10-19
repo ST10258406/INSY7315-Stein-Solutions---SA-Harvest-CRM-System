@@ -1,19 +1,28 @@
 import { useState } from 'react';
 import { Search, Bookmark, CalendarDays, Bot, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
+import { AgentDrawer } from '@/features/agent';
 
 /**
  * Slim icon-only rail for secondary quick actions, per the Claude Design
  * hybrid-nav spec (deviation from the original SDD sidebar). Primary
  * navigation lives in TopBar — this rail is deliberately non-navigational.
+ *
+ * The Agent action (CRM assistant) is SuperAdmin-only, so it renders for
+ * SuperAdmins only. Cosmetic — the API enforces access.
  */
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const isSuperAdmin = useAuthStore((state) => state.user?.roles.includes('SuperAdmin') ?? false);
 
   const quickActions = [
     { title: 'Search', icon: Search },
     { title: 'Saved filters', icon: Bookmark },
     { title: 'Calendar', icon: CalendarDays },
-    { title: 'Agent', icon: Bot },
+    ...(isSuperAdmin
+      ? [{ title: 'Agent', icon: Bot, ariaLabel: 'Open CRM assistant', onClick: () => setIsAgentOpen(true) }]
+      : []),
     { title: 'Help & support', icon: HelpCircle },
   ];
 
@@ -35,11 +44,13 @@ export function Sidebar() {
   return (
     <aside className="flex w-[68px] shrink-0 flex-col items-center bg-background py-5.5 pb-4">
       <div className="mt-4 flex flex-col gap-1 rounded-[26px] border border-border bg-card p-1.5 shadow-[0_1px_3px_var(--shadow)]">
-        {quickActions.map(({ title, icon: Icon }) => (
+        {quickActions.map(({ title, icon: Icon, ariaLabel, onClick }) => (
           <button
             key={title}
             type="button"
             title={title}
+            aria-label={ariaLabel ?? title}
+            onClick={onClick}
             className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover"
           >
             <Icon className="h-4 w-4" />
@@ -55,6 +66,8 @@ export function Sidebar() {
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
+
+      {isSuperAdmin && <AgentDrawer open={isAgentOpen} onOpenChange={setIsAgentOpen} />}
     </aside>
   );
 }

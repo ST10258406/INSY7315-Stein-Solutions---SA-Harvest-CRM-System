@@ -47,6 +47,12 @@ public static class RateLimitingExtensions
     /// </summary>
     public const string DonorEmailPolicy = "DonorEmail";
 
+    /// <summary>
+    /// Per-user limit on POST /agent/messages (default 20 per 10 minutes) — every request
+    /// costs LLM provider quota. Configurable via RateLimiting:Agent:PermitLimit / :WindowMinutes.
+    /// </summary>
+    public const string AgentPolicy = "Agent";
+
     /// <summary>Strict per-IP limit on POST /auth/login (default 10/minute) — F-02.</summary>
     public const string AuthLoginPolicy = "AuthLogin";
 
@@ -85,6 +91,18 @@ public static class RateLimitingExtensions
                     {
                         PermitLimit = permitLimit,
                         Window = TimeSpan.FromMinutes(windowMinutes),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0
+                    }));
+
+            // Limits read when a partition is first created, so test-host overrides apply.
+            options.AddPolicy(AgentPolicy, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: GetUserId(context),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = configuration.GetValue<int?>("RateLimiting:Agent:PermitLimit") ?? 20,
+                        Window = TimeSpan.FromMinutes(configuration.GetValue<int?>("RateLimiting:Agent:WindowMinutes") ?? 10),
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         QueueLimit = 0
                     }));

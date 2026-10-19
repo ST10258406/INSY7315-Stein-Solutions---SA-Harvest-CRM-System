@@ -57,6 +57,20 @@ public class ExceptionHandlingMiddlewareTests
     }
 
     [Fact]
+    public async Task AgentUnavailableException_Returns503_WithGenericMessage()
+    {
+        var (statusCode, body) = await InvokeWithException(
+            new AgentUnavailableException("The LLM provider request failed: 429 quota", new HttpRequestException("secret detail")));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, statusCode);
+        Assert.Equal(503, body.GetProperty("status").GetInt32());
+        Assert.Equal("AGENT_UNAVAILABLE", body.GetProperty("code").GetString());
+        Assert.DoesNotContain("quota", body.GetProperty("message").GetString());
+        Assert.DoesNotContain("secret detail", body.ToString());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("traceId").GetString()));
+    }
+
+    [Fact]
     public async Task UnhandledException_Returns500_WithNoStackTrace()
     {
         var (statusCode, body) = await InvokeWithException(

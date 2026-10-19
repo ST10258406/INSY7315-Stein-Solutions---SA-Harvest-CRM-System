@@ -15,6 +15,7 @@ using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
 using CRM.Infrastructure.Services;
 using CRM.Infrastructure.Services.Email;
+using CRM.Infrastructure.Services.Agent;
 using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -223,6 +224,9 @@ public static class ServiceCollectionExtensions
 
         // Recurring background jobs
         services.AddScoped<ITaskDueNotificationJob, TaskDueNotificationJob>();
+
+        // In-app CRM agent (docs/agent-spec.md) — IChatClient for the configured provider + tools
+        services.AddAgent(configuration);
 
         return services;
     }
