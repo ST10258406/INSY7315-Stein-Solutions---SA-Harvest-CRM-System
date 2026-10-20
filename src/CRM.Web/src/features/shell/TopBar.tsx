@@ -1,44 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  CheckCircle2,
-  BarChart3,
-  UserCog,
-  LogOut,
-  Sun,
-  Moon,
-  type LucideIcon,
-} from 'lucide-react';
+import { LogOut, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { NotificationBell } from '@/features/notifications';
 import { paths } from '@/routes/paths';
 import logoImg from '@/assets/sa-harvest-logo.png';
-
-const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
-
-interface NavItem {
-  label: string;
-  path: string;
-  icon: LucideIcon;
-  adminOnly?: boolean;
-}
-
-// `adminOnly` items (Approvals — Issue #113 — Reports — Issue #73 — and Users)
-// are hidden from every non-Admin role. This is cosmetic only: the routes are
-// `ProtectedRoute`-guarded and the APIs enforce `AdminOrAbove` server-side
-// regardless of the nav.
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: paths.dashboard, icon: LayoutDashboard },
-  { label: 'Donors', path: paths.donors, icon: Users },
-  { label: 'Tasks', path: paths.tasks, icon: ClipboardList },
-  { label: 'Approvals', path: paths.approvals, icon: CheckCircle2, adminOnly: true },
-  { label: 'Reports', path: paths.reports, icon: BarChart3, adminOnly: true },
-  { label: 'Users', path: paths.users, icon: UserCog, adminOnly: true },
-];
+import { ADMIN_ROLES, NAV_ITEMS } from './navItems';
 
 function isRouteActive(pathname: string, itemPath: string) {
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);

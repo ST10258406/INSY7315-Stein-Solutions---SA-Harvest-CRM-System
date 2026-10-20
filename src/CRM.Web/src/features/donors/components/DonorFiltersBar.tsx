@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { SelectHTMLAttributes } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, FilterX } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronDown, FilterX, Bookmark } from 'lucide-react';
 import { useCompanyTypes, useOperationalRegions, useDonationTypes, useDonationFrequencies } from '@/features/lookups';
 import type { DonorFilters, DonorStatus } from '../types';
 import type { DonorFilterKey } from '../hooks/useDonorListFilters';
 import { DatePicker } from '@/components/common/DatePicker';
 import { Button } from '@/components/ui/button';
+import { SaveFilterDialog } from '@/features/savedFilters';
 
 const STATUS_OPTIONS: { value: DonorStatus; label: string }[] = [
   { value: 'PendingReview', label: 'Pending review' },
@@ -44,6 +45,7 @@ function PillSelect({
 
 export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFiltersBarProps) {
   const [showMore, setShowMore] = useState(false);
+  const [isSaveOpen, setIsSaveOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
   const [syncedSearch, setSyncedSearch] = useState(filters.search);
 
@@ -145,6 +147,13 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
         </Button>
 
         {hasActiveFilters && (
+          <Button variant="secondary" onClick={() => setIsSaveOpen(true)}>
+            <Bookmark className="w-3.5 h-3.5" />
+            Save filters
+          </Button>
+        )}
+
+        {hasActiveFilters && (
           <Button
             variant="ghost"
             onClick={onClear}
@@ -200,6 +209,8 @@ export function DonorFiltersBar({ filters, onFilterChange, onClear }: DonorFilte
           </div>
         </div>
       )}
+
+      <SaveFilterDialog open={isSaveOpen} onOpenChange={setIsSaveOpen} />
     </div>
   );
 }

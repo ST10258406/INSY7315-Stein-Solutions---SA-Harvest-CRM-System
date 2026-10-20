@@ -33,6 +33,9 @@ public class TaskRepository : ITaskRepository
         if (criteria.IsCompleted.HasValue)
             query = query.Where(t => t.IsCompleted == criteria.IsCompleted.Value);
 
+        if (criteria.DueAfter.HasValue)
+            query = query.Where(t => t.DueDate >= criteria.DueAfter.Value);
+
         if (criteria.DueBefore.HasValue)
             query = query.Where(t => t.DueDate <= criteria.DueBefore.Value);
 

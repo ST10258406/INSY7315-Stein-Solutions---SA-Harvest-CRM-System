@@ -17,6 +17,7 @@ public record DonorSearchCriteria
     public short? DonationTypeId { get; init; }
     public short? DonationFrequencyId { get; init; }
     public Guid? RelationshipManagerId { get; init; }
+    public DateTime? FollowUpAfter { get; init; }
     public DateTime? FollowUpBefore { get; init; }
 
     public string? SortBy { get; init; }

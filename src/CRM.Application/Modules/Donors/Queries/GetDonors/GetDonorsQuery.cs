@@ -13,5 +13,6 @@ public record GetDonorsQuery : PaginationParams, IRequest<PaginatedResult<DonorL
     public short? DonationTypeId { get; init; }
     public short? DonationFrequencyId { get; init; }
     public Guid? RelationshipManagerId { get; init; }
+    public DateOnly? FollowUpAfter { get; init; }
     public DateOnly? FollowUpBefore { get; init; }
 }

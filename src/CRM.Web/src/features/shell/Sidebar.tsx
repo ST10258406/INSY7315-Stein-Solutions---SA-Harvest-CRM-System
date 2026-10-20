@@ -1,7 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Bookmark, CalendarDays, Bot, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { AgentDrawer } from '@/features/agent';
+import { HelpDrawer } from '@/features/help';
+import { QuickSearchDialog } from '@/features/search';
+import { CalendarDrawer } from '@/features/calendar';
+import { SavedFiltersMenu } from '@/features/savedFilters';
+
+// Saved filters apply to the donor list, which is ProcurementOrAbove (cosmetic; the API enforces it).
+const DONOR_LIST_ROLES = ['Procurement', 'Admin', 'SuperAdmin'];
+const ACTION_BUTTON_CLASS =
+  'flex h-9.5 w-9.5 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover';
 
 /**
  * Slim icon-only rail for secondary quick actions, per the Claude Design
@@ -14,16 +23,43 @@ import { AgentDrawer } from '@/features/agent';
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const isSuperAdmin = useAuthStore((state) => state.user?.roles.includes('SuperAdmin') ?? false);
+  const canUseDonorList = useAuthStore((state) => state.user?.roles.some((r) => DONOR_LIST_ROLES.includes(r)) ?? false);
+
+  // Ctrl+K / Cmd+K opens quick search from anywhere (Issue 102). preventDefault stops the
+  // browser's own Ctrl+K (focus the address bar search).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !e.repeat) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Rendered in both rail states, so Ctrl+K still works while the rail is collapsed.
+  const overlays = (
+    <>
+      <QuickSearchDialog open={isSearchOpen} onOpenChange={setIsSearchOpen} />
+      <CalendarDrawer open={isCalendarOpen} onOpenChange={setIsCalendarOpen} />
+      {isSuperAdmin && <AgentDrawer open={isAgentOpen} onOpenChange={setIsAgentOpen} />}
+      <HelpDrawer open={isHelpOpen} onOpenChange={setIsHelpOpen} />
+    </>
+  );
 
   const quickActions = [
-    { title: 'Search', icon: Search },
-    { title: 'Saved filters', icon: Bookmark },
-    { title: 'Calendar', icon: CalendarDays },
+    { title: 'Search', icon: Search, ariaLabel: 'Open quick search (Ctrl+K)', onClick: () => setIsSearchOpen(true) },
+    ...(canUseDonorList ? [{ title: 'Saved filters', icon: Bookmark, isMenu: true }] : []),
+    { title: 'Calendar', icon: CalendarDays, ariaLabel: 'Open calendar', onClick: () => setIsCalendarOpen(true) },
     ...(isSuperAdmin
       ? [{ title: 'Agent', icon: Bot, ariaLabel: 'Open CRM assistant', onClick: () => setIsAgentOpen(true) }]
       : []),
-    { title: 'Help & support', icon: HelpCircle },
+    { title: 'Help & support', icon: HelpCircle, ariaLabel: 'Open help and support', onClick: () => setIsHelpOpen(true) },
   ];
 
   if (!isOpen) {
@@ -37,6 +73,7 @@ export function Sidebar() {
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
+        {overlays}
       </aside>
     );
   }
@@ -44,18 +81,22 @@ export function Sidebar() {
   return (
     <aside className="flex w-[68px] shrink-0 flex-col items-center bg-background py-5.5 pb-4">
       <div className="mt-4 flex flex-col gap-1 rounded-[26px] border border-border bg-card p-1.5 shadow-[0_1px_3px_var(--shadow)]">
-        {quickActions.map(({ title, icon: Icon, ariaLabel, onClick }) => (
-          <button
-            key={title}
-            type="button"
-            title={title}
-            aria-label={ariaLabel ?? title}
-            onClick={onClick}
-            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover"
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        ))}
+        {quickActions.map(({ title, icon: Icon, ariaLabel, onClick, isMenu }) =>
+          isMenu ? (
+            <SavedFiltersMenu key={title} triggerClassName={ACTION_BUTTON_CLASS} />
+          ) : (
+            <button
+              key={title}
+              type="button"
+              title={title}
+              aria-label={ariaLabel ?? title}
+              onClick={onClick}
+              className={ACTION_BUTTON_CLASS}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          ),
+        )}
       </div>
 
       <button
@@ -67,7 +108,7 @@ export function Sidebar() {
         <ChevronLeft className="h-4 w-4" />
       </button>
 
-      {isSuperAdmin && <AgentDrawer open={isAgentOpen} onOpenChange={setIsAgentOpen} />}
+      {overlays}
     </aside>
   );
 }

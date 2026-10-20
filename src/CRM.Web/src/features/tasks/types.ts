@@ -38,7 +38,9 @@ export interface MyTasksFilters {
   pageSize?: number;
   /** Defaults to false server-side (open tasks first). */
   isCompleted?: boolean;
-  /** yyyy-MM-dd — tasks due strictly before this date. */
+  /** yyyy-MM-dd — tasks due on or after this date (inclusive). */
+  dueAfter?: string;
+  /** yyyy-MM-dd — tasks due on or before this date (inclusive). */
   dueBefore?: string;
   donorId?: string;
 }

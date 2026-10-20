@@ -118,6 +118,12 @@ public class DonorRepository : IDonorRepository
         if (criteria.RelationshipManagerId.HasValue)
             query = query.Where(d => d.RelationshipManagerId == criteria.RelationshipManagerId.Value);
 
+        if (criteria.FollowUpAfter.HasValue)
+        {
+            var followUpAfter = criteria.FollowUpAfter.Value;
+            query = query.Where(d => d.FollowUpDate != null && d.FollowUpDate >= followUpAfter);
+        }
+
         if (criteria.FollowUpBefore.HasValue)
         {
             var followUpBefore = criteria.FollowUpBefore.Value;
