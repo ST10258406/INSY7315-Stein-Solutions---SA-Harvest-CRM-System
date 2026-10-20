@@ -6,6 +6,7 @@ using CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Vetting.Submissions.Dtos;
 using CRM.Domain.Entities.Vetting;
+using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -78,6 +79,41 @@ public class VettingSubmissionRepository : IVettingSubmissionRepository
             .Where(s => s.Id == id)
             .ProjectTo<VettingSubmissionDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<Guid?> GetOfficerIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.VettingSubmissions.AsNoTracking()
+            .Where(s => s.Id == id)
+            .Select(s => (Guid?)s.OfficerId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<bool> TryRecordDecisionAsync(
+        Guid id, VettingApprovalState newState, VettingDecision decision, string? reason, CancellationToken cancellationToken = default)
+    {
+        // InMemory (CRM.API.Tests) has no ExecuteUpdate. This read-then-write is NOT safe under
+        // concurrency and must never run against Postgres; same trade-off as DonorRepository.
+        if (!_context.Database.IsRelational())
+        {
+            var submission = await _context.VettingSubmissions
+                .FirstOrDefaultAsync(s => s.Id == id && s.ApprovalState == VettingApprovalState.Ready, cancellationToken);
+            if (submission is null) return false;
+            submission.ApprovalState = newState;
+            submission.AdminDecision = decision;
+            submission.DecisionReason = reason;
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        // One statement: Postgres row-locks the match, so a second concurrent decider re-checks the
+        // WHERE after the first commits and updates 0 rows. ExecuteUpdate skips the interceptor, hence updated_at.
+        var rows = await _context.VettingSubmissions
+            .Where(s => s.Id == id && s.ApprovalState == VettingApprovalState.Ready)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.ApprovalState, newState)
+                .SetProperty(s => s.AdminDecision, decision)
+                .SetProperty(s => s.DecisionReason, reason)
+                .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), cancellationToken);
+        return rows == 1;
+    }
 
     public async Task<(List<VettingSubmissionListItemDto> Items, int TotalCount)> SearchAsync(
         VettingSubmissionSearchCriteria criteria, CancellationToken cancellationToken = default)

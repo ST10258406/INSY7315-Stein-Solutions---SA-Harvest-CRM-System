@@ -3,6 +3,7 @@ namespace CRM.Application.Common.Interfaces;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Vetting.Submissions.Dtos;
 using CRM.Domain.Entities.Vetting;
+using CRM.Domain.Enums;
 
 public interface IVettingSubmissionRepository
 {
@@ -24,6 +25,17 @@ public interface IVettingSubmissionRepository
 
     /// <summary>The full read model (details, active flags, photos, filled file slots), or null.</summary>
     Task<VettingSubmissionDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>The submission's officer, or null when the submission doesn't exist.</summary>
+    Task<Guid?> GetOfficerIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records an admin decision with a conditional UPDATE ... WHERE approval_state = 'Ready', so of two
+    /// concurrent deciders exactly one wins. Executes immediately (not staged): call inside
+    /// <see cref="IUnitOfWork.ExecuteInTransactionAsync{T}"/>. False when the submission is no longer Ready.
+    /// </summary>
+    Task<bool> TryRecordDecisionAsync(
+        Guid id, VettingApprovalState newState, VettingDecision decision, string? reason, CancellationToken cancellationToken = default);
 
     /// <summary>Filtered page, newest first, plus the total match count before paging.</summary>
     Task<(List<VettingSubmissionListItemDto> Items, int TotalCount)> SearchAsync(

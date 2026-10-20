@@ -154,6 +154,8 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
         f => f.Client.GetAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/photos/0/download"),
         f => f.Client.PostAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/files/certificates", JpegForm()),
         f => f.Client.GetAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/files/certificates/download"),
+        f => f.Client.PostAsJsonAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/decision", new { decision = "Approve" }),
+        f => f.Client.PostAsJsonAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/flags", new { description = "Check fridge" }),
     ];
 
     [Fact]
@@ -313,6 +315,89 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("Details.SlaSigned", await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Creates a submission through the API, marks its 4 photos captured, and submits it.</summary>
+    private async Task<string> ReadySubmissionAsync(Fixture f)
+    {
+        var created = Body(await f.Client.PostAsJsonAsync("/api/v1/vetting/submissions",
+            new { donorId = f.DonorId, officerId = f.OfficerId, details = Details() })).GetProperty("data");
+        var id = created.GetProperty("id").GetGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+            await context.VettingEvidencePhotos.Where(p => p.SubmissionId == id).ForEachAsync(p => p.IsCaptured = true);
+            await context.SaveChangesAsync();
+        }
+        var submitted = await f.Client.PostAsync($"/api/v1/vetting/submissions/{id}/submit", null);
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        return $"/api/v1/vetting/submissions/{id}";
+    }
+
+    [Fact]
+    public async Task Review_AsProcurement_Returns403_OnBothEndpoints()
+    {
+        var f = await SetupAsync("Procurement");
+        var url = await ReadySubmissionAsync(f);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Approve" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.PostAsJsonAsync($"{url}/flags", new { description = "x" })).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Admin")]
+    [InlineData("SuperAdmin")]
+    public async Task Review_ReturnThenPatchAndResubmit_ThenApprove_WorksEndToEnd(string role)
+    {
+        var f = await SetupAsync(role);
+        var url = await ReadySubmissionAsync(f);
+
+        var flag = await f.Client.PostAsJsonAsync($"{url}/flags", new { description = "Fridge not working" });
+        Assert.Equal(HttpStatusCode.Created, flag.StatusCode);
+        Assert.Equal("Reviewer", Body(flag).GetProperty("data").GetProperty("source").GetString());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Return" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Decline", reason = "  " })).StatusCode);
+
+        var returned = await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Return", reason = "Toilets need re-inspection" });
+        Assert.Equal(HttpStatusCode.OK, returned.StatusCode);
+        var returnedData = Body(returned).GetProperty("data");
+        Assert.Equal("Returned", returnedData.GetProperty("approvalState").GetString());
+        Assert.Equal("Return", returnedData.GetProperty("adminDecision").GetString());
+        Assert.Equal("Toilets need re-inspection", returnedData.GetProperty("decisionReason").GetString());
+
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Approve" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PostAsJsonAsync($"{url}/flags", new { description = "x" })).StatusCode);
+
+        var fixedDetails = Details();
+        fixedDetails.ToiletFacilities = true;
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PatchAsJsonAsync(url, new { details = fixedDetails })).StatusCode);
+        var resubmitted = Body(await f.Client.PostAsync($"{url}/submit", null)).GetProperty("data");
+        Assert.Equal("Ready", resubmitted.GetProperty("approvalState").GetString());
+        Assert.Equal(JsonValueKind.Null, resubmitted.GetProperty("adminDecision").ValueKind);
+        Assert.Equal(
+            ["Fridge not working", "Organisation is not a registered NPO"], // reviewer flag kept; toilet auto flag gone
+            resubmitted.GetProperty("flags").EnumerateArray().Select(x => x.GetProperty("description").GetString()).Order());
+
+        var approved = await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Approve" });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        Assert.Equal("Approved", Body(approved).GetProperty("data").GetProperty("approvalState").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Decline", reason = "x" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Decline_OnReady_MovesToDeclined_AndDecisionOnNewIs409()
+    {
+        var f = await SetupAsync("Admin");
+        var url = await ReadySubmissionAsync(f);
+        var fresh = Body(await f.Client.PostAsJsonAsync("/api/v1/vetting/submissions",
+            new { donorId = f.DonorId, officerId = f.OfficerId, details = Details() })).GetProperty("data").GetProperty("id").GetGuid();
+
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await f.Client.PostAsJsonAsync($"/api/v1/vetting/submissions/{fresh}/decision", new { decision = "Approve" })).StatusCode);
+
+        var declined = Body(await f.Client.PostAsJsonAsync($"{url}/decision", new { decision = "Decline", reason = "Not a food-relief organisation" }));
+        Assert.Equal("Declined", declined.GetProperty("data").GetProperty("approvalState").GetString());
     }
 
     private static MultipartFormDataContent JpegForm(string name = "kitchen.jpg")

@@ -1,3 +1,6 @@
+using CRM.Application.Modules.Vetting.Review.Commands.AddReviewerFlag;
+using CRM.Application.Modules.Vetting.Review.Commands.DecideSubmission;
+using CRM.Application.Modules.Vetting.Review.Dtos;
 using CRM.Application.Modules.Vetting.Submissions.Commands.CreateSubmission;
 using CRM.Application.Modules.Vetting.Submissions.Commands.SubmitSubmission;
 using CRM.Application.Modules.Vetting.Submissions.Commands.UpdateSubmission;
@@ -58,6 +61,17 @@ public class VettingSubmissionsController : ControllerBase
     [HttpPost("{id:guid}/submit")]
     public async Task<IActionResult> Submit(Guid id)
         => Ok(new { data = await _mediator.Send(new SubmitSubmissionCommand { Id = id }) });
+
+    [HttpPost("{id:guid}/decision")]
+    [Authorize(Policy = "AdminOrAbove")]
+    public async Task<IActionResult> Decide(Guid id, [FromBody] DecideSubmissionRequest request)
+        => Ok(new { data = await _mediator.Send(new DecideSubmissionCommand { Id = id, Decision = request.Decision, Reason = request.Reason }) });
+
+    [HttpPost("{id:guid}/flags")]
+    [Authorize(Policy = "AdminOrAbove")]
+    public async Task<IActionResult> AddReviewerFlag(Guid id, [FromBody] AddReviewerFlagRequest request)
+        => StatusCode(StatusCodes.Status201Created,
+            new { data = await _mediator.Send(new AddReviewerFlagCommand { SubmissionId = id, Description = request.Description }) });
 
     // range(0,3): any other shot index is a 404 at routing.
     [HttpPost("{id:guid}/photos/{shotIndex:int:range(0,3)}")]
