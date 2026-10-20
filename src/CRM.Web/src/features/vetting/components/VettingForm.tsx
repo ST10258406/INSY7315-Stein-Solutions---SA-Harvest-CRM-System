@@ -24,7 +24,9 @@ import {
   submissionToFormValues,
 } from '../schemas/vettingFormMapping';
 import { vettingFormSchema, type VettingDetailsKey, type VettingFormValues } from '../schemas/vettingFormSchema';
-import { FIELD_ORDER, FIELD_SECTION, SECTION_IDS, VETTING_SECTIONS, type SectionMeta } from '../lib/vettingSections';
+import { FIELD_LABELS, FIELD_ORDER, FIELD_SECTION, SECTION_IDS, VETTING_SECTIONS, type SectionMeta } from '../lib/vettingSections';
+import { AssessmentFileSlot } from './AssessmentFileSlot';
+import { EvidencePhotos, PhotosCapturedBadge } from './EvidencePhotos';
 import { AccordionFormLayout, type AccordionFormLayoutHandle } from './form/AccordionFormLayout';
 import { FormAccordionSection } from './form/FormAccordionSection';
 import { VettingStatusBadge } from './VettingStatusBadge';
@@ -82,6 +84,7 @@ export function VettingForm({ mode, submissionId, prefill = {} }: VettingFormPro
 
   // Create mode: picking a donor pre-fills the legal name and province (both stay editable).
   const donorId = useWatch({ control, name: 'donorId' });
+  const isRegisteredNpo = useWatch({ control, name: 'details.isRegisteredNpo' });
   const donorQuery = useDonor(mode === 'create' && donorId ? donorId : undefined);
   const prefilledFor = useRef<string | null>(null);
   useEffect(() => {
@@ -160,21 +163,23 @@ export function VettingForm({ mode, submissionId, prefill = {} }: VettingFormPro
   const submission = submissionQuery.data;
   // The API only accepts edits while the form is with the officer (409 otherwise).
   const readOnly = !!submission && !['New', 'Returned'].includes(submission.approvalState);
+  // Uploads need a saved submission; create mode shows "Save first" placeholders instead.
+  const uploads = { submissionId: submission?.id, files: submission?.files, editable: !readOnly };
   const isSaving = isSubmitting || createVetting.isPending || updateVetting.isPending;
   const detailErrors = (errors.details ?? {}) as Partial<Record<VettingDetailsKey, unknown>>;
   const errorCount = (section: SectionMeta) => section.fields.filter((f) => detailErrors[f]).length;
 
   const err = (field: VettingDetailsKey) => (detailErrors[field] as { message?: string } | undefined)?.message;
-  const yesNo = (field: VettingDetailsKey, label: string) => (
+  const yesNo = (field: VettingDetailsKey, label = FIELD_LABELS[field]) => (
     <FormSelect label={label} required registration={register(`details.${field}`)} options={YES_NO} placeholder="Yes or No" error={err(field)} />
   );
-  const count = (field: VettingDetailsKey, label: string) => (
+  const count = (field: VettingDetailsKey, label = FIELD_LABELS[field]) => (
     <FormField label={label} required type="number" min={0} step={1} registration={register(`details.${field}`, { valueAsNumber: true })} error={err(field)} />
   );
-  const choice = (field: VettingDetailsKey, label: string, values: readonly string[]) => (
+  const choice = (field: VettingDetailsKey, values: readonly string[], label = FIELD_LABELS[field]) => (
     <FormSelect label={label} required registration={register(`details.${field}`)} options={asOptions(values)} placeholder="Select…" error={err(field)} />
   );
-  const chips = (field: VettingDetailsKey, label: string, values: readonly string[], required = true) => (
+  const chips = (field: VettingDetailsKey, values: readonly string[], required = true, label = FIELD_LABELS[field]) => (
     <Controller
       control={control}
       name={`details.${field}`}
@@ -246,23 +251,24 @@ export function VettingForm({ mode, submissionId, prefill = {} }: VettingFormPro
             title={section.title}
             icon={section.icon}
             errorCount={errorCount(section)}
+            badge={section.id === 'photos' && submission ? <PhotosCapturedBadge photos={submission.photos} /> : undefined}
           >
             {section.id === 'organisation' && (
               <>
-                <FormField label="Organisation legal name" required fullWidth registration={register('details.legalName')} error={err('legalName')} />
-                <FormField label="Contact name and surname" required registration={register('details.contactName')} error={err('contactName')} />
-                <FormField label="Contact email" required type="email" registration={register('details.contactEmail')} error={err('contactEmail')} />
-                <FormField label="Contact phone" required type="tel" registration={register('details.contactPhone')} error={err('contactPhone')} />
-                <FormField label="Website" type="url" placeholder="https://" registration={register('details.website')} error={err('website')} />
+                <FormField label={FIELD_LABELS.legalName} required fullWidth registration={register('details.legalName')} error={err('legalName')} />
+                <FormField label={FIELD_LABELS.contactName} required registration={register('details.contactName')} error={err('contactName')} />
+                <FormField label={FIELD_LABELS.contactEmail} required type="email" registration={register('details.contactEmail')} error={err('contactEmail')} />
+                <FormField label={FIELD_LABELS.contactPhone} required type="tel" registration={register('details.contactPhone')} error={err('contactPhone')} />
+                <FormField label={FIELD_LABELS.website} type="url" placeholder="https://" registration={register('details.website')} error={err('website')} />
               </>
             )}
             {section.id === 'location' && (
               <>
-                <FormTextArea label="Organisation address" registration={register('details.addressPhysical')} error={err('addressPhysical')} />
-                <FormTextArea label="Address detail" hint="As much detail as possible, especially if rural." registration={register('details.addressDetail')} error={err('addressDetail')} />
-                {choice('province', 'Province', OPTIONS.PROVINCES)}
+                <FormTextArea label={FIELD_LABELS.addressPhysical} registration={register('details.addressPhysical')} error={err('addressPhysical')} />
+                <FormTextArea label={FIELD_LABELS.addressDetail} hint="As much detail as possible, especially if rural." registration={register('details.addressDetail')} error={err('addressDetail')} />
+                {choice('province', OPTIONS.PROVINCES)}
                 <FormField
-                  label="What3Words"
+                  label={FIELD_LABELS.what3Words}
                   required
                   placeholder="///apple.orange.banana"
                   hint="Use the What3Words address in rural areas or informal settlements."
@@ -273,50 +279,53 @@ export function VettingForm({ mode, submissionId, prefill = {} }: VettingFormPro
             )}
             {section.id === 'programmes' && (
               <>
-                {chips('coreFocusAreas', 'Core business / focus areas', OPTIONS.CORE_FOCUS_AREAS)}
-                {chips('targetPopulation', 'Target population', OPTIONS.TARGET_POPULATIONS)}
-                <FormTextArea label="Programmes & services" required registration={register('details.programmesSummary')} error={err('programmesSummary')} />
-                {choice('distributionChannel', 'Distribution channel', OPTIONS.DISTRIBUTION_CHANNELS)}
+                {chips('coreFocusAreas', OPTIONS.CORE_FOCUS_AREAS)}
+                {chips('targetPopulation', OPTIONS.TARGET_POPULATIONS)}
+                <FormTextArea label={FIELD_LABELS.programmesSummary} required registration={register('details.programmesSummary')} error={err('programmesSummary')} />
+                {choice('distributionChannel', OPTIONS.DISTRIBUTION_CHANNELS)}
               </>
             )}
             {section.id === 'staffing' && (
               <>
-                {count('fullTimeFemales', 'Full-time females')}
-                {count('fullTimeMales', 'Full-time males')}
-                {count('volunteersCount', 'Volunteers')}
+                {count('fullTimeFemales')}
+                {count('fullTimeMales')}
+                {count('volunteersCount')}
               </>
             )}
             {section.id === 'registration' && (
               <>
-                {yesNo('isRegisteredNpo', 'Registered NPO?')}
-                {yesNo('isRegisteredDsd', 'Registered with DSD?')}
+                {yesNo('isRegisteredNpo')}
+                {yesNo('isRegisteredDsd')}
+                {/* Matches the auto flag raised on submit (#157). */}
+                <AssessmentFileSlot {...uploads} slot="npo-certificate" hint={isRegisteredNpo === 'true' ? 'Required if registered NPO' : undefined} />
+                <AssessmentFileSlot {...uploads} slot="pbo-certificate" />
               </>
             )}
             {section.id === 'demographics' && (
               <>
-                {chips('beneficiaryRaces', 'Race', OPTIONS.RACES)}
-                {chips('beneficiaryGenders', 'Gender', OPTIONS.GENDERS)}
-                {chips('beneficiaryAgeGroups', 'Age groups', OPTIONS.AGE_GROUPS)}
+                {chips('beneficiaryRaces', OPTIONS.RACES)}
+                {chips('beneficiaryGenders', OPTIONS.GENDERS)}
+                {chips('beneficiaryAgeGroups', OPTIONS.AGE_GROUPS)}
               </>
             )}
             {section.id === 'feeding' && (
               <>
-                {choice('feedingFrequency', 'Feeding frequency', OPTIONS.FEEDING_FREQUENCIES)}
-                {choice('saHarvestReliance', 'Reliance on SA Harvest', OPTIONS.RELIANCE_LEVELS)}
-                {choice('transportCapacity', 'Transport capacity', OPTIONS.TRANSPORT_CAPACITIES)}
-                {count('totalPeopleServed', 'Total people served')}
-                {count('femalesServed', 'Females served')}
-                {count('malesServed', 'Males served')}
-                {count('africanServed', 'African served')}
-                {count('colouredServed', 'Coloured served')}
-                {count('indianAsianServed', 'Indian/Asian served')}
-                {count('whiteServed', 'White served')}
+                {choice('feedingFrequency', OPTIONS.FEEDING_FREQUENCIES)}
+                {choice('saHarvestReliance', OPTIONS.RELIANCE_LEVELS)}
+                {choice('transportCapacity', OPTIONS.TRANSPORT_CAPACITIES)}
+                {count('totalPeopleServed')}
+                {count('femalesServed')}
+                {count('malesServed')}
+                {count('africanServed')}
+                {count('colouredServed')}
+                {count('indianAsianServed')}
+                {count('whiteServed')}
                 <SubtotalHint control={control} />
-                {chips('mealsProvided', 'Meals provided', OPTIONS.MEALS)}
-                {chips('feedingDays', 'Days of the week', OPTIONS.DAYS)}
+                {chips('mealsProvided', OPTIONS.MEALS)}
+                {chips('feedingDays', OPTIONS.DAYS)}
                 <div className="flex flex-col gap-2">
                   <label htmlFor="details.lastFedDate" className="text-xs font-bold text-foreground">
-                    Last date fed by SA Harvest
+                    {FIELD_LABELS.lastFedDate}
                   </label>
                   <Controller
                     control={control}
@@ -331,40 +340,45 @@ export function VettingForm({ mode, submissionId, prefill = {} }: VettingFormPro
             )}
             {section.id === 'facilities' && (
               <>
-                {chips('foodStorageTypes', 'Food storage', OPTIONS.STORAGE_TYPES)}
-                {yesNo('kitchenClean', 'Kitchen clean and organised?')}
-                {yesNo('waterAccess', 'Access to water / cleaning products?')}
-                {yesNo('toiletFacilities', 'Toilets & hygiene facilities?')}
-                {yesNo('pestFree', 'Pest / rodent free?')}
-                {chips('infrastructureChecks', 'Infrastructure checks (tick those in safe working order)', OPTIONS.INFRASTRUCTURE_CHECKS, false)}
+                {chips('foodStorageTypes', OPTIONS.STORAGE_TYPES)}
+                {yesNo('kitchenClean')}
+                {yesNo('waterAccess')}
+                {yesNo('toiletFacilities')}
+                {yesNo('pestFree')}
+                {chips('infrastructureChecks', OPTIONS.INFRASTRUCTURE_CHECKS, false)}
+                <AssessmentFileSlot {...uploads} slot="kitchen-storage-photos" />
               </>
             )}
             {section.id === 'access' && (
               <>
-                {yesNo('deliveryAccessEase', 'Easy access for delivery?')}
-                {yesNo('parkingAndSecurity', 'Parking & security?')}
-                <FormField label="Proximity to police station" registration={register('details.policeStationProximity')} error={err('policeStationProximity')} />
+                {yesNo('deliveryAccessEase')}
+                {yesNo('parkingAndSecurity')}
+                <FormField label={FIELD_LABELS.policeStationProximity} registration={register('details.policeStationProximity')} error={err('policeStationProximity')} />
               </>
             )}
             {section.id === 'capacity' && (
               <>
-                <FormTextArea label="Additional comments" registration={register('details.officerComments')} error={err('officerComments')} />
-                <FormTextArea label="Proposal writing capabilities" registration={register('details.proposalCapabilities')} error={err('proposalCapabilities')} />
-                <FormTextArea label="Digital capabilities" registration={register('details.digitalCapabilities')} error={err('digitalCapabilities')} />
+                <FormTextArea label={FIELD_LABELS.officerComments} registration={register('details.officerComments')} error={err('officerComments')} />
+                <FormTextArea label={FIELD_LABELS.proposalCapabilities} registration={register('details.proposalCapabilities')} error={err('proposalCapabilities')} />
+                <FormTextArea label={FIELD_LABELS.digitalCapabilities} registration={register('details.digitalCapabilities')} error={err('digitalCapabilities')} />
+                <AssessmentFileSlot {...uploads} slot="facility-photos" />
               </>
             )}
             {section.id === 'documents' && (
               <>
-                {yesNo('slaSigned', 'SLA signed?')}
-                {yesNo('consentFormSigned', 'Consent form signed?')}
-                {yesNo('policyDocumentPresent', 'Policy document present?')}
+                {yesNo('slaSigned')}
+                {yesNo('consentFormSigned')}
+                {yesNo('policyDocumentPresent')}
+                <AssessmentFileSlot {...uploads} slot="certificates" />
               </>
             )}
             {section.id === 'photos' && (
-              <p className="m-0 text-[13px] font-medium text-muted-foreground sm:col-span-2">
-                The four evidence photos (kitchen, dry storage, fridge / freezer, toilets & water) are uploaded after the form is saved,
-                and all four are needed before it can be submitted for review.
-              </p>
+              <>
+                <p className="m-0 text-[13px] font-medium text-muted-foreground sm:col-span-2">
+                  All four photos are needed before the form can be submitted for review.
+                </p>
+                <EvidencePhotos submissionId={uploads.submissionId} photos={submission?.photos ?? []} editable={uploads.editable} />
+              </>
             )}
           </FormAccordionSection>
         ))}

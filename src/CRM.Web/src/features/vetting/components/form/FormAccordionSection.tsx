@@ -11,11 +11,13 @@ interface FormAccordionSectionProps {
   icon?: LucideIcon;
   /** Shown on the header even while collapsed, so errors in a closed section are never invisible. */
   errorCount?: number;
+  /** Extra header content shown even while collapsed, e.g. "3 / 4 captured". */
+  badge?: ReactNode;
   children: ReactNode;
 }
 
 /** The collapsible equivalent of donors' FormSection: same header and 2-column card body. */
-export function FormAccordionSection({ id, number, title, description, icon: Icon, errorCount = 0, children }: FormAccordionSectionProps) {
+export function FormAccordionSection({ id, number, title, description, icon: Icon, errorCount = 0, badge, children }: FormAccordionSectionProps) {
   return (
     <AccordionItem value={id} id={id} className="rounded-2xl border border-border bg-muted/40 not-last:border-b">
       <AccordionTrigger className="items-center gap-2.75 rounded-2xl px-5 py-4 hover:no-underline **:data-[slot=accordion-trigger-icon]:hidden">
@@ -31,6 +33,7 @@ export function FormAccordionSection({ id, number, title, description, icon: Ico
           <span className="block text-base font-bold tracking-tight text-foreground">{title}</span>
           {description && <span className="mt-0.5 block text-xs font-medium text-muted-foreground">{description}</span>}
         </span>
+        {badge}
         {errorCount > 0 && (
           <span className="shrink-0 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive">
             {errorCount} {errorCount === 1 ? 'error' : 'errors'}

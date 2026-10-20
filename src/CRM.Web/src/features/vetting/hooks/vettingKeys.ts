@@ -6,6 +6,9 @@ export const vettingKeys = {
   submissions: () => [...vettingKeys.all, 'submissions'] as const,
   submissionList: (filters: VettingSubmissionFilters = {}) => [...vettingKeys.submissions(), 'list', filters] as const,
   submission: (id: string | undefined) => [...vettingKeys.submissions(), 'detail', id] as const,
+  /** Thumbnail SAS URL; keyed by capture time so a re-upload fetches the new blob. */
+  photoUrl: (id: string, shotIndex: number, capturedAt: string | null) =>
+    [...vettingKeys.submission(id), 'photo-url', shotIndex, capturedAt] as const,
   officers: () => [...vettingKeys.all, 'officers'] as const,
   officer: (id: string | undefined) => [...vettingKeys.officers(), id] as const,
   siteVisits: () => [...vettingKeys.all, 'site-visits'] as const,

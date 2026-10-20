@@ -1,6 +1,7 @@
 import { useImperativeHandle, useState, type ReactNode, type Ref } from 'react';
 import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
+import { AccordionOpenContext } from './accordionOpenContext';
 
 export interface AccordionFormLayoutHandle {
   /** Opens these sections (keeping any already open), e.g. every section with errors after a failed submit. */
@@ -34,7 +35,7 @@ export function AccordionFormLayout({ sectionIds, defaultOpen = [], ref, childre
         </Button>
       </div>
       <Accordion multiple value={open} onValueChange={(value) => setOpen(value as string[])} className="gap-3">
-        {children}
+        <AccordionOpenContext.Provider value={open}>{children}</AccordionOpenContext.Provider>
       </Accordion>
     </div>
   );

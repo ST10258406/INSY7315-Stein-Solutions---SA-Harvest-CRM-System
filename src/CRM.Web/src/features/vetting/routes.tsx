@@ -5,6 +5,7 @@ import EditVettingPage from './pages/EditVettingPage';
 import NewVettingPage from './pages/NewVettingPage';
 import OfficersPage from './pages/OfficersPage';
 import SiteVisitsPage from './pages/SiteVisitsPage';
+import VettingDetailPage from './pages/VettingDetailPage';
 import VettingListPage from './pages/VettingListPage';
 import { VettingPlaceholderPage } from './pages/VettingPlaceholderPage';
 
@@ -14,7 +15,7 @@ const PROCUREMENT_OR_ABOVE = ['Procurement', ...ADMIN];
 /**
  * Vetting routes, rendered inside App's authenticated AppLayout route. Procurement and above
  * (Marketing is redirected); the review queue and officers are Admin only. The static paths are
- * declared before vetting/:id so it can't swallow them. The review queue and submission detail are placeholders until #163/#164.
+ * declared before vetting/:id so it can't swallow them. The review queue is a placeholder until #164.
  */
 export const vettingRoutes = (
   <>
@@ -45,7 +46,7 @@ export const vettingRoutes = (
       <Route path={paths.vetting} element={<VettingListPage />} />
       <Route path={paths.vettingNew} element={<NewVettingPage />} />
       <Route path={paths.vettingEditPattern} element={<EditVettingPage />} />
-      <Route path={paths.vettingDetailPattern} element={<VettingPlaceholderPage title="Vetting submission" />} />
+      <Route path={paths.vettingDetailPattern} element={<VettingDetailPage />} />
     </Route>
   </>
 );
