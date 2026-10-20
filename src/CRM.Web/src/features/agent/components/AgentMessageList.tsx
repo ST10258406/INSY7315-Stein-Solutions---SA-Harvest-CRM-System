@@ -20,7 +20,7 @@ export function AgentMessageList({ messages, isPending }: AgentMessageListProps)
         return (
           <div key={index} className={`flex flex-col gap-1.5 ${isUser ? 'items-end' : 'items-start'}`}>
             <div
-              className={`max-w-[85%] rounded-2xl px-3.75 py-2.5 text-[13.5px] font-medium leading-relaxed ${
+              className={`max-w-[85%] rounded-2xl has-[table]:w-full has-[table]:max-w-full px-3.75 py-2.5 text-[13.5px] font-medium leading-relaxed ${
                 isUser ? 'whitespace-pre-wrap bg-brand text-white' : 'border border-border bg-field text-foreground'
               }`}
             >
