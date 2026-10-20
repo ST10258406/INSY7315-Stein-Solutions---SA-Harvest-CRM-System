@@ -78,6 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IVettingOfficerRepository, VettingOfficerRepository>();
         services.AddScoped<IVettingSiteVisitRepository, VettingSiteVisitRepository>();
+        services.AddScoped<IVettingSubmissionRepository, VettingSubmissionRepository>();
 
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IUserPasswordHasher, UserPasswordHasher>();
