@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   BarChart3,
   UserCog,
+  ShieldCheck,
+  ChevronDown,
   LogOut,
   Sun,
   Moon,
@@ -16,18 +18,29 @@ import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { NotificationBell } from '@/features/notifications';
 import { paths } from '@/routes/paths';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import logoImg from '@/assets/sa-harvest-logo.png';
 
 const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
+const PROCUREMENT_OR_ABOVE = ['Procurement', ...ADMIN_ROLES];
+
+interface SubLink {
+  label: string;
+  path: string;
+  adminOnly?: boolean;
+}
 
 interface NavItem {
   label: string;
   path: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  procurementOrAbove?: boolean;
+  /** Renders the item as a dropdown of these links instead of a single link. */
+  children?: SubLink[];
 }
 
-// `adminOnly` items (Approvals — Issue #113 — Reports — Issue #73 — and Users)
+// `procurementOrAbove` items (Vetting) are hidden from Marketing; `adminOnly` items (Approvals — Issue #113 — Reports — Issue #73 — and Users)
 // are hidden from every non-Admin role. This is cosmetic only: the routes are
 // `ProtectedRoute`-guarded and the APIs enforce `AdminOrAbove` server-side
 // regardless of the nav.
@@ -35,6 +48,18 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: paths.dashboard, icon: LayoutDashboard },
   { label: 'Donors', path: paths.donors, icon: Users },
   { label: 'Tasks', path: paths.tasks, icon: ClipboardList },
+  {
+    label: 'Vetting',
+    path: paths.vetting,
+    icon: ShieldCheck,
+    procurementOrAbove: true,
+    children: [
+      { label: 'Submissions', path: paths.vetting },
+      { label: 'Site visits', path: paths.vettingVisits },
+      { label: 'Review queue', path: paths.vettingReview, adminOnly: true },
+      { label: 'Officers', path: paths.vettingOfficers, adminOnly: true },
+    ],
+  },
   { label: 'Approvals', path: paths.approvals, icon: CheckCircle2, adminOnly: true },
   { label: 'Reports', path: paths.reports, icon: BarChart3, adminOnly: true },
   { label: 'Users', path: paths.users, icon: UserCog, adminOnly: true },
@@ -44,17 +69,40 @@ function isRouteActive(pathname: string, itemPath: string) {
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
 }
 
+function pillClass(isActive: boolean) {
+  return `flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
+    isActive
+      ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
+      : 'border-border bg-pill text-pill-ink hover:border-foreground'
+  }`;
+}
+
+function PillIcon({ icon: Icon, isActive }: { icon: LucideIcon; isActive: boolean }) {
+  return (
+    <span
+      className={`flex h-6 w-6 items-center justify-center rounded-full ${
+        isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+    </span>
+  );
+}
+
 export function TopBar() {
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const roles = user?.roles ?? [];
   const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
+  const isProcurementOrAbove = roles.some((role) => PROCUREMENT_OR_ABOVE.includes(role));
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   // Filtered before render — Admin-only items never reach the DOM for other roles.
-  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.procurementOrAbove || isProcurementOrAbove),
+  );
 
   const initials = user ? `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() : '';
 
@@ -77,25 +125,40 @@ export function TopBar() {
       <nav className="flex min-w-0 items-center gap-2 overflow-x-auto">
         {visibleNavItems.map((item) => {
           const isActive = isRouteActive(location.pathname, item.path);
-          const Icon = item.icon;
+
+          if (item.children) {
+            return (
+              <DropdownMenu key={item.path}>
+                <DropdownMenuTrigger className={pillClass(isActive)}>
+                  <PillIcon icon={item.icon} isActive={isActive} />
+                  <span>{item.label}</span>
+                  <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-auto min-w-44 p-1.5">
+                  {item.children
+                    .filter((child) => !child.adminOnly || isAdmin)
+                    .map((child) => (
+                      <DropdownMenuItem
+                        key={child.path}
+                        render={<Link to={child.path} />}
+                        className="text-[13px] font-semibold"
+                      >
+                        {child.label}
+                      </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
           return (
             <Link
               key={item.path}
               to={item.path}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
-                isActive
-                  ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
-                  : 'border-border bg-pill text-pill-ink hover:border-foreground'
-              }`}
+              className={pillClass(isActive)}
             >
-              <span
-                className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                  isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-              </span>
+              <PillIcon icon={item.icon} isActive={isActive} />
               <span>{item.label}</span>
             </Link>
           );

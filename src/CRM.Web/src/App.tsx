@@ -19,6 +19,7 @@ import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { useHydrateAuth } from '@/features/auth/hooks/useHydrateAuth';
 import { useAuthStore } from '@/store/authStore';
 import { AppLayout } from '@/features/shell/AppLayout';
+import { vettingRoutes } from '@/features/vetting';
 import { Toaster } from '@/components/ui/sonner';
 import { paths } from '@/routes/paths';
 import '@/store/themeStore';
@@ -100,6 +101,9 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Vetting — role guards live in features/vetting/routes.tsx. */}
+              {vettingRoutes}
             </Route>
           </Routes>
         </div>
