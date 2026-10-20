@@ -1,12 +1,13 @@
 namespace CRM.Domain.Entities.Vetting;
 
 using CRM.Domain.Common;
+using CRM.Domain.Entities;
 using CRM.Domain.Enums;
 
 public class VettingSiteVisit : BaseEntity
 {
-    public Guid CboId { get; set; }
-    public CboOrganisation Cbo { get; set; } = null!;
+    public Guid DonorId { get; set; }
+    public Donor Donor { get; set; } = null!;
 
     public Guid OfficerId { get; set; }
     public VettingOfficer Officer { get; set; } = null!;

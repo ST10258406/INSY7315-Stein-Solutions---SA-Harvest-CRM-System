@@ -15,7 +15,7 @@ public class VettingConfigurationTests
     public VettingConfigurationTests()
     {
         _options = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseNpgsql(TestPostgres.ConnectionString("crm_test_vetting"))
+            .UseNpgsql(TestPostgres.ConnectionString("crm_test_vetting_schema"))
             .Options;
     }
 
@@ -28,13 +28,13 @@ public class VettingConfigurationTests
 
     private static async Task<VettingSubmission> AddSubmissionAsync(CrmDbContext context)
     {
-        var cbo = new CboOrganisation { Id = Guid.NewGuid(), Name = $"CBO {Guid.NewGuid()}", Province = "Gauteng", AreaSuburb = "Soweto" };
+        var donor = await VettingTestData.AddDonorAsync(context);
         var officer = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
         var submission = new VettingSubmission
         {
             Id = Guid.NewGuid(),
             FormReference = $"VET-T-{Guid.NewGuid():N}"[..20],
-            Cbo = cbo,
+            DonorId = donor.Id,
             Officer = officer
         };
         context.VettingSubmissions.Add(submission);
@@ -104,22 +104,6 @@ public class VettingConfigurationTests
             .SqlQueryRaw<string>("SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_name = 'vetting_assessment_details' AND column_name = 'feeding_days'")
             .SingleAsync();
         Assert.Equal("jsonb", columnType);
-    }
-
-    [Fact]
-    public async Task DuplicateCboName_ViolatesUniqueIndex()
-    {
-        await using var context = await CreateContextAsync();
-        var name = $"Dup CBO {Guid.NewGuid()}";
-        context.CboOrganisations.Add(new CboOrganisation { Id = Guid.NewGuid(), Name = name, Province = "Gauteng", AreaSuburb = "Soweto" });
-        await context.SaveChangesAsync();
-
-        context.CboOrganisations.Add(new CboOrganisation { Id = Guid.NewGuid(), Name = name, Province = "Limpopo", AreaSuburb = "Polokwane" });
-        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
-
-        var pg = Assert.IsType<PostgresException>(ex.InnerException);
-        Assert.Equal(PostgresErrorCodes.UniqueViolation, pg.SqlState);
-        Assert.Equal("idx_cbo_organisations_name", pg.ConstraintName);
     }
 
     [Fact]

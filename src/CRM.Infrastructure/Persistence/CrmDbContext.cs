@@ -45,7 +45,6 @@ public class CrmDbContext : DbContext
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
 
     // Vetting
-    public DbSet<CboOrganisation> CboOrganisations => Set<CboOrganisation>();
     public DbSet<VettingOfficer> VettingOfficers => Set<VettingOfficer>();
     public DbSet<VettingSiteVisit> VettingSiteVisits => Set<VettingSiteVisit>();
     public DbSet<VettingSubmission> VettingSubmissions => Set<VettingSubmission>();

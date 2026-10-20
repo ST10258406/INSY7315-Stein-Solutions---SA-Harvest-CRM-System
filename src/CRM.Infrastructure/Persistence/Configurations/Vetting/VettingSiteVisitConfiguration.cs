@@ -17,7 +17,7 @@ public class VettingSiteVisitConfiguration : IEntityTypeConfiguration<VettingSit
 
         builder.HasIndex(x => new { x.ScheduledDate, x.OfficerId }).HasDatabaseName("idx_vetting_site_visits_date_officer");
 
-        builder.Property(x => x.CboId).HasColumnName("cbo_id");
+        builder.Property(x => x.DonorId).HasColumnName("donor_id");
         builder.Property(x => x.OfficerId).HasColumnName("officer_id");
         builder.Property(x => x.ScheduledDate).HasColumnName("scheduled_date").IsRequired();
         builder.Property(x => x.ScheduledTime).HasColumnName("scheduled_time").IsRequired();
@@ -25,7 +25,7 @@ public class VettingSiteVisitConfiguration : IEntityTypeConfiguration<VettingSit
         builder.Property(x => x.VisitNotes).HasColumnName("visit_notes").HasMaxLength(255);
         builder.Property(x => x.VisitStatus).HasColumnName("visit_status").HasConversion<string>().HasMaxLength(20).IsRequired();
 
-        builder.HasOne(x => x.Cbo).WithMany(x => x.SiteVisits).HasForeignKey(x => x.CboId).OnDelete(DeleteBehavior.Restrict).IsRequired();
+        builder.HasOne(x => x.Donor).WithMany().HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Restrict).IsRequired();
         builder.HasOne(x => x.Officer).WithMany(x => x.SiteVisits).HasForeignKey(x => x.OfficerId).OnDelete(DeleteBehavior.Restrict).IsRequired();
     }
 }
