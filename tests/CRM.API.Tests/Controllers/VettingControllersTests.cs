@@ -18,12 +18,17 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CRM.Application.Common.Interfaces;
+using CRM.Application.Common.Models;
+using NSubstitute;
 
 /// <summary>Officers and site-visits endpoints: role matrix plus the create → workload round-trip.</summary>
 public class VettingControllersTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private const string Date = "2026-10-21";
     private readonly WebApplicationFactory<Program> _factory;
+    private readonly IBlobStorageService _blob = Substitute.For<IBlobStorageService>();
 
     public VettingControllersTests(WebApplicationFactory<Program> factory)
     {
@@ -35,6 +40,11 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
         Environment.SetEnvironmentVariable("Jwt__AccessTokenExpiryMinutes", "60");
         Environment.SetEnvironmentVariable("Jwt__Issuer", "TestIssuer");
         Environment.SetEnvironmentVariable("Jwt__Audience", "TestAudience");
+
+        _blob.UploadAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(ci => new BlobUploadResult(ci.ArgAt<string>(1), "https://storage.blob.core.windows.net/" + ci.ArgAt<string>(1)));
+        _blob.GenerateSasUrlAsync(Arg.Any<string>(), Arg.Any<TimeSpan>())
+            .Returns(ci => "https://storage.blob.core.windows.net/" + ci.ArgAt<string>(0) + "?sv=sas");
 
         _factory = factory.WithWebHostBuilder(builder =>
         {
@@ -53,6 +63,8 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
 
                 services.AddHangfire(config => config.UseInMemoryStorage());
                 services.AddDbContext<CrmDbContext>(options => options.UseInMemoryDatabase("InMemoryDbForVettingTesting"));
+                services.RemoveAll<IBlobStorageService>();
+                services.AddSingleton(_blob);
             });
         });
     }
@@ -138,6 +150,10 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
         f => f.Client.PostAsJsonAsync("/api/v1/vetting/submissions", new { donorId = f.DonorId, officerId = f.OfficerId, details = Details() }),
         f => f.Client.PatchAsJsonAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}", new { details = Details() }),
         f => f.Client.PostAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/submit", null),
+        f => f.Client.PostAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/photos/0", JpegForm()),
+        f => f.Client.GetAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/photos/0/download"),
+        f => f.Client.PostAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/files/certificates", JpegForm()),
+        f => f.Client.GetAsync($"/api/v1/vetting/submissions/{Guid.NewGuid()}/files/certificates/download"),
     ];
 
     [Fact]
@@ -297,6 +313,52 @@ public class VettingControllersTests : IClassFixture<WebApplicationFactory<Progr
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("Details.SlaSigned", await response.Content.ReadAsStringAsync());
+    }
+
+    private static MultipartFormDataContent JpegForm(string name = "kitchen.jpg")
+    {
+        var file = new ByteArrayContent([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        return new MultipartFormDataContent { { file, "file", name } };
+    }
+
+    [Fact]
+    public async Task Uploads_PhotoAndFile_ThenDownload_ReturnSasUrls_AndUnlockSubmit()
+    {
+        var f = await SetupAsync("Procurement");
+        var created = Body(await f.Client.PostAsJsonAsync("/api/v1/vetting/submissions",
+            new { donorId = f.DonorId, officerId = f.OfficerId, details = Details() })).GetProperty("data");
+        var id = created.GetProperty("id").GetGuid();
+        var baseUrl = $"/api/v1/vetting/submissions/{id}";
+
+        Assert.Equal(HttpStatusCode.NotFound, (await f.Client.GetAsync($"{baseUrl}/photos/0/download")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await f.Client.PostAsync($"{baseUrl}/photos/4", JpegForm())).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await f.Client.PostAsync($"{baseUrl}/files/tax-return", JpegForm())).StatusCode);
+
+        for (var shot = 0; shot < 4; shot++)
+        {
+            var upload = await f.Client.PostAsync($"{baseUrl}/photos/{shot}", JpegForm());
+            Assert.True(upload.IsSuccessStatusCode, await upload.Content.ReadAsStringAsync());
+        }
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync($"{baseUrl}/files/facility-photos", JpegForm("fridge.jpg"))).StatusCode);
+
+        var photo = Body(await f.Client.GetAsync($"{baseUrl}/photos/0/download")).GetProperty("data");
+        Assert.Matches($@"^https://storage\.blob\.core\.windows\.net/vetting/{id}/photos/0-[0-9a-f-]{{36}}\.jpg\?sv=sas$", photo.GetProperty("downloadUrl").GetString());
+        Assert.Equal("kitchen.jpg", photo.GetProperty("originalFileName").GetString());
+        Assert.True(photo.GetProperty("expiresAt").GetDateTime() > DateTime.UtcNow);
+
+        var file = Body(await f.Client.GetAsync($"{baseUrl}/files/facility-photos/download")).GetProperty("data");
+        Assert.Contains($"vetting/{id}/files/facility-photos-", file.GetProperty("downloadUrl").GetString());
+
+        var got = Body(await f.Client.GetAsync(baseUrl)).GetProperty("data");
+        Assert.All(got.GetProperty("photos").EnumerateArray(), p => Assert.True(p.GetProperty("isCaptured").GetBoolean()));
+        Assert.True(got.GetProperty("files").GetProperty("facilityPhotos").GetBoolean());
+        Assert.DoesNotContain("blob", got.GetRawText());
+
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync($"{baseUrl}/submit", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PostAsync($"{baseUrl}/photos/0", JpegForm())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.GetAsync($"{baseUrl}/photos/0/download")).StatusCode);
+        await _blob.DidNotReceive().DeleteAsync(Arg.Any<string>());
     }
 
     private static JsonElement Body(HttpResponseMessage r) =>
