@@ -24,6 +24,9 @@ public class VettingSubmissionListItemDto
     public string FormReference { get; set; } = string.Empty;
     public string DonorCompanyName { get; set; } = string.Empty;
     public string OfficerFullName { get; set; } = string.Empty;
+
+    /// <summary>The province recorded in the assessment (section 2).</summary>
+    public string Province { get; set; } = string.Empty;
     public string ApprovalState { get; set; } = string.Empty;
     public DateTime? SubmittedAt { get; set; }
     public int ActiveFlagCount { get; set; }

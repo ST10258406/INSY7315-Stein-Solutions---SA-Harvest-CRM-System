@@ -60,7 +60,12 @@ describe('TopBar nav — Approvals/Reports link RoleGuard (Issues #113, #73)', (
 });
 
 describe('TopBar nav — Vetting menu RoleGuard (Issue #160)', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Undo any per-test GET implementation (e.g. the review count) so it can't leak.
+    const { api } = await import('@/lib/axios');
+    vi.mocked(api.get).mockReset().mockResolvedValue({ data: null });
+  });
   afterEach(cleanup);
 
   const vettingTrigger = () => screen.queryByRole('button', { name: /vetting/i });
@@ -80,6 +85,27 @@ describe('TopBar nav — Vetting menu RoleGuard (Issue #160)', () => {
     expect(screen.getByRole('menuitem', { name: 'Site visits' })).toHaveAttribute('href', '/vetting/visits');
     expect(screen.queryByRole('menuitem', { name: 'Review queue' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Officers' })).not.toBeInTheDocument();
+  });
+
+  it('shows Admins how many vettings are waiting, from the list endpoint total', async () => {
+    const { api } = await import('@/lib/axios');
+    vi.mocked(api.get).mockImplementation(async (url: string) =>
+      url === '/api/v1/vetting/submissions'
+        ? { data: { data: [], pagination: { page: 1, pageSize: 1, totalCount: 3, totalPages: 3 } } }
+        : { data: null },
+    );
+    signInAs(['Admin']);
+    renderTopBar();
+
+    expect(await screen.findByLabelText('3 waiting for review')).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith('/api/v1/vetting/submissions', { params: { approvalState: 'Ready', pageSize: 1 } });
+  });
+
+  it('never asks Procurement for the review count', async () => {
+    const { api } = await import('@/lib/axios');
+    signInAs(['Procurement']);
+    renderTopBar();
+    expect(api.get).not.toHaveBeenCalledWith('/api/v1/vetting/submissions', expect.anything());
   });
 
   it.each(['Admin', 'SuperAdmin'])('shows %s the Review queue and Officers links', async (role) => {

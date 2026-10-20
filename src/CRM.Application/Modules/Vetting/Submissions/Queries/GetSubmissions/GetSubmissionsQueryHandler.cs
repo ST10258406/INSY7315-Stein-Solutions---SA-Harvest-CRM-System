@@ -20,6 +20,9 @@ public class GetSubmissionsQueryHandler : IRequestHandler<GetSubmissionsQuery, P
             DonorId = request.DonorId,
             OfficerId = request.OfficerId,
             Search = request.Search,
+            SubmittedAtAscending = request.SortBy is null
+                ? null
+                : string.Equals(request.SortDir, "asc", StringComparison.OrdinalIgnoreCase),
             Page = request.Page,
             PageSize = request.PageSize
         }, cancellationToken);

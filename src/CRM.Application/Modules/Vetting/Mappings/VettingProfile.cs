@@ -45,7 +45,8 @@ public class VettingProfile : Profile
         // DonorCompanyName / OfficerFullName flatten from the navigations.
         CreateMap<VettingSubmission, VettingSubmissionListItemDto>()
             .ForMember(d => d.ApprovalState, o => o.MapFrom(s => s.ApprovalState.ToString()))
-            .ForMember(d => d.ActiveFlagCount, o => o.MapFrom(s => s.Flags.Count(f => f.IsActive)));
+            .ForMember(d => d.ActiveFlagCount, o => o.MapFrom(s => s.Flags.Count(f => f.IsActive)))
+            .ForMember(d => d.Province, o => o.MapFrom(s => s.Details!.Province));
         CreateMap<VettingSubmission, VettingSubmissionDto>()
             .ForMember(d => d.ApprovalState, o => o.MapFrom(s => s.ApprovalState.ToString()))
             .ForMember(d => d.AdminDecision, o => o.MapFrom(s => s.AdminDecision.HasValue ? s.AdminDecision.Value.ToString() : null))

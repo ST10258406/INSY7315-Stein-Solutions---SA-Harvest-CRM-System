@@ -3,6 +3,7 @@ using CRM.Application.Modules.Vetting.Officers.Commands.UpdateOfficer;
 using CRM.Application.Modules.Vetting.SiteVisits.Commands.CreateSiteVisit;
 using CRM.Application.Modules.Vetting.SiteVisits.Commands.UpdateSiteVisit;
 using CRM.Application.Modules.Vetting.SiteVisits.Queries.GetSiteVisits;
+using CRM.Application.Modules.Vetting.Submissions.Queries.GetSubmissions;
 
 namespace CRM.Application.Tests.Modules.Vetting;
 
@@ -98,4 +99,13 @@ public class VettingValidatorTests
     [Fact]
     public void GetSiteVisits_DateIsRequired()
         => Assert.False(new GetSiteVisitsQueryValidator().Validate(new GetSiteVisitsQuery()).IsValid);
+
+    [Theory]
+    [InlineData(null, "asc", true)]
+    [InlineData("submittedAt", "asc", true)]
+    [InlineData("SubmittedAt", "desc", true)]
+    [InlineData("createdAt", "asc", false)]
+    [InlineData("submittedAt", "sideways", false)]
+    public void GetSubmissions_SortIsSubmittedAtOnly(string? sortBy, string sortDir, bool valid)
+        => Assert.Equal(valid, new GetSubmissionsQueryValidator().Validate(new GetSubmissionsQuery { SortBy = sortBy, SortDir = sortDir }).IsValid);
 }

@@ -4,10 +4,10 @@ import { paths } from '@/routes/paths';
 import EditVettingPage from './pages/EditVettingPage';
 import NewVettingPage from './pages/NewVettingPage';
 import OfficersPage from './pages/OfficersPage';
+import ReviewQueuePage from './pages/ReviewQueuePage';
 import SiteVisitsPage from './pages/SiteVisitsPage';
 import VettingDetailPage from './pages/VettingDetailPage';
 import VettingListPage from './pages/VettingListPage';
-import { VettingPlaceholderPage } from './pages/VettingPlaceholderPage';
 
 const ADMIN = ['Admin', 'SuperAdmin'];
 const PROCUREMENT_OR_ABOVE = ['Procurement', ...ADMIN];
@@ -15,7 +15,7 @@ const PROCUREMENT_OR_ABOVE = ['Procurement', ...ADMIN];
 /**
  * Vetting routes, rendered inside App's authenticated AppLayout route. Procurement and above
  * (Marketing is redirected); the review queue and officers are Admin only. The static paths are
- * declared before vetting/:id so it can't swallow them. The review queue is a placeholder until #164.
+ * declared before vetting/:id so it can't swallow them.
  */
 export const vettingRoutes = (
   <>
@@ -23,7 +23,7 @@ export const vettingRoutes = (
       path={paths.vettingReview}
       element={
         <ProtectedRoute allowedRoles={ADMIN}>
-          <VettingPlaceholderPage title="Vetting review queue" />
+          <ReviewQueuePage />
         </ProtectedRoute>
       }
     />

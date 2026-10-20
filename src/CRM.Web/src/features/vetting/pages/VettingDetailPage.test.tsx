@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { toast } from 'sonner';
 import { api } from '@/lib/axios';
+import { useAuthStore } from '@/store/authStore';
 import VettingDetailPage from './VettingDetailPage';
 import { VettingForm } from '../components/VettingForm';
 import type { EvidencePhotoCategory, VettingSubmission } from '../types';
@@ -32,12 +33,21 @@ function submission(captured: number, overrides: Partial<VettingSubmission> = {}
   };
 }
 
+function signInAs(roles: string[]) {
+  useAuthStore.setState({
+    user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@saharvest.org', roles },
+    isAuthenticated: true,
+    isHydrating: false,
+  });
+}
+
 function renderDetail() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={['/vetting/s1']}>
         <Routes>
           <Route path="/vetting/:id" element={<VettingDetailPage />} />
+          <Route path="/vetting/review" element={<div>Review queue page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -129,6 +139,118 @@ describe('VettingDetailPage', () => {
     await user.click(await screen.findByRole('button', { name: /submit for review/i }));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
     expect(await screen.findByText('Missing evidence photos: Kitchen.')).toBeInTheDocument();
+  });
+});
+
+describe('VettingDetailPage — admin review', () => {
+  let current: VettingSubmission;
+  const ready = () => submission(4, { approvalState: 'Ready', submittedAt: '2026-10-20T10:00:00Z' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    current = ready();
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url === SUBMISSION_URL) return { data: { data: current } };
+      return { data: { data: { downloadUrl: 'https://blob/x?sas', expiresAt: '', originalFileName: 'x.jpg' } } };
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+  });
+
+  const decisionButtons = () => ['Approve', 'Return to officer', 'Decline'].map((name) => screen.queryByRole('button', { name: new RegExp(`^${name}$`) }));
+
+  it.each([
+    [['Procurement'], 'Ready', false],
+    [['Admin'], 'New', false],
+    [['Admin'], 'Approved', false],
+    [['Admin'], 'Ready', true],
+    [['SuperAdmin'], 'Ready', true],
+  ] as const)('roles %j on %s → decision buttons shown: %s', async (roles, approvalState, shown) => {
+    signInAs([...roles]);
+    current = submission(4, { approvalState, submittedAt: approvalState === 'New' ? null : '2026-10-20T10:00:00Z' });
+    renderDetail();
+    await screen.findByText('VET-2026-0007');
+    for (const button of decisionButtons()) expect(!!button).toBe(shown);
+    expect(!!screen.queryByLabelText('New reviewer flag')).toBe(shown);
+  });
+
+  it('does not submit Decline without a reason', async () => {
+    const user = userEvent.setup();
+    signInAs(['Admin']);
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /^Decline$/ }));
+    expect(screen.getByText(/This closes the vetting/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Reason for declining/), '   ');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Decline' }));
+
+    expect(await screen.findByText('Give a reason so the officer knows what happened')).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('Return sends the decision and the trimmed reason, then goes back to the queue', async () => {
+    const user = userEvent.setup();
+    signInAs(['Admin']);
+    vi.mocked(api.post).mockResolvedValue({ data: { data: { ...ready(), approvalState: 'Returned' } } });
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /^Return to officer$/ }));
+    expect(screen.getByText(/The officer will see this reason and can correct and resubmit/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/What needs correcting/), '  Toilets need re-inspection ');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Return to officer' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/api/v1/vetting/submissions/s1/decision', { decision: 'Return', reason: 'Toilets need re-inspection' }),
+    );
+    expect(await screen.findByText('Review queue page')).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith('VET-2026-0007 returned to the officer.');
+  });
+
+  it('Approve needs no reason', async () => {
+    const user = userEvent.setup();
+    signInAs(['Admin']);
+    vi.mocked(api.post).mockResolvedValue({ data: { data: { ...ready(), approvalState: 'Approved' } } });
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /^Approve$/ }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/v1/vetting/submissions/s1/decision', { decision: 'Approve' }));
+  });
+
+  it('a 409 says another admin already reviewed it and refetches', async () => {
+    const user = userEvent.setup();
+    signInAs(['Admin']);
+    vi.mocked(api.post).mockRejectedValue({ response: { status: 409, data: { message: 'Only a submission that is Ready…' } } });
+    renderDetail();
+    await user.click(await screen.findByRole('button', { name: /^Approve$/ }));
+    const before = submissionGets();
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }));
+
+    expect(await screen.findByText('This submission was already reviewed.')).toBeInTheDocument();
+    await waitFor(() => expect(submissionGets()).toBeGreaterThan(before));
+  });
+
+  it('Add flag posts the description and the new flag shows as Reviewer', async () => {
+    const user = userEvent.setup();
+    signInAs(['Admin']);
+    vi.mocked(api.post).mockImplementation(async () => {
+      current = { ...ready(), flags: [{ id: 'f9', description: 'Fridge not working', source: 'Reviewer', createdAt: '2026-10-20T11:00:00Z' }] };
+      return { data: { data: current.flags[0] } };
+    });
+    renderDetail();
+    await user.type(await screen.findByLabelText('New reviewer flag'), 'Fridge not working');
+    await user.click(screen.getByRole('button', { name: /add flag/i }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/v1/vetting/submissions/s1/flags', { description: 'Fridge not working' }));
+    const flag = (await screen.findByText('Fridge not working')).closest('li')!;
+    expect(within(flag).getByText('Reviewer')).toBeInTheDocument();
+  });
+
+  it('shows the decision and reason in a summary card once decided', async () => {
+    current = submission(4, { approvalState: 'Declined', adminDecision: 'Decline', decisionReason: 'Not a food-relief organisation' });
+    renderDetail();
+    const summary = await screen.findByRole('status');
+    expect(summary).toHaveTextContent('Decision: Decline (declined)');
+    expect(summary).toHaveTextContent('Not a food-relief organisation');
   });
 });
 

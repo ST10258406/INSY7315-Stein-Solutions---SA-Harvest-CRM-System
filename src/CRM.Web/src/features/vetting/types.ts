@@ -152,6 +152,8 @@ export interface VettingSubmissionListItem {
   formReference: string;
   donorCompanyName: string;
   officerFullName: string;
+  /** The province recorded in the assessment. */
+  province: string;
   approvalState: VettingApprovalState;
   submittedAt: string | null;
   activeFlagCount: number;
@@ -201,6 +203,9 @@ export interface VettingSubmissionFilters {
   donorId?: string;
   officerId?: string;
   search?: string;
+  /** Only submittedAt is supported; asc = longest-waiting first (the review queue). */
+  sortBy?: 'submittedAt';
+  sortDir?: 'asc' | 'desc';
 }
 
 // ---- Uploads (#158) — same shape as donor document downloads

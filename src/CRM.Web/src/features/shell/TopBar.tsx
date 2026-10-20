@@ -18,6 +18,7 @@ import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { NotificationBell } from '@/features/notifications';
 import { paths } from '@/routes/paths';
+import { useVettingSubmissions } from '@/features/vetting/hooks';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import logoImg from '@/assets/sa-harvest-logo.png';
 
@@ -28,6 +29,8 @@ interface SubLink {
   label: string;
   path: string;
   adminOnly?: boolean;
+  /** Shows how many vettings are waiting for review. */
+  showReviewCount?: boolean;
 }
 
 interface NavItem {
@@ -56,7 +59,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Submissions', path: paths.vetting },
       { label: 'Site visits', path: paths.vettingVisits },
-      { label: 'Review queue', path: paths.vettingReview, adminOnly: true },
+      { label: 'Review queue', path: paths.vettingReview, adminOnly: true, showReviewCount: true },
       { label: 'Officers', path: paths.vettingOfficers, adminOnly: true },
     ],
   },
@@ -95,6 +98,9 @@ export function TopBar() {
   const roles = user?.roles ?? [];
   const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
   const isProcurementOrAbove = roles.some((role) => PROCUREMENT_OR_ABOVE.includes(role));
+  // Reuses the list endpoint's total (pageSize=1) rather than a dedicated count endpoint. Admins only.
+  const { data: readyPage } = useVettingSubmissions({ approvalState: 'Ready', pageSize: 1 }, { enabled: isAdmin });
+  const reviewCount = readyPage?.pagination?.totalCount ?? 0;
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
@@ -132,6 +138,11 @@ export function TopBar() {
                 <DropdownMenuTrigger className={pillClass(isActive)}>
                   <PillIcon icon={item.icon} isActive={isActive} />
                   <span>{item.label}</span>
+                  {reviewCount > 0 && item.children.some((c) => c.showReviewCount) && isAdmin && (
+                    <span className="rounded-full bg-destructive px-1.5 text-[10.5px] font-bold text-white" aria-label={`${reviewCount} waiting for review`}>
+                      {reviewCount}
+                    </span>
+                  )}
                   <ChevronDown aria-hidden className="h-3.5 w-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-auto min-w-44 p-1.5">
@@ -144,6 +155,9 @@ export function TopBar() {
                         className="text-[13px] font-semibold"
                       >
                         {child.label}
+                        {child.showReviewCount && reviewCount > 0 && (
+                          <span className="ml-auto rounded-full bg-destructive/10 px-1.5 text-[11px] font-bold text-destructive">{reviewCount}</span>
+                        )}
                       </DropdownMenuItem>
                     ))}
                 </DropdownMenuContent>

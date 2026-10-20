@@ -67,6 +67,41 @@ describe('vetting pages', () => {
     expect(screen.getByText('Not authorized page')).toBeInTheDocument();
   });
 
+  it('redirects Procurement away from the review queue to notAuthorized', () => {
+    signInAs(['Procurement']);
+    renderAt(paths.vettingReview);
+    expect(screen.getByText('Not authorized page')).toBeInTheDocument();
+  });
+
+  it('shows Admins the review queue, longest-waiting first, with a red flag count', async () => {
+    signInAs(['Admin']);
+    vi.mocked(api.get).mockResolvedValue({
+      data: {
+        data: [
+          { id: 's1', formReference: 'VET-2026-0003', donorCompanyName: 'FoodCorp SA', officerFullName: 'Thandi Mokoena', province: 'Gauteng',
+            approvalState: 'Ready', submittedAt: '2026-10-18T09:00:00Z', activeFlagCount: 2 },
+        ],
+        pagination: { page: 1, pageSize: 20, totalCount: 1, totalPages: 1 },
+      },
+    });
+    renderAt(paths.vettingReview);
+
+    const row = (await screen.findByText('VET-2026-0003')).closest('tr')!;
+    expect(within(row).getByText('Gauteng')).toBeInTheDocument();
+    expect(within(row).getByText('2')).toHaveClass('text-destructive');
+    expect(within(row).getByRole('link', { name: 'VET-2026-0003' })).toHaveAttribute('href', '/vetting/s1');
+    expect(api.get).toHaveBeenCalledWith('/api/v1/vetting/submissions', {
+      params: { approvalState: 'Ready', sortBy: 'submittedAt', sortDir: 'asc', page: 1, pageSize: 20 },
+    });
+  });
+
+  it('shows the empty state when nothing is waiting', async () => {
+    signInAs(['SuperAdmin']);
+    vi.mocked(api.get).mockResolvedValue({ data: { data: [], pagination: { page: 1, pageSize: 20, totalCount: 0, totalPages: 0 } } });
+    renderAt(paths.vettingReview);
+    expect(await screen.findByText('No vettings waiting for review.')).toBeInTheDocument();
+  });
+
   it('redirects Marketing away from Site visits to notAuthorized', () => {
     signInAs(['Marketing']);
     renderAt(paths.vettingVisits);

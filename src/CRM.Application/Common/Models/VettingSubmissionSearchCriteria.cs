@@ -11,6 +11,9 @@ public class VettingSubmissionSearchCriteria
     /// <summary>Case-insensitive contains on form reference or donor company name.</summary>
     public string? Search { get; init; }
 
+    /// <summary>Sort by submittedAt (true = oldest first, for the review queue); null = newest created first.</summary>
+    public bool? SubmittedAtAscending { get; init; }
+
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 20;
 }

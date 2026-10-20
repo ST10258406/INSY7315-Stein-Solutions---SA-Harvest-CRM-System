@@ -107,4 +107,44 @@ public class VettingSubmissionRepositoryTests
         Assert.Equal(1, total);
         Assert.Equal(1, Assert.Single(items).ActiveFlagCount);
     }
+
+    [Fact]
+    public async Task SearchAsync_SubmittedAtAscending_PutsTheLongestWaitingFirst_AndIncludesProvince()
+    {
+        await using var context = new CrmDbContext(_options);
+        await context.Database.EnsureCreatedAsync();
+        var donor = await VettingTestData.AddDonorAsync(context);
+        var officer = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
+        context.VettingOfficers.Add(officer);
+
+        VettingSubmission Ready(DateTime submittedAt, string province) => new()
+        {
+            Id = Guid.NewGuid(), FormReference = $"VET-T-{Guid.NewGuid():N}"[..20], DonorId = donor.Id, OfficerId = officer.Id,
+            ApprovalState = VettingApprovalState.Ready, SubmittedAt = submittedAt,
+            Details = new VettingAssessmentDetails
+            {
+                Id = Guid.NewGuid(), LegalName = "x", ContactName = "x", ContactEmail = "x@example.com", ContactPhone = "082",
+                Province = province, What3Words = "///a.b.c", ProgrammesSummary = "x", DistributionChannel = "Both",
+                FeedingFrequency = "Daily", SaHarvestReliance = "Low", TransportCapacity = "Own vehicle"
+            }
+        };
+        var newer = Ready(DateTime.UtcNow.AddHours(-1), "Limpopo");
+        var older = Ready(DateTime.UtcNow.AddDays(-3), "Gauteng");
+        context.VettingSubmissions.AddRange(newer, older);
+        await context.SaveChangesAsync();
+
+        var repository = new VettingSubmissionRepository(context, _mapper);
+        var (oldestFirst, _) = await repository.SearchAsync(new VettingSubmissionSearchCriteria
+        {
+            DonorId = donor.Id, ApprovalState = VettingApprovalState.Ready, SubmittedAtAscending = true
+        });
+        var (newestFirst, _) = await repository.SearchAsync(new VettingSubmissionSearchCriteria
+        {
+            DonorId = donor.Id, ApprovalState = VettingApprovalState.Ready, SubmittedAtAscending = false
+        });
+
+        Assert.Equal([older.Id, newer.Id], oldestFirst.Select(i => i.Id));
+        Assert.Equal(["Gauteng", "Limpopo"], oldestFirst.Select(i => i.Province));
+        Assert.Equal([newer.Id, older.Id], newestFirst.Select(i => i.Id));
+    }
 }

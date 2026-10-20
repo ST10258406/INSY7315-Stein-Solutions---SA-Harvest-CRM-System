@@ -134,9 +134,14 @@ public class VettingSubmissionRepository : IVettingSubmissionRepository
 
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var items = await query
-            .OrderByDescending(s => s.CreatedAt)
-            .ThenByDescending(s => s.FormReference)
+        var ordered = criteria.SubmittedAtAscending switch
+        {
+            true => query.OrderBy(s => s.SubmittedAt).ThenBy(s => s.FormReference),
+            false => query.OrderByDescending(s => s.SubmittedAt).ThenByDescending(s => s.FormReference),
+            null => query.OrderByDescending(s => s.CreatedAt).ThenByDescending(s => s.FormReference),
+        };
+
+        var items = await ordered
             .Skip((criteria.Page - 1) * criteria.PageSize)
             .Take(criteria.PageSize)
             .ProjectTo<VettingSubmissionListItemDto>(_mapper.ConfigurationProvider)

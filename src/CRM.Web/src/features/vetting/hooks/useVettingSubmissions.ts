@@ -12,8 +12,9 @@ import type {
 } from '../types';
 
 /** GET /api/v1/vetting/submissions — the PaginatedResult envelope, newest first. */
-export function useVettingSubmissions(filters: VettingSubmissionFilters = {}) {
+export function useVettingSubmissions(filters: VettingSubmissionFilters = {}, { enabled = true } = {}) {
   return useQuery<PaginatedResult<VettingSubmissionListItem>, ApiError>({
+    enabled,
     queryKey: vettingKeys.submissionList(filters),
     queryFn: async () => {
       const { data } = await api.get<PaginatedResult<VettingSubmissionListItem>>('/api/v1/vetting/submissions', { params: filters });

@@ -6,14 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DetailField } from '@/features/donors/components/DetailSectionCard';
 import { paths } from '@/routes/paths';
+import { useAuthStore } from '@/store/authStore';
 import { useSubmitVetting, useVetting } from '../hooks';
 import { AccordionFormLayout } from '../components/form/AccordionFormLayout';
 import { FormAccordionSection } from '../components/form/FormAccordionSection';
 import { AssessmentFileSlot } from '../components/AssessmentFileSlot';
 import { EvidencePhotos, PhotosCapturedBadge } from '../components/EvidencePhotos';
 import { VettingStatusBadge } from '../components/VettingStatusBadge';
+import { AddFlagForm, DecisionButtons } from '../components/ReviewControls';
 import { FIELD_LABELS, FILE_SLOT_SECTION, SECTION_IDS, VETTING_SECTIONS } from '../lib/vettingSections';
-import { FLAG_SOURCE_LABELS, PHOTO_CATEGORY_LABELS } from '../lib/vettingLabels';
+import { APPROVAL_STATE_LABELS, DECISION_LABELS, FLAG_SOURCE_LABELS, PHOTO_CATEGORY_LABELS } from '../lib/vettingLabels';
 import type { VettingFileSlot, VettingSubmission } from '../types';
 
 const DATE = new Intl.DateTimeFormat('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -56,8 +58,13 @@ export default function VettingDetailPage() {
   return <SubmissionView submission={submission} />;
 }
 
+const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
+
 function SubmissionView({ submission }: { submission: VettingSubmission }) {
   const editable = submission.approvalState === 'New' || submission.approvalState === 'Returned';
+  const isAdmin = (useAuthStore((s) => s.user?.roles) ?? []).some((role) => ADMIN_ROLES.includes(role));
+  // The API allows decisions and reviewer flags only on Ready, and only for Admins (cosmetic here; enforced server-side).
+  const reviewing = isAdmin && submission.approvalState === 'Ready';
   const fileSlots = (sectionId: string) =>
     (Object.entries(FILE_SLOT_SECTION) as [VettingFileSlot, string][]).filter(([, s]) => s === sectionId).map(([slot]) => slot);
 
@@ -79,6 +86,11 @@ function SubmissionView({ submission }: { submission: VettingSubmission }) {
               <SubmitForReview submission={submission} />
             </div>
           )}
+          {reviewing && (
+            <div className="ml-auto flex flex-wrap items-center gap-2.5">
+              <DecisionButtons submission={submission} />
+            </div>
+          )}
         </div>
         <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
           <DetailField label="Donor" value={<Link to={paths.donorDetail(submission.donorId)} className="hover:underline">{submission.donorCompanyName}</Link>} />
@@ -87,16 +99,9 @@ function SubmissionView({ submission }: { submission: VettingSubmission }) {
         </dl>
       </div>
 
-      {submission.decisionReason && (
-        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.75 px-4.5">
-          <AlertCircle className="mt-0.5 h-4.5 w-4.5 shrink-0 text-amber-700 dark:text-amber-400" />
-          <p className="m-0 text-[13px] leading-relaxed font-semibold text-foreground">
-            <span className="font-extrabold">{submission.approvalState}:</span> {submission.decisionReason}
-          </p>
-        </div>
-      )}
+      {submission.adminDecision && <DecisionSummary submission={submission} />}
 
-      {(submission.submittedAt || submission.flags.length > 0) && <FlagsPanel submission={submission} />}
+      {(submission.submittedAt || submission.flags.length > 0) && <FlagsPanel submission={submission} canAddFlag={reviewing} />}
 
       <AccordionFormLayout sectionIds={SECTION_IDS}>
         {VETTING_SECTIONS.map((section, index) => (
@@ -127,7 +132,28 @@ function SubmissionView({ submission }: { submission: VettingSubmission }) {
   );
 }
 
-function FlagsPanel({ submission }: { submission: VettingSubmission }) {
+/** The admin's decision and reason. Cleared by the API when a returned submission is resubmitted. */
+function DecisionSummary({ submission }: { submission: VettingSubmission }) {
+  const approved = submission.adminDecision === 'Approve';
+  return (
+    <section
+      role="status"
+      className={`flex items-start gap-3 rounded-2xl border p-3.75 px-4.5 ${
+        approved ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-amber-500/40 bg-amber-500/10'
+      }`}
+    >
+      <AlertCircle className={`mt-0.5 h-4.5 w-4.5 shrink-0 ${approved ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`} />
+      <div className="text-[13px] leading-relaxed font-semibold text-foreground">
+        <p className="m-0 font-extrabold">
+          Decision: {DECISION_LABELS[submission.adminDecision!]} ({APPROVAL_STATE_LABELS[submission.approvalState].toLowerCase()})
+        </p>
+        <p className="m-0">{submission.decisionReason ?? 'No reason given.'}</p>
+      </div>
+    </section>
+  );
+}
+
+function FlagsPanel({ submission, canAddFlag }: { submission: VettingSubmission; canAddFlag: boolean }) {
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
       <h2 className="m-0 mb-3 flex items-center gap-2 text-[15px] font-extrabold tracking-tight text-foreground">
@@ -151,6 +177,7 @@ function FlagsPanel({ submission }: { submission: VettingSubmission }) {
           ))}
         </ul>
       )}
+      {canAddFlag && <AddFlagForm submissionId={submission.id} />}
     </section>
   );
 }
