@@ -2,6 +2,7 @@ namespace CRM.Infrastructure.Persistence;
 
 using CRM.Domain.Entities;
 using CRM.Domain.Entities.Lookups;
+using CRM.Domain.Entities.Vetting;
 using Microsoft.EntityFrameworkCore;
 
 public class CrmDbContext : DbContext
@@ -42,6 +43,14 @@ public class CrmDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+
+    // Vetting
+    public DbSet<VettingOfficer> VettingOfficers => Set<VettingOfficer>();
+    public DbSet<VettingSiteVisit> VettingSiteVisits => Set<VettingSiteVisit>();
+    public DbSet<VettingSubmission> VettingSubmissions => Set<VettingSubmission>();
+    public DbSet<VettingFlag> VettingFlags => Set<VettingFlag>();
+    public DbSet<VettingEvidencePhoto> VettingEvidencePhotos => Set<VettingEvidencePhoto>();
+    public DbSet<VettingAssessmentDetails> VettingAssessmentDetails => Set<VettingAssessmentDetails>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

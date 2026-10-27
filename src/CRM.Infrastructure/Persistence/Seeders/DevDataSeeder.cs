@@ -1,6 +1,7 @@
 namespace CRM.Infrastructure.Persistence.Seeders;
 
 using CRM.Domain.Entities;
+using CRM.Domain.Entities.Vetting;
 using CRM.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,11 +12,18 @@ using Microsoft.EntityFrameworkCore;
 /// Development environment (see DatabaseSeeder.SeedAsync); never runs against
 /// Staging/Production. Skipped entirely if any donor already exists, so it
 /// never overwrites or duplicates data a developer has since created through
-/// the app themselves.
+/// the app themselves. Vetting officers and today's site visits have their own
+/// guard, so a dev database seeded before the vetting module still gets them.
 /// </summary>
 public static class DevDataSeeder
 {
     public static async Task SeedAsync(CrmDbContext context)
+    {
+        await SeedDonorsAsync(context);
+        await SeedVettingAsync(context);
+    }
+
+    private static async Task SeedDonorsAsync(CrmDbContext context)
     {
         if (await context.Donors.AnyAsync())
         {
@@ -209,6 +217,44 @@ public static class DevDataSeeder
                 Subject = "Public form submission received",
                 Body = "Donor submitted their onboarding form via the public site.",
             });
+
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedVettingAsync(CrmDbContext context)
+    {
+        if (await context.VettingOfficers.AnyAsync())
+        {
+            return;
+        }
+
+        var donors = await context.Donors.Include(d => d.LegalAddress).OrderBy(d => d.CompanyName).Take(3).ToListAsync();
+        if (donors.Count == 0)
+        {
+            return;
+        }
+
+        var thandi = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
+        var pieter = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Pieter van Wyk", Initials = "PVW", AssignedRegion = "Western Cape Metro" };
+        context.VettingOfficers.AddRange(thandi, pieter);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var times = new[] { new TimeOnly(9, 0), new TimeOnly(11, 30), new TimeOnly(14, 0) };
+        for (var i = 0; i < donors.Count; i++)
+        {
+            var officer = i % 2 == 0 ? thandi : pieter;
+            context.VettingSiteVisits.Add(new VettingSiteVisit
+            {
+                Id = Guid.NewGuid(),
+                DonorId = donors[i].Id,
+                OfficerId = officer.Id,
+                ScheduledDate = today,
+                ScheduledTime = times[i],
+                LocationLabel = donors[i].LegalAddress?.Suburb ?? "On site",
+                VisitStatus = i == 0 ? SiteVisitStatus.InProgress : SiteVisitStatus.ToDo,
+            });
+            officer.WorkloadCount++; // fresh officers with only open visits, so this equals the COUNT
+        }
 
         await context.SaveChangesAsync();
     }

@@ -35,6 +35,12 @@ public class DonorRepository : IDonorRepository
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.Donors.AsNoTracking().AnyAsync(d => d.Id == id, cancellationToken);
 
+    public Task<string?> GetLegalAddressSuburbAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.DonorLegalAddresses.AsNoTracking()
+            .Where(a => a.DonorId == id)
+            .Select(a => (string?)a.Suburb)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<Donor?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
         // Tracked query (no AsNoTracking) — this feeds a write, EF needs to track
         // changes so SaveChangesAsync knows what to update.
