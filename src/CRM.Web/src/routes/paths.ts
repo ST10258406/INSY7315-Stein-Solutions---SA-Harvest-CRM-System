@@ -17,6 +17,16 @@ export const paths = {
   approvals: '/approvals',
   reports: '/reports',
   users: '/users',
+  // Vetting. Donors are the vetted organisations, so there are no separate organisation routes.
+  vetting: '/vetting', // submissions list
+  vettingNew: '/vetting/new', // ?donorId=&officerId=&siteVisitId= prefill
+  vettingDetailPattern: '/vetting/:id',
+  vettingDetail: (id: string) => `/vetting/${id}`,
+  vettingEditPattern: '/vetting/:id/edit',
+  vettingEdit: (id: string) => `/vetting/${id}/edit`,
+  vettingReview: '/vetting/review', // Admin queue (#164)
+  vettingOfficers: '/vetting/officers',
+  vettingVisits: '/vetting/visits',
   notAuthorized: '/not-authorized',
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',

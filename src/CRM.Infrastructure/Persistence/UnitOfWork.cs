@@ -1,5 +1,6 @@
 namespace CRM.Infrastructure.Persistence;
 
+using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,8 +15,17 @@ public class UnitOfWork : IUnitOfWork
 
     public UnitOfWork(CrmDbContext context) => _context = context;
 
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default)
-        => _context.SaveChangesAsync(cancellationToken);
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new ConflictException("This record was changed by someone else. Reload it and try again.");
+        }
+    }
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> work, CancellationToken cancellationToken = default)
     {
