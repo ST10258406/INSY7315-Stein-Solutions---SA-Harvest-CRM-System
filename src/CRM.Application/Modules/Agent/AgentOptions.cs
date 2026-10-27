@@ -25,5 +25,12 @@ public class AgentOptions
 
     public int MaxHistoryMessages { get; set; } = 20;
 
+    /// <summary>Limit for the user's own messages.</summary>
     public int MaxMessageLength { get; set; } = 2000;
+
+    /// <summary>
+    /// Limit for earlier assistant replies sent back as history. Looser than MaxMessageLength
+    /// because the model's replies aren't capped; the client trims longer ones before sending.
+    /// </summary>
+    public int MaxAssistantMessageLength { get; set; } = 8000;
 }

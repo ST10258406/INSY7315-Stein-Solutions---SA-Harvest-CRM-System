@@ -17,19 +17,28 @@ public class SendAgentMessageCommandValidator : AbstractValidator<SendAgentMessa
             .WithMessage($"messages must contain between 1 and {agent.MaxHistoryMessages} items.");
 
         RuleFor(x => x.Messages)
-            .Must(m => m[^1].Role == "user")
+            .Must(m => m[^1]?.Role == "user")
             .When(x => x.Messages is { Count: > 0 })
             .WithMessage("The last message must have role 'user'.");
 
-        RuleForEach(x => x.Messages).ChildRules(message =>
-        {
-            message.RuleFor(m => m.Role)
-                .Must(r => r is "user" or "assistant")
-                .WithMessage("role must be 'user' or 'assistant'.");
+        RuleForEach(x => x.Messages)
+            .NotNull()
+            .WithMessage("messages must not contain null items.")
+            .ChildRules(message =>
+            {
+                message.RuleFor(m => m.Role)
+                    .Must(r => r is "user" or "assistant")
+                    .WithMessage("role must be 'user' or 'assistant'.");
 
-            message.RuleFor(m => m.Content)
-                .NotEmpty()
-                .MaximumLength(agent.MaxMessageLength);
-        });
+                message.RuleFor(m => m.Content)
+                    .NotEmpty()
+                    .MaximumLength(agent.MaxMessageLength)
+                    .When(m => m.Role == "user");
+
+                message.RuleFor(m => m.Content)
+                    .NotEmpty()
+                    .MaximumLength(agent.MaxAssistantMessageLength)
+                    .When(m => m.Role != "user");
+            });
     }
 }

@@ -133,6 +133,36 @@ public class ProductionConfigurationGuardTests
         ProductionConfigurationGuard.Validate(config, new FakeEnvironment("Staging"));
     }
 
+    private static IConfiguration AgentConfig(string endpoint, params string[] allowedHosts)
+    {
+        var values = new Dictionary<string, string?> { ["Agent:Enabled"] = "true", ["Agent:Endpoint"] = endpoint };
+        for (var i = 0; i < allowedHosts.Length; i++)
+            values[$"Agent:AllowedProductionProviders:{i}"] = allowedHosts[i];
+
+        return new ConfigurationBuilder().AddConfiguration(Config()).AddInMemoryCollection(values).Build();
+    }
+
+    [Fact]
+    public void Validate_AgentEndpointNotAllowListedInProduction_Throws()
+        => Assert.Contains("Agent:AllowedProductionProviders",
+            Fails(AgentConfig("https://api.groq.com/openai/v1/", "models.inference.ai.azure.com")).Message);
+
+    [Fact]
+    public void Validate_AgentEndpointWithNoAllowListInProduction_Throws()
+        => Assert.Contains("Agent:Endpoint", Fails(AgentConfig("https://api.groq.com/openai/v1/")).Message);
+
+    [Fact]
+    public void Validate_AgentEndpointAllowListedInProduction_DoesNotThrow()
+        => ProductionConfigurationGuard.Validate(
+            AgentConfig("https://Models.Inference.AI.Azure.com/", "models.inference.ai.azure.com"),
+            new FakeEnvironment("Production"));
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    public void Validate_AgentEndpointNotAllowListedOutsideProduction_DoesNotThrow(string env)
+        => ProductionConfigurationGuard.Validate(AgentConfig("https://api.groq.com/openai/v1/"), new FakeEnvironment(env));
+
     [Fact]
     public void GetAllowedOrigins_TrimsTrailingSlashesAndDropsBlanks()
     {

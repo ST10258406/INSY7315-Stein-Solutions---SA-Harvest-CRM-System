@@ -60,21 +60,28 @@ public static class McpExtensions
                 })))
             .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (context, cancellationToken) =>
             {
-                var result = await next(context, cancellationToken);
-
-                // After the call, success or IsError alike, so every outcome is audited. The result
-                // itself is not passed on (spec §6).
-                var client = context.JsonRpcRequest.Context?.ClientInfo ?? context.Server.ClientInfo;
-                await context.Services!.GetRequiredService<ISender>().Send(new RecordMcpToolCallCommand
+                // After the call, whether it succeeded, returned IsError or threw (unknown tool, client
+                // abort), so every attempt is audited. The result itself is not passed on (spec §6).
+                CallToolResult? result = null;
+                try
                 {
-                    Tool = context.Params?.Name ?? string.Empty,
-                    Arguments = context.Params?.Arguments is { } arguments ? new Dictionary<string, JsonElement>(arguments) : null,
-                    IsError = result.IsError ?? false,
-                    ClientName = client?.Name,
-                    ClientVersion = client?.Version,
-                }, cancellationToken);
-
-                return result;
+                    result = await next(context, cancellationToken);
+                    return result;
+                }
+                finally
+                {
+                    var client = context.JsonRpcRequest.Context?.ClientInfo ?? context.Server.ClientInfo;
+                    var tool = context.Params?.Name;
+                    // CancellationToken.None: a client that disconnects must not skip its audit row.
+                    await context.Services!.GetRequiredService<ISender>().Send(new RecordMcpToolCallCommand
+                    {
+                        Tool = string.IsNullOrEmpty(tool) ? "(missing)" : tool[..Math.Min(tool.Length, RecordMcpToolCallCommandValidator.MaxToolNameLength)],
+                        Arguments = context.Params?.Arguments is { } arguments ? new Dictionary<string, JsonElement>(arguments) : null,
+                        IsError = result?.IsError ?? true,
+                        ClientName = client?.Name,
+                        ClientVersion = client?.Version,
+                    }, CancellationToken.None);
+                }
             }));
 
         return services;

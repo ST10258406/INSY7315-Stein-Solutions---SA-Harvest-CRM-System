@@ -7,7 +7,7 @@ namespace CRM.Application.Tests.Modules.Agent;
 public class SendAgentMessageCommandValidatorTests
 {
     private readonly SendAgentMessageCommandValidator _validator =
-        new(Options.Create(new AgentOptions { MaxHistoryMessages = 3, MaxMessageLength = 10 }));
+        new(Options.Create(new AgentOptions { MaxHistoryMessages = 3, MaxMessageLength = 10, MaxAssistantMessageLength = 20 }));
 
     private static SendAgentMessageCommand Make(params AgentMessageDto[] messages) =>
         new() { ConversationId = Guid.NewGuid(), Messages = messages };
@@ -45,4 +45,20 @@ public class SendAgentMessageCommandValidatorTests
     [InlineData("01234567890")]
     public void Validate_BadContentLength_Fails(string content) =>
         Assert.False(_validator.Validate(Make(User(content))).IsValid);
+
+    // A long earlier reply must not break the conversation (only user input has the tight limit).
+    [Fact]
+    public void Validate_AssistantReplyLongerThanUserLimit_Passes() =>
+        Assert.True(_validator.Validate(Make(User(), new("assistant", new string('a', 20)), User())).IsValid);
+
+    [Fact]
+    public void Validate_AssistantReplyOverItsLimit_Fails() =>
+        Assert.False(_validator.Validate(Make(User(), new("assistant", new string('a', 21)), User())).IsValid);
+
+    [Fact]
+    public void Validate_NullMessage_FailsWithoutThrowing()
+    {
+        Assert.False(_validator.Validate(Make(new AgentMessageDto[] { null! })).IsValid);
+        Assert.False(_validator.Validate(Make(null!, User())).IsValid);
+    }
 }

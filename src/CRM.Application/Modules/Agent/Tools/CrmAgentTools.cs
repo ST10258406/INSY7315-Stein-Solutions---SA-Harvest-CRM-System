@@ -36,6 +36,7 @@ public sealed partial class CrmAgentTools(ISender sender)
     private const int PageSize = 25;
     private const int InteractionLimit = 20;
     private const int MaxSummaryLength = 500;
+    private const int MaxTitleLength = 200;
 
     /// <summary>
     /// The one place tool names are defined. The in-app agent (<see cref="AsTools"/>) and the
@@ -253,7 +254,7 @@ public sealed partial class CrmAgentTools(ISender sender)
         result.Pagination.TotalCount,
         Items = result.Data.Select(t => new
         {
-            Title = Scrub(t.Title),
+            Title = Truncate(Scrub(t.Title), MaxTitleLength),
             t.DueDate,
             t.IsCompleted,
             Donor = t.Donor.CompanyName,
