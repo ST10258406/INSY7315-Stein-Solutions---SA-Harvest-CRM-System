@@ -45,6 +45,13 @@ public class ExceptionHandlingMiddleware
                 "Unhandled exception. TraceId: {TraceId}, Path: {Path}",
                 traceId, context.Request.Path);
         }
+        else if (exception is AgentUnavailableException)
+        {
+            // Not a bug, but the provider's real error (quota, bad model, outage) is only visible here.
+            Log.Warning(exception,
+                "CRM agent unavailable. TraceId: {TraceId}, Reason: {Reason}",
+                traceId, exception.Message);
+        }
 
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = statusCode;
@@ -106,6 +113,13 @@ public class ExceptionHandlingMiddleware
                 StatusCodes.Status502BadGateway,
                 "EMAIL_DELIVERY_FAILED",
                 ex.Message,
+                null),
+
+            // Generic message on purpose: the reason (and provider detail) goes to the log only.
+            AgentUnavailableException => (
+                StatusCodes.Status503ServiceUnavailable,
+                "AGENT_UNAVAILABLE",
+                "The assistant isn't available right now. Please try again later.",
                 null),
 
             // Catch-all. Message is deliberately generic — the real

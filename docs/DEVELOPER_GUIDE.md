@@ -246,6 +246,41 @@ Rules:
 - Document-type restriction (BBBEE cert = Admin+) is applied with the
   `DocumentTypeAuthorizationFilter` / `DocumentTypeAuthorizationHandler`.
 
+### In-app CRM agent
+
+`POST /api/v1/agent/messages` (docs/agent-spec.md) is `SuperAdminOnly` and off by default
+(`Agent:Enabled = false` returns 503 `AGENT_UNAVAILABLE`). Configure it with the `Agent__*`
+keys in `.env.example`:
+
+- **Fully local (nothing leaves your machine):** run Ollama on the host
+  (`ollama pull qwen2.5:7b`), then set `Agent__Enabled=true`, `Agent__Provider=ollama`,
+  `Agent__Endpoint=http://host.docker.internal:11434` (or `http://localhost:11434` outside Docker).
+- **Hosted free tier (seed data only):** `docker-compose.override.yml` points at Groq. Put your key
+  in `.env` as `AGENT_API_KEY`; never paste it into a tracked file.
+
+An enabled agent with a bad provider, endpoint or missing key stops the API at startup. In
+Production the endpoint host must also be in `Agent:AllowedProductionProviders`. New tools go in
+`CrmAgentTools.Definitions` (see below).
+
+### CRM MCP server (local dev only)
+
+`/mcp` exposes the in-app agent's read-only tools (`CrmAgentTools`) to MCP clients such as
+Claude Code (docs/mcp-spec.md). It is `SuperAdminOnly`, rate limited per user (every `/mcp` request counts), audits every
+tool call (including failed and unknown ones), and only exists when `Mcp:Enabled = true` (set in `docker-compose.override.yml`;
+the API refuses to start in Production with it on). Use **seed data only**: the client's own
+LLM receives the tool results.
+
+1. Sign in as a SuperAdmin: `POST http://localhost:5000/api/auth/login`. Copy `accessToken` from the response.
+2. Add the server to Claude Code (the token expires after 60 minutes; sign in again and re-add it):
+
+   ```bash
+   claude mcp add --transport http sa-harvest-crm http://localhost:5000/mcp --header "Authorization: Bearer <accessToken>"
+   ```
+
+Never commit an MCP config that contains a token (`.mcp.json` is git-ignored). New tools go in
+`CrmAgentTools.Definitions`, which feeds both the in-app agent and `/mcp`; they must wrap a
+query whose endpoint policy includes SuperAdmin.
+
 ---
 
 ## 8. API contract

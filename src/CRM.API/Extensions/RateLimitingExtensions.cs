@@ -47,6 +47,18 @@ public static class RateLimitingExtensions
     /// </summary>
     public const string DonorEmailPolicy = "DonorEmail";
 
+    /// <summary>
+    /// Per-user limit on POST /agent/messages (default 20 per 10 minutes) — every request
+    /// costs LLM provider quota. Configurable via RateLimiting:Agent:PermitLimit / :WindowMinutes.
+    /// </summary>
+    public const string AgentPolicy = "Agent";
+
+    /// <summary>
+    /// Per-user limit on /mcp (docs/mcp-spec.md §9), default 60 per 10 minutes. It counts HTTP
+    /// requests, so initialize and tools/list use the budget as well as tools/call.
+    /// </summary>
+    public const string McpPolicy = "Mcp";
+
     /// <summary>Strict per-IP limit on POST /auth/login (default 10/minute) — F-02.</summary>
     public const string AuthLoginPolicy = "AuthLogin";
 
@@ -73,21 +85,13 @@ public static class RateLimitingExtensions
     /// </summary>
     public static IServiceCollection AddAuthenticatedApiRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
-        var permitLimit = configuration.GetValue<int?>("RateLimiting:DonorEmail:PermitLimit") ?? DefaultDonorEmailPermitLimit;
-        var windowMinutes = configuration.GetValue<int?>("RateLimiting:DonorEmail:WindowMinutes") ?? DefaultDonorEmailWindowMinutes;
-
         services.AddRateLimiter(options =>
         {
-            options.AddPolicy(DonorEmailPolicy, context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: GetUserId(context),
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = permitLimit,
-                        Window = TimeSpan.FromMinutes(windowMinutes),
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        QueueLimit = 0
-                    }));
+            AddPerUserPolicy(options, configuration, DonorEmailPolicy, "RateLimiting:DonorEmail",
+                DefaultDonorEmailPermitLimit, DefaultDonorEmailWindowMinutes);
+            AddPerUserPolicy(options, configuration, AgentPolicy, "RateLimiting:Agent", defaultPermitLimit: 20, defaultWindowMinutes: 10);
+            // Higher than Agent: one MCP client question fans out into several requests.
+            AddPerUserPolicy(options, configuration, McpPolicy, "RateLimiting:Mcp", defaultPermitLimit: 60, defaultWindowMinutes: 10);
         });
 
         return services;
@@ -109,6 +113,23 @@ public static class RateLimitingExtensions
         });
 
         return services;
+    }
+
+    /// <summary>Per-user fixed window; limits are read when a partition is first created, so test-host overrides apply.</summary>
+    private static void AddPerUserPolicy(
+        RateLimiterOptions options, IConfiguration configuration, string policyName, string section,
+        int defaultPermitLimit, int defaultWindowMinutes)
+    {
+        options.AddPolicy(policyName, context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: GetUserId(context),
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = configuration.GetValue<int?>($"{section}:PermitLimit") ?? defaultPermitLimit,
+                    Window = TimeSpan.FromMinutes(configuration.GetValue<int?>($"{section}:WindowMinutes") ?? defaultWindowMinutes),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                }));
     }
 
     private static void AddStrictIpPolicy(

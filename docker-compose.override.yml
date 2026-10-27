@@ -1,6 +1,14 @@
 services:
   crm-api:
     environment:
+    
+      Agent__Enabled: "true"
+      Agent__Provider: openai-compatible
+      Agent__Endpoint: https://api.groq.com/openai/v1/
+      Agent__Model: openai/gpt-oss-120b
+      AGENT_API_KEY: ${AGENT_API_KEY} # from .env — never paste the key here (this file is tracked)
+      Mcp__Enabled: "true" # local dev only — seed data only (docs/mcp-spec.md); never set in Azure
+    
       ASPNETCORE_ENVIRONMENT: Development
       # appsettings.Development.json is excluded from the image (.dockerignore), so supply its dev values here.
       Cors__AllowedOrigins__0: http://localhost:3000
@@ -14,3 +22,8 @@ services:
       # exposed to host for local DB tools (pgAdmin, DBeaver, etc.). Override
       # POSTGRES_HOST_PORT in your local .env if 5432 is already taken on your machine.
       - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  crm-web:
+    environment:
+      # Windows bind mounts don't forward file-change events, so Vite polls instead (see vite.config.ts).
+      VITE_USE_POLLING: "true"

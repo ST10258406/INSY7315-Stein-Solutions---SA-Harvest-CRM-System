@@ -15,6 +15,7 @@ using CRM.Infrastructure.Persistence.Interceptors;
 using CRM.Infrastructure.Persistence.Repositories;
 using CRM.Infrastructure.Services;
 using CRM.Infrastructure.Services.Email;
+using CRM.Infrastructure.Services.Agent;
 using FluentValidation;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -227,6 +228,9 @@ public static class ServiceCollectionExtensions
         // Recurring background jobs
         services.AddScoped<ITaskDueNotificationJob, TaskDueNotificationJob>();
 
+        // In-app CRM agent (docs/agent-spec.md) — IChatClient for the configured provider + tools
+        services.AddAgent(configuration);
+
         return services;
     }
 
@@ -299,6 +303,9 @@ public static class ServiceCollectionExtensions
         services.AddPublicApiRateLimiting();
         services.AddAuthenticatedApiRateLimiting(configuration);
         services.AddAuthEndpointRateLimiting(configuration);
+
+        // CRM MCP server (docs/mcp-spec.md) — the agent's tools over /mcp.
+        services.AddCrmMcp();
 
         services.Configure<LoginLockoutOptions>(configuration.GetSection(LoginLockoutOptions.SectionName));
         services.Configure<RefreshTokenOptions>(configuration.GetSection(RefreshTokenOptions.SectionName));

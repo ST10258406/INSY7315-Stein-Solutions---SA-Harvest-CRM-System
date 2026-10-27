@@ -19,6 +19,9 @@ public static class ProductionConfigurationGuard
     public const string FrontendBaseUrlKey = "Frontend:BaseUrl";
     public const string JwtSecretKey = "JWT_SECRET";
     public const string RefreshCookieSecureKey = "Auth:RefreshCookie:Secure";
+    public const string AgentEnabledKey = "Agent:Enabled";
+    public const string AgentEndpointKey = "Agent:Endpoint";
+    public const string AgentAllowedProvidersKey = "Agent:AllowedProductionProviders";
 
     /// <summary>HS256 needs a key at least as long as its 256-bit output (RFC 7518 §3.2).</summary>
     public const int MinimumJwtSecretBytes = 32;
@@ -82,6 +85,22 @@ public static class ProductionConfigurationGuard
         // and browsers reject SameSite=None without Secure anyway.
         if (configuration.GetValue<bool?>(RefreshCookieSecureKey) == false)
             errors.Add($"{RefreshCookieSecureKey} is false. The refresh-token cookie must be Secure outside Development.");
+
+        // MCP sends CRM data to whatever LLM the client uses, which no setting here controls
+        // (docs/mcp-spec.md D3). Off in Production until a production auth model and POPIA sign-off exist.
+        if (environment.IsProduction() && configuration.GetValue<bool>(McpExtensions.EnabledKey))
+            errors.Add($"{McpExtensions.EnabledKey} is true. The MCP endpoint is not allowed in Production.");
+
+        // The agent sends donor data to its provider, so Production may only use providers signed off
+        // for it (no free tiers that train on prompts) — docs/agent-spec.md §9, risk R-15.
+        if (environment.IsProduction() && configuration.GetValue<bool>(AgentEnabledKey))
+        {
+            var endpoint = configuration[AgentEndpointKey];
+            var allowedHosts = configuration.GetSection(AgentAllowedProvidersKey).Get<string[]>() ?? [];
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri) ||
+                !allowedHosts.Contains(endpointUri.Host, StringComparer.OrdinalIgnoreCase))
+                errors.Add($"{AgentEndpointKey} ('{endpoint}') is not listed in {AgentAllowedProvidersKey}. Only providers approved for donor data may be used in Production.");
+        }
 
         if (errors.Count > 0)
             throw new InvalidOperationException(

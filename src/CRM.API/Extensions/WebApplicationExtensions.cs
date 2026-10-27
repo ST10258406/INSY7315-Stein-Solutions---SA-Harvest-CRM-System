@@ -54,6 +54,9 @@ public static class WebApplicationExtensions
 
         app.MapHealthChecks("/health");
 
+        // CRM MCP server (docs/mcp-spec.md) — mapped only when Mcp:Enabled = true.
+        app.MapCrmMcp();
+
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
