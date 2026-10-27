@@ -10,7 +10,8 @@ public class GetSubmissionsQueryValidator : AbstractValidator<GetSubmissionsQuer
         RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
         RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
         RuleFor(x => x.ApprovalState)
-            .Must(s => Enum.TryParse<VettingApprovalState>(s, true, out _))
+            // Names only: Enum.TryParse would also accept "9".
+            .Must(s => Enum.GetNames<VettingApprovalState>().Contains(s, StringComparer.OrdinalIgnoreCase))
             .When(x => x.ApprovalState is not null)
             .WithMessage("approvalState must be one of: New, Ready, Returned, Approved, Declined.");
         RuleFor(x => x.Search).MaximumLength(100);

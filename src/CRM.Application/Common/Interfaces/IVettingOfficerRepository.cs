@@ -22,7 +22,8 @@ public interface IVettingOfficerRepository
     /// Sets workload_count to (site visits not Completed) + (submissions in New, Ready or
     /// Returned), recounted from the database, never ±1. Counts only SAVED rows, so save the
     /// change first and call this inside the same <see cref="IUnitOfWork.ExecuteInTransactionAsync{T}"/>,
-    /// then save again.
+    /// then save again. Locks the officer row (FOR UPDATE) until that transaction ends, so concurrent
+    /// recalculations for one officer serialise instead of overwriting each other.
     /// </summary>
     Task RecalculateWorkloadAsync(Guid officerId, CancellationToken cancellationToken = default);
 }

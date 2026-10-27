@@ -95,6 +95,24 @@ public class SubmissionCommandHandlerTests
         Assert.Equal(SiteVisitStatus.ToDo, visit.VisitStatus);
     }
 
+    [Theory]
+    [InlineData(SiteVisitStatus.Completed, false)]
+    [InlineData(SiteVisitStatus.ToDo, true)]
+    public async Task Create_SiteVisitCompletedOrAlreadyLinked_Throws409_AndLeavesItAlone(SiteVisitStatus status, bool linked)
+    {
+        var visit = new VettingSiteVisit { Id = Guid.NewGuid(), DonorId = _donorId, OfficerId = _officerId, VisitStatus = status };
+        _visits.GetForUpdateAsync(visit.Id, Arg.Any<CancellationToken>()).Returns(visit);
+        _submissions.IsSiteVisitLinkedAsync(visit.Id, Arg.Any<CancellationToken>()).Returns(linked);
+
+        await Assert.ThrowsAsync<ConflictException>(() => Create().Handle(new CreateSubmissionCommand
+        {
+            DonorId = _donorId, OfficerId = _officerId, SiteVisitId = visit.Id, Details = VettingFixtures.ValidDetailsDto()
+        }, CancellationToken.None));
+
+        Assert.Equal(status, visit.VisitStatus);
+        Assert.Empty(_added);
+    }
+
     [Fact]
     public async Task Create_MatchingSiteVisit_MovesItToInProgress()
     {

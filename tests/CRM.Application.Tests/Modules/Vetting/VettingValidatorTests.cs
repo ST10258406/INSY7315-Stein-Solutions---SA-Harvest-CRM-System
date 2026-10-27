@@ -93,8 +93,17 @@ public class VettingValidatorTests
     [InlineData("InProgress", true)]
     [InlineData("completed", true)]
     [InlineData("Cancelled", false)]
+    [InlineData("7", false)]
     public void UpdateSiteVisit_VisitStatus_MustBeKnown(string status, bool valid)
         => Assert.Equal(valid, new UpdateSiteVisitCommandValidator().Validate(new UpdateSiteVisitCommand { Id = Guid.NewGuid(), VisitStatus = status }).IsValid);
+
+    [Theory]
+    [InlineData("Ready", true)]
+    [InlineData("approved", true)]
+    [InlineData("9", false)]
+    [InlineData("Bogus", false)]
+    public void GetSubmissions_ApprovalState_MustBeAName(string state, bool valid)
+        => Assert.Equal(valid, new GetSubmissionsQueryValidator().Validate(new GetSubmissionsQuery { ApprovalState = state }).IsValid);
 
     [Fact]
     public void GetSiteVisits_DateIsRequired()

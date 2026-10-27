@@ -1,4 +1,5 @@
 using AutoMapper;
+using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Models;
 using CRM.Application.Modules.Vetting.Mappings;
 using CRM.Domain.Entities.Vetting;
@@ -146,5 +147,67 @@ public class VettingSubmissionRepositoryTests
         Assert.Equal([older.Id, newer.Id], oldestFirst.Select(i => i.Id));
         Assert.Equal(["Gauteng", "Limpopo"], oldestFirst.Select(i => i.Province));
         Assert.Equal([newer.Id, older.Id], newestFirst.Select(i => i.Id));
+    }
+
+    [Fact]
+    public async Task SearchAsync_NewestFirst_PutsDraftsWithNoSubmittedAtLast()
+    {
+        await using var context = new CrmDbContext(_options);
+        await context.Database.EnsureCreatedAsync();
+        var donor = await VettingTestData.AddDonorAsync(context);
+        var officer = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
+        context.VettingOfficers.Add(officer);
+
+        VettingSubmission Make(VettingApprovalState state, DateTime? submittedAt) => new()
+        {
+            Id = Guid.NewGuid(), FormReference = $"VET-T-{Guid.NewGuid():N}"[..20], DonorId = donor.Id, OfficerId = officer.Id,
+            ApprovalState = state, SubmittedAt = submittedAt
+        };
+        var draft = Make(VettingApprovalState.New, null);
+        var older = Make(VettingApprovalState.Approved, DateTime.UtcNow.AddDays(-3));
+        var newer = Make(VettingApprovalState.Approved, DateTime.UtcNow.AddHours(-1));
+        context.VettingSubmissions.AddRange(draft, older, newer);
+        await context.SaveChangesAsync();
+
+        var (items, _) = await new VettingSubmissionRepository(context, _mapper).SearchAsync(
+            new VettingSubmissionSearchCriteria { DonorId = donor.Id, SubmittedAtAscending = false });
+
+        Assert.Equal([newer.Id, older.Id, draft.Id], items.Select(i => i.Id));
+    }
+
+    [Fact]
+    public async Task Save_AfterAnotherContextChangedTheSubmission_IsA409_EvenForChildOnlyEdits()
+    {
+        await using var seed = new CrmDbContext(_options);
+        await seed.Database.EnsureCreatedAsync();
+        var donor = await VettingTestData.AddDonorAsync(seed);
+        var officer = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
+        seed.VettingOfficers.Add(officer);
+        var submission = new VettingSubmission
+        {
+            Id = Guid.NewGuid(), FormReference = $"VET-T-{Guid.NewGuid():N}"[..20], DonorId = donor.Id, OfficerId = officer.Id,
+            Details = new VettingAssessmentDetails
+            {
+                Id = Guid.NewGuid(), LegalName = "x", ContactName = "x", ContactEmail = "x@example.com", ContactPhone = "082",
+                Province = "Gauteng", What3Words = "///a.b.c", ProgrammesSummary = "x", DistributionChannel = "Both",
+                FeedingFrequency = "Daily", SaHarvestReliance = "Low", TransportCapacity = "Own vehicle"
+            }
+        };
+        seed.VettingSubmissions.Add(submission);
+        await seed.SaveChangesAsync();
+
+        // The PATCH loads the draft while it is still New...
+        await using var patchContext = new CrmDbContext(_options);
+        var stale = await new VettingSubmissionRepository(patchContext, _mapper).GetForUpdateAsync(submission.Id);
+
+        // ...then a submit lands first.
+        await using var submitContext = new CrmDbContext(_options);
+        var submitted = await new VettingSubmissionRepository(submitContext, _mapper).GetForUpdateAsync(submission.Id);
+        submitted!.ApprovalState = VettingApprovalState.Ready;
+        await new UnitOfWork(submitContext).SaveChangesAsync();
+
+        // Only a child row changes, yet the stale save must still be refused.
+        stale!.Details!.LegalName = "changed after submit";
+        await Assert.ThrowsAsync<ConflictException>(() => new UnitOfWork(patchContext).SaveChangesAsync());
     }
 }

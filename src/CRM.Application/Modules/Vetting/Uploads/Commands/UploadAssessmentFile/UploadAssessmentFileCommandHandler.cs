@@ -40,14 +40,13 @@ public class UploadAssessmentFileCommandHandler : IRequestHandler<UploadAssessme
         var blobPath = $"vetting/{submission.Id}/files/{command.Slot}-{Guid.NewGuid()}{sniffed.Extension}";
         await _blobStorage.UploadAsync(command.FileStream, blobPath, sniffed.MimeType);
 
-        var fileName = UploadedFileInspector.SanitizeDisplayName(command.OriginalFileName);
         command.OldValues = new { command.Slot, Filled = slot.GetPath(submission.Details!) is not null };
 
         slot.SetPath(submission.Details!, blobPath);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         command.EntityId = submission.Id;
-        command.NewValues = new { command.Slot, FileName = fileName };
+        command.NewValues = new { command.Slot };
 
         return _mapper.Map<VettingFilesDto>(submission.Details);
     }

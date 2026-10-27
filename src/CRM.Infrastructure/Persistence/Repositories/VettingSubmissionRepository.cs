@@ -65,13 +65,30 @@ public class VettingSubmissionRepository : IVettingSubmissionRepository
         return Task.CompletedTask;
     }
 
-    public Task<VettingSubmission?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
-        // Tracked — feeds PATCH / submit. Only active flags: inactive ones are history, never touched again.
-        => _context.VettingSubmissions
+    public async Task<VettingSubmission?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // Tracked — feeds PATCH / submit / uploads / reviewer flags. Only active flags: inactive ones are history, never touched again.
+        var submission = await _context.VettingSubmissions
             .Include(s => s.Details)
             .Include(s => s.Flags.Where(f => f.IsActive))
             .Include(s => s.Photos)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+        // Child-only edits (details, photos, flags) wouldn't UPDATE this row, so its xmin would never be checked.
+        // Forcing the write makes any racing change to the submission fail with a 409.
+        if (submission is not null) _context.Entry(submission).Property(s => s.ApprovalState).IsModified = true;
+        return submission;
+    }
+
+    public Task<VettingSubmission?> GetForDownloadAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.VettingSubmissions
+            .AsNoTracking()
+            .Include(s => s.Details)
+            .Include(s => s.Photos)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+    public Task<bool> IsSiteVisitLinkedAsync(Guid siteVisitId, CancellationToken cancellationToken = default)
+        => _context.VettingSubmissions.AsNoTracking().AnyAsync(s => s.SiteVisitId == siteVisitId, cancellationToken);
 
     public Task<VettingSubmissionDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.VettingSubmissions
@@ -137,7 +154,8 @@ public class VettingSubmissionRepository : IVettingSubmissionRepository
         var ordered = criteria.SubmittedAtAscending switch
         {
             true => query.OrderBy(s => s.SubmittedAt).ThenBy(s => s.FormReference),
-            false => query.OrderByDescending(s => s.SubmittedAt).ThenByDescending(s => s.FormReference),
+            // Postgres sorts NULLs first when descending; drafts (no submitted_at) go last.
+            false => query.OrderBy(s => s.SubmittedAt == null).ThenByDescending(s => s.SubmittedAt).ThenByDescending(s => s.FormReference),
             null => query.OrderByDescending(s => s.CreatedAt).ThenByDescending(s => s.FormReference),
         };
 

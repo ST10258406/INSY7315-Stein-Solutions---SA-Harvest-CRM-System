@@ -61,4 +61,59 @@ public class VettingOfficerRepositoryTests
         await using var read = new CrmDbContext(_options);
         Assert.Equal(5, (await read.VettingOfficers.SingleAsync(o => o.Id == officer.Id)).WorkloadCount);
     }
+
+    [Fact]
+    public async Task RecalculateWorkloadAsync_TwoConcurrentTransactions_BothVisitsAreCounted()
+    {
+        Guid donorId, officerId;
+        await using (var seed = new CrmDbContext(_options))
+        {
+            await seed.Database.EnsureCreatedAsync();
+            donorId = (await VettingTestData.AddDonorAsync(seed)).Id;
+            var officer = new VettingOfficer { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North" };
+            seed.VettingOfficers.Add(officer);
+            await seed.SaveChangesAsync();
+            officerId = officer.Id;
+        }
+
+        var firstHoldsLock = new TaskCompletionSource();
+        var releaseFirst = new TaskCompletionSource();
+
+        async Task AddVisitAsync(bool first)
+        {
+            await using var context = new CrmDbContext(_options);
+            await new UnitOfWork(context).ExecuteInTransactionAsync(async () =>
+            {
+                context.VettingSiteVisits.Add(new VettingSiteVisit
+                {
+                    Id = Guid.NewGuid(), DonorId = donorId, OfficerId = officerId, LocationLabel = "Midrand",
+                    ScheduledDate = new DateOnly(2026, 10, 21), ScheduledTime = new TimeOnly(9, 0)
+                });
+                await context.SaveChangesAsync();
+                var recalc = new VettingOfficerRepository(context, _mapper).RecalculateWorkloadAsync(officerId);
+                if (first)
+                {
+                    await recalc;
+                    firstHoldsLock.SetResult();
+                    await releaseFirst.Task; // second is now blocked on the officer row
+                }
+                else
+                {
+                    await recalc;
+                }
+                await context.SaveChangesAsync();
+                return true;
+            });
+        }
+
+        var firstTask = AddVisitAsync(true);
+        await firstHoldsLock.Task;
+        var secondTask = AddVisitAsync(false);
+        await Task.Delay(500); // let the second reach the lock
+        releaseFirst.SetResult();
+        await Task.WhenAll(firstTask, secondTask);
+
+        await using var read = new CrmDbContext(_options);
+        Assert.Equal(2, (await read.VettingOfficers.SingleAsync(o => o.Id == officerId)).WorkloadCount);
+    }
 }

@@ -48,7 +48,13 @@ public class VettingOfficerRepository : IVettingOfficerRepository
 
     public async Task RecalculateWorkloadAsync(Guid officerId, CancellationToken cancellationToken = default)
     {
-        var officer = await _context.VettingOfficers.FirstAsync(o => o.Id == officerId, cancellationToken);
+        // Row lock until the caller's transaction ends: a concurrent recalculation waits here, then
+        // counts after we commit (READ COMMITTED), so it sees our row. InMemory has no locks or raw SQL.
+        var officer = _context.Database.IsNpgsql()
+            ? await _context.VettingOfficers
+                .FromSqlInterpolated($"SELECT * FROM vetting_officers WHERE id = {officerId} FOR UPDATE")
+                .FirstAsync(cancellationToken)
+            : await _context.VettingOfficers.FirstAsync(o => o.Id == officerId, cancellationToken);
 
         var openVisits = await _context.VettingSiteVisits
             .CountAsync(v => v.OfficerId == officerId && v.VisitStatus != SiteVisitStatus.Completed, cancellationToken);

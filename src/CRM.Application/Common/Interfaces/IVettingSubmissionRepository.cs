@@ -19,9 +19,16 @@ public interface IVettingSubmissionRepository
 
     /// <summary>
     /// Tracked aggregate in one query: submission, details, ACTIVE flags and photos.
-    /// Feeds PATCH and submit. Null when not found.
+    /// Feeds every write to a submission. The submission row is always written on save, so a racing
+    /// change to it surfaces as a <see cref="Exceptions.ConflictException"/>. Null when not found.
     /// </summary>
     Task<VettingSubmission?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Untracked submission with details and photos, for download links. Null when not found.</summary>
+    Task<VettingSubmission?> GetForDownloadAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>True when any submission already points at this site visit.</summary>
+    Task<bool> IsSiteVisitLinkedAsync(Guid siteVisitId, CancellationToken cancellationToken = default);
 
     /// <summary>The full read model (details, active flags, photos, filled file slots), or null.</summary>
     Task<VettingSubmissionDto?> GetDtoByIdAsync(Guid id, CancellationToken cancellationToken = default);

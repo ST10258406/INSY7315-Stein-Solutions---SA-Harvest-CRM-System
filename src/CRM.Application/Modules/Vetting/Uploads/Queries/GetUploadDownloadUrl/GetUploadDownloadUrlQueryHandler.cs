@@ -27,7 +27,7 @@ public class GetUploadDownloadUrlQueryHandler : IRequestHandler<GetUploadDownloa
         if (request.Slot is not null && !VettingUploadSlots.Files.TryGetValue(request.Slot, out fileSlot))
             throw new NotFoundException($"Unknown file slot '{request.Slot}'.");
 
-        var submission = await _submissions.GetForUpdateAsync(request.SubmissionId, cancellationToken)
+        var submission = await _submissions.GetForDownloadAsync(request.SubmissionId, cancellationToken)
             ?? throw new NotFoundException(nameof(VettingSubmission), request.SubmissionId);
 
         string? path, fileName;

@@ -12,7 +12,8 @@ public class UpdateSiteVisitCommandValidator : AbstractValidator<UpdateSiteVisit
         RuleFor(x => x.VisitNotes).MaximumLength(255);
 
         RuleFor(x => x.VisitStatus)
-            .Must(s => Enum.TryParse<SiteVisitStatus>(s, true, out _))
+            // Names only: Enum.TryParse would also accept "7".
+            .Must(s => Enum.GetNames<SiteVisitStatus>().Contains(s, StringComparer.OrdinalIgnoreCase))
             .When(x => x.VisitStatus is not null)
             .WithMessage("visitStatus must be one of: ToDo, InProgress, Completed.");
 

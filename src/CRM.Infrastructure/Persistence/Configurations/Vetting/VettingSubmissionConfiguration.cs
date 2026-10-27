@@ -18,7 +18,12 @@ public class VettingSubmissionConfiguration : IEntityTypeConfiguration<VettingSu
         builder.HasIndex(x => x.FormReference).IsUnique().HasDatabaseName("idx_vetting_submissions_form_reference");
         builder.HasIndex(x => x.ApprovalState).HasDatabaseName("idx_vetting_submissions_approval_state");
         builder.HasIndex(x => x.DonorId).HasDatabaseName("idx_vetting_submissions_donor");
+        // One submission per site visit; Postgres allows many NULLs.
+        builder.HasIndex(x => x.SiteVisitId).IsUnique().HasDatabaseName("idx_vetting_submissions_site_visit");
         builder.HasIndex(x => x.OfficerId).HasDatabaseName("idx_vetting_submissions_officer");
+
+        // Postgres system column, bumped by every UPDATE of the row: a save from a stale load fails instead of overwriting.
+        builder.Property<uint>("xmin").HasColumnName("xmin").HasColumnType("xid").ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
 
         builder.Property(x => x.FormReference).HasColumnName("form_reference").HasMaxLength(20).IsRequired();
         builder.Property(x => x.DonorId).HasColumnName("donor_id");

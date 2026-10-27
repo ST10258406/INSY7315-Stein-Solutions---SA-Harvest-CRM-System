@@ -1775,6 +1775,12 @@ namespace CRM.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovalState")
@@ -1790,7 +1796,9 @@ namespace CRM.Infrastructure.Migrations
                     b.HasIndex("OfficerId")
                         .HasDatabaseName("idx_vetting_submissions_officer");
 
-                    b.HasIndex("SiteVisitId");
+                    b.HasIndex("SiteVisitId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_vetting_submissions_site_visit");
 
                     b.ToTable("vetting_submissions", (string)null);
                 });

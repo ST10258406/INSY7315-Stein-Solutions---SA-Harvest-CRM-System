@@ -54,6 +54,8 @@ public class CreateSubmissionCommandHandler : IRequestHandler<CreateSubmissionCo
             if (visit.DonorId != command.DonorId || visit.OfficerId != command.OfficerId)
                 throw new ValidationException([new ValidationFailure(
                     nameof(command.SiteVisitId), "The site visit must be for the same donor and officer.")]);
+            if (visit.VisitStatus == SiteVisitStatus.Completed || await _submissions.IsSiteVisitLinkedAsync(siteVisitId, cancellationToken))
+                throw new ConflictException("The site visit is already completed or linked to another submission.");
             visit.VisitStatus = SiteVisitStatus.InProgress;
         }
 

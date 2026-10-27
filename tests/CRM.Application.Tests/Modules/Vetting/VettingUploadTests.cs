@@ -58,6 +58,7 @@ public class VettingUploadTests
                 .ToList()
         };
         _submissions.GetForUpdateAsync(s.Id, Arg.Any<CancellationToken>()).Returns(s);
+        _submissions.GetForDownloadAsync(s.Id, Arg.Any<CancellationToken>()).Returns(s);
         return s;
     }
 
