@@ -1,4 +1,5 @@
 using CRM.Domain.Enums;
+using CRM.Application.Common.Validation;
 using FluentValidation;
 
 namespace CRM.Application.Modules.Donors.Queries.GetDonors;
@@ -28,5 +29,7 @@ public class GetDonorsQueryValidator : AbstractValidator<GetDonorsQuery>
             .Must(s => Enum.TryParse<DonorStatus>(s, true, out _))
             .When(x => !string.IsNullOrWhiteSpace(x.Status))
             .WithMessage("status must be one of: PendingReview, Active, Lapsed, Rejected");
+
+        RuleFor(x => x).DateWindow(x => x.FollowUpAfter, x => x.FollowUpBefore, "followUpAfter", "followUpBefore");
     }
 }

@@ -43,6 +43,7 @@ public class CrmDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+    public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
 
     // Vetting
     public DbSet<VettingOfficer> VettingOfficers => Set<VettingOfficer>();

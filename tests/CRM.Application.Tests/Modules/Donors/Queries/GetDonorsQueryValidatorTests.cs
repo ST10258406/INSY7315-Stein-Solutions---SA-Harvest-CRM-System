@@ -85,4 +85,21 @@ public class GetDonorsQueryValidatorTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.PropertyName == "Status");
     }
+
+    [Fact]
+    public void FollowUpAfterLaterThanFollowUpBefore_ShouldHaveValidationError()
+        => Assert.False(_validator.Validate(new GetDonorsQuery
+        {
+            FollowUpAfter = new DateOnly(2026, 10, 31),
+            FollowUpBefore = new DateOnly(2026, 10, 1)
+        }).IsValid);
+
+    [Theory]
+    [InlineData(62, true)]
+    [InlineData(63, false)]
+    public void FollowUpRange_IsCappedAt62Days(int days, bool valid)
+    {
+        var from = new DateOnly(2026, 1, 1);
+        Assert.Equal(valid, _validator.Validate(new GetDonorsQuery { FollowUpAfter = from, FollowUpBefore = from.AddDays(days) }).IsValid);
+    }
 }

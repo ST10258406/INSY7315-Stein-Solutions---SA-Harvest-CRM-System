@@ -45,6 +45,7 @@ public class GetDonorsQueryHandlerTests
             DonationTypeId = 3,
             DonationFrequencyId = 2,
             RelationshipManagerId = managerId,
+            FollowUpAfter = new DateOnly(2026, 8, 1),
             FollowUpBefore = new DateOnly(2026, 8, 15),
             SortBy = "companyName",
             SortDir = "desc",
@@ -62,6 +63,8 @@ public class GetDonorsQueryHandlerTests
         Assert.Equal((short)3, _capturedCriteria.DonationTypeId);
         Assert.Equal((short)2, _capturedCriteria.DonationFrequencyId);
         Assert.Equal(managerId, _capturedCriteria.RelationshipManagerId);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), _capturedCriteria.FollowUpAfter);
+        Assert.Equal(DateTimeKind.Utc, _capturedCriteria.FollowUpAfter!.Value.Kind);
         Assert.Equal("companyName", _capturedCriteria.SortBy);
         Assert.Equal("desc", _capturedCriteria.SortDir);
         Assert.Equal(2, _capturedCriteria.Page);

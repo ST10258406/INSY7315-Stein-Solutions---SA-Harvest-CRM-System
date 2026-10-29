@@ -1,18 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  CheckCircle2,
-  BarChart3,
-  UserCog,
-  ShieldCheck,
-  ChevronDown,
-  LogOut,
-  Sun,
-  Moon,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronDown, LogOut, Sun, Moon, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
@@ -21,52 +8,7 @@ import { paths } from '@/routes/paths';
 import { useVettingSubmissions } from '@/features/vetting/hooks';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import logoImg from '@/assets/sa-harvest-logo.png';
-
-const ADMIN_ROLES = ['Admin', 'SuperAdmin'];
-const PROCUREMENT_OR_ABOVE = ['Procurement', ...ADMIN_ROLES];
-
-interface SubLink {
-  label: string;
-  path: string;
-  adminOnly?: boolean;
-  /** Shows how many vettings are waiting for review. */
-  showReviewCount?: boolean;
-}
-
-interface NavItem {
-  label: string;
-  path: string;
-  icon: LucideIcon;
-  adminOnly?: boolean;
-  procurementOrAbove?: boolean;
-  /** Renders the item as a dropdown of these links instead of a single link. */
-  children?: SubLink[];
-}
-
-// `procurementOrAbove` items (Vetting) are hidden from Marketing; `adminOnly` items (Approvals — Issue #113 — Reports — Issue #73 — and Users)
-// are hidden from every non-Admin role. This is cosmetic only: the routes are
-// `ProtectedRoute`-guarded and the APIs enforce `AdminOrAbove` server-side
-// regardless of the nav.
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: paths.dashboard, icon: LayoutDashboard },
-  { label: 'Donors', path: paths.donors, icon: Users },
-  { label: 'Tasks', path: paths.tasks, icon: ClipboardList },
-  {
-    label: 'Vetting',
-    path: paths.vetting,
-    icon: ShieldCheck,
-    procurementOrAbove: true,
-    children: [
-      { label: 'Submissions', path: paths.vetting },
-      { label: 'Site visits', path: paths.vettingVisits },
-      { label: 'Review queue', path: paths.vettingReview, adminOnly: true, showReviewCount: true },
-      { label: 'Officers', path: paths.vettingOfficers, adminOnly: true },
-    ],
-  },
-  { label: 'Approvals', path: paths.approvals, icon: CheckCircle2, adminOnly: true },
-  { label: 'Reports', path: paths.reports, icon: BarChart3, adminOnly: true },
-  { label: 'Users', path: paths.users, icon: UserCog, adminOnly: true },
-];
+import { ADMIN_ROLES, NAV_ITEMS, PROCUREMENT_OR_ABOVE } from './navItems';
 
 function isRouteActive(pathname: string, itemPath: string) {
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
