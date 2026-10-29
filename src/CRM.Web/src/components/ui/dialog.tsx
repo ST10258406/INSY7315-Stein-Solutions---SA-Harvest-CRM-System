@@ -12,7 +12,7 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
     <DialogPrimitive.Backdrop
       data-slot="dialog-backdrop"
       className={cn(
-        "fixed inset-0 z-50 bg-[rgba(20,20,15,0.42)] transition-opacity duration-100 ease-out will-change-[opacity] motion-reduce:transition-none data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+        "fixed inset-0 z-50 bg-[rgba(20,20,15,0.42)] transition-opacity duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
         className
       )}
       {...props}
@@ -23,18 +23,16 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
 interface DialogContentProps extends DialogPrimitive.Popup.Props {
   /** Hide the built-in top-right close button (defaults to shown). */
   hideCloseButton?: boolean
-  /** Extra classes for the dimmed backdrop behind the dialog. */
-  backdropClassName?: string
 }
 
-function DialogContent({ className, children, hideCloseButton, backdropClassName, ...props }: DialogContentProps) {
+function DialogContent({ className, children, hideCloseButton, ...props }: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogBackdrop className={backdropClassName} />
+      <DialogBackdrop />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-60px)] w-[520px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--card)] p-[24px_26px_26px] shadow-[0_24px_60px_rgba(20,20,15,0.28)] outline-none transition-[opacity,scale] duration-100 ease-out will-change-[opacity,scale] motion-reduce:transition-none data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0",
+          "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-60px)] w-[520px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--card)] p-[24px_26px_26px] shadow-[0_24px_60px_rgba(20,20,15,0.28)] outline-none transition-all duration-150 data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0",
           className
         )}
         {...props}

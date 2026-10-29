@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type MouseEvent } from 'react';
+import { useState, type ComponentProps, type MouseEvent, type Ref } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { labelDayButton } from 'react-day-picker';
@@ -8,14 +8,13 @@ import { Button } from '@/components/ui/button';
 import { fromYmd, toYmd } from '@/lib/date';
 import { paths } from '@/routes/paths';
 import { useAuthStore } from '@/store/authStore';
+import { PROCUREMENT_OR_ABOVE } from '@/features/shell/navItems';
 import { useMyTasks } from '@/features/tasks/hooks';
 import { TaskFormDialog } from '@/features/tasks/components/TaskFormDialog';
 import { donorKeys, fetchDonors } from '@/features/donors/hooks';
 import { DonorStatusBadge } from '@/features/donors/components/DonorStatusBadge';
 import { addDaysYmd, monthBounds, sastYmd } from '../lib/sast';
 
-// Matches the ProcurementOrAbove policy on GET /api/v1/donors (cosmetic; the API enforces it).
-const DONOR_ROLES = ['Procurement', 'Admin', 'SuperAdmin'];
 // The API's page-size cap. A month with more is flagged rather than silently cut.
 const MAX_ITEMS = 100;
 // Dot colour per kind, shared by the day cells, the legend and the agenda rows.
@@ -44,7 +43,7 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[860px] max-w-[calc(100vw-2rem)]" backdropClassName="backdrop-blur-[6px]">
+        <DialogContent className="w-[860px] max-w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>Calendar</DialogTitle>
             <DialogDescription>Your open tasks and your donors' follow-ups. Pick a day to see what's on.</DialogDescription>
@@ -75,6 +74,12 @@ export function CalendarDialog({ open, onOpenChange }: CalendarDialogProps) {
   );
 }
 
+// The shadcn Calendar defines Root inline, so every render remounts the grid and a double-click's two
+// clicks land on different nodes (no dblclick). A module-level Root keeps the grid mounted.
+function StableRoot({ rootRef, ...props }: ComponentProps<'div'> & { rootRef?: Ref<HTMLDivElement> }) {
+  return <div data-slot="calendar" ref={rootRef} {...props} />;
+}
+
 // Module-level so DayPicker keeps the same component between renders instead of remounting every day cell.
 function ItemsDayButton({ children, ...props }: ComponentProps<typeof CalendarDayButton>) {
   const { hasTask, hasFollowUp } = props.modifiers;
@@ -93,7 +98,7 @@ function ItemsDayButton({ children, ...props }: ComponentProps<typeof CalendarDa
 function CalendarBody({ onNavigate, onNewTask }: { onNavigate: () => void; onNewTask: (day: string) => void }) {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const canSeeDonors = (user?.roles ?? []).some((role) => DONOR_ROLES.includes(role));
+  const canSeeDonors = (user?.roles ?? []).some((role) => PROCUREMENT_OR_ABOVE.includes(role));
 
   const today = sastYmd(new Date());
   const thisMonth = monthBounds(today).first;
@@ -187,7 +192,7 @@ function CalendarBody({ onNavigate, onNewTask }: { onNavigate: () => void; onNew
               return `${base}, ${count} ${count === 1 ? 'item' : 'items'}${overdue}`;
             },
           }}
-          components={{ DayButton: ItemsDayButton }}
+          components={{ Root: StableRoot, DayButton: ItemsDayButton }}
           className="mx-auto rounded-2xl border border-border p-3 [--cell-size:--spacing(11)]"
         />
         <div className="mt-3 flex items-center justify-between gap-3">

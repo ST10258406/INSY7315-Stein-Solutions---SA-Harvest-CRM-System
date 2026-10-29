@@ -3,6 +3,7 @@ namespace CRM.Infrastructure.Persistence;
 using CRM.Application.Common.Exceptions;
 using CRM.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 /// <summary>
 /// EF Core backed <see cref="IUnitOfWork"/>. Registered as scoped so that it shares the
@@ -24,6 +25,11 @@ public class UnitOfWork : IUnitOfWork
         catch (DbUpdateConcurrencyException)
         {
             throw new ConflictException("This record was changed by someone else. Reload it and try again.");
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // A concurrent request won the race past the handler's own duplicate check.
+            throw new ConflictException("This already exists. Reload and try again.");
         }
     }
 

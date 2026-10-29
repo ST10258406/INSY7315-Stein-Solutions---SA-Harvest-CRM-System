@@ -6,9 +6,8 @@ import { HelpDrawer } from '@/features/help';
 import { QuickSearchDialog } from '@/features/search';
 import { CalendarDialog } from '@/features/calendar';
 import { SavedFiltersMenu } from '@/features/savedFilters';
+import { PROCUREMENT_OR_ABOVE } from './navItems';
 
-// Saved filters apply to the donor list, which is ProcurementOrAbove (cosmetic; the API enforces it).
-const DONOR_LIST_ROLES = ['Procurement', 'Admin', 'SuperAdmin'];
 const ACTION_BUTTON_CLASS =
   'flex h-9.5 w-9.5 items-center justify-center rounded-full text-icon transition-colors hover:bg-hover';
 
@@ -27,7 +26,7 @@ export function Sidebar() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const isSuperAdmin = useAuthStore((state) => state.user?.roles.includes('SuperAdmin') ?? false);
-  const canUseDonorList = useAuthStore((state) => state.user?.roles.some((r) => DONOR_LIST_ROLES.includes(r)) ?? false);
+  const canUseDonorList = useAuthStore((state) => state.user?.roles.some((r) => PROCUREMENT_OR_ABOVE.includes(r)) ?? false);
 
   // Ctrl+K / Cmd+K opens quick search from anywhere (Issue 102). preventDefault stops the
   // browser's own Ctrl+K (focus the address bar search).

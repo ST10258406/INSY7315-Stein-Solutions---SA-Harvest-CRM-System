@@ -11,7 +11,7 @@ interface HelpDrawerProps {
 }
 
 export function HelpDrawer({ open, onOpenChange }: HelpDrawerProps) {
-  const roles = useAuthStore((state) => state.user?.roles ?? []);
+  const roles = useAuthStore((state) => state.user?.roles) ?? [];
   const { pathname } = useLocation();
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);

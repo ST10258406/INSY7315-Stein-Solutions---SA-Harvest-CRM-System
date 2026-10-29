@@ -1,12 +1,11 @@
 using CRM.Domain.Enums;
+using CRM.Application.Common.Validation;
 using FluentValidation;
 
 namespace CRM.Application.Modules.Donors.Queries.GetDonors;
 
 public class GetDonorsQueryValidator : AbstractValidator<GetDonorsQuery>
 {
-    public const int MaxRangeDays = 62;
-
     private static readonly string[] AllowedSortFields = ["followUpDate", "companyName", "createdAt", "lastInteractionDate"];
 
     public GetDonorsQueryValidator()
@@ -31,16 +30,6 @@ public class GetDonorsQueryValidator : AbstractValidator<GetDonorsQuery>
             .When(x => !string.IsNullOrWhiteSpace(x.Status))
             .WithMessage("status must be one of: PendingReview, Active, Lapsed, Rejected");
 
-        // Same window rule as GetMyTasksQuery (calendar, Issue 104).
-        RuleFor(x => x)
-            .Must(x => x.FollowUpAfter!.Value <= x.FollowUpBefore!.Value)
-            .When(x => x.FollowUpAfter.HasValue && x.FollowUpBefore.HasValue)
-            .WithName("followUpAfter")
-            .WithMessage("followUpAfter must be on or before followUpBefore.");
-        RuleFor(x => x)
-            .Must(x => x.FollowUpBefore!.Value.DayNumber - x.FollowUpAfter!.Value.DayNumber <= MaxRangeDays)
-            .When(x => x.FollowUpAfter.HasValue && x.FollowUpBefore.HasValue)
-            .WithName("followUpAfter")
-            .WithMessage($"The followUpAfter–followUpBefore range can be at most {MaxRangeDays} days.");
+        RuleFor(x => x).DateWindow(x => x.FollowUpAfter, x => x.FollowUpBefore, "followUpAfter", "followUpBefore");
     }
 }

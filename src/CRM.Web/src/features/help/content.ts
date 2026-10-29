@@ -1,4 +1,5 @@
 import { paths } from '@/routes/paths';
+import { ADMIN_ROLES, PROCUREMENT_OR_ABOVE } from '@/features/shell/navItems';
 
 /**
  * Help & support content (Issue 105). Kept as data, not JSX, so it can be edited without
@@ -19,8 +20,6 @@ export interface HelpShortcut {
   roles?: readonly string[];
 }
 
-const PROCUREMENT_OR_ABOVE = ['Procurement', 'Admin', 'SuperAdmin'] as const;
-const ADMIN_OR_ABOVE = ['Admin', 'SuperAdmin'] as const;
 const SUPER_ADMIN = ['SuperAdmin'] as const;
 
 export const HELP_TOPICS: HelpTopic[] = [
@@ -73,7 +72,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'approvals',
     title: 'Reviewing donor approvals',
     path: paths.approvals,
-    roles: ADMIN_OR_ABOVE,
+    roles: ADMIN_ROLES,
     steps: [
       'Open Approvals to see donors waiting for review.',
       'Open a donor to check their details and documents.',
@@ -84,7 +83,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'reports',
     title: 'Running and exporting reports',
     path: paths.reports,
-    roles: ADMIN_OR_ABOVE,
+    roles: ADMIN_ROLES,
     steps: [
       'Open Reports and choose a report.',
       'Set the date range or filters it offers.',
@@ -95,7 +94,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     id: 'users',
     title: 'Managing users',
     path: paths.users,
-    roles: ADMIN_OR_ABOVE,
+    roles: ADMIN_ROLES,
     steps: [
       'Open Users to see every staff account.',
       'Add a user with their name, email and role. They must change the temporary password at first login.',

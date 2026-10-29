@@ -24,11 +24,6 @@ function Calendar({
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
 }) {
   const defaultClassNames = getDefaultClassNames()
-  // Stable component identities: an inline component here would make DayPicker remount the whole grid on every render.
-  const DayButton = React.useMemo(
-    () => (props: React.ComponentProps<typeof CalendarDayButton>) => <CalendarDayButton locale={locale} {...props} />,
-    [locale]
-  )
 
   return (
     <DayPicker
@@ -137,32 +132,49 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: CalendarRoot,
-        Chevron: CalendarChevron,
-        DayButton,
-        WeekNumber: CalendarWeekNumber,
+        Root: ({ className, rootRef, ...props }) => {
+          return (
+            <div
+              data-slot="calendar"
+              ref={rootRef}
+              className={cn(className)}
+              {...props}
+            />
+          )
+        },
+        Chevron: ({ className, orientation, ...props }) => {
+          if (orientation === "left") {
+            return (
+              <CaretLeftIcon className={cn("size-4", className)} {...props} />
+            )
+          }
+
+          if (orientation === "right") {
+            return (
+              <CaretRightIcon className={cn("size-4", className)} {...props} />
+            )
+          }
+
+          return (
+            <CaretDownIcon className={cn("size-4", className)} {...props} />
+          )
+        },
+        DayButton: ({ ...props }) => (
+          <CalendarDayButton locale={locale} {...props} />
+        ),
+        WeekNumber: ({ children, ...props }) => {
+          return (
+            <td {...props}>
+              <div className="flex size-(--cell-size) items-center justify-center text-center">
+                {children}
+              </div>
+            </td>
+          )
+        },
         ...components,
       }}
       {...props}
     />
-  )
-}
-
-function CalendarRoot({ className, rootRef, ...props }: React.ComponentProps<"div"> & { rootRef?: React.Ref<HTMLDivElement> }) {
-  return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />
-}
-
-function CalendarChevron({ className, orientation, ...props }: { className?: string; orientation?: "up" | "down" | "left" | "right" } & React.SVGProps<SVGSVGElement>) {
-  if (orientation === "left") return <CaretLeftIcon className={cn("size-4", className)} {...props} />
-  if (orientation === "right") return <CaretRightIcon className={cn("size-4", className)} {...props} />
-  return <CaretDownIcon className={cn("size-4", className)} {...props} />
-}
-
-function CalendarWeekNumber({ children, ...props }: React.ComponentProps<"td">) {
-  return (
-    <td {...props}>
-      <div className="flex size-(--cell-size) items-center justify-center text-center">{children}</div>
-    </td>
   )
 }
 
