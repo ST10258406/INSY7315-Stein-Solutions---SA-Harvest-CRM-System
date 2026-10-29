@@ -67,7 +67,7 @@ CRM.API pipeline (existing): ForwardedHeaders → Authentication → PasswordCha
    → Authorization (SuperAdminOnly) → RateLimiter ("Mcp" policy)
    ▼
 MapMcp("/mcp")  ── only when Mcp:Enabled = true
-   │  tools/list → 10 tools built from CrmAgentTools.Definitions
+   │  tools/list → 14 tools built from CrmAgentTools.Definitions
    │  tools/call → CallToolFilter ─┬─▶ CrmAgentTools.<Method>()  (resolved from request scope)
    │                               │        └─▶ ISender.Send(existing query) → repositories → PostgreSQL
    │                               └─▶ after return: ISender.Send(RecordMcpToolCallCommand)
@@ -189,7 +189,8 @@ public sealed partial class CrmAgentTools(ISender sender)
     [
         ("search_donors", Method(nameof(SearchDonorsAsync))),
         ("get_donor", Method(nameof(GetDonorAsync))),
-        // ... all 10, same names as today
+        // ... all 14: the 10 donor/CRM tools plus list_vetting_submissions,
+        // get_vetting_submission, list_site_visits, list_vetting_officers (agent-spec §6)
     ];
 
     public IList<AITool> AsTools() =>
@@ -256,7 +257,7 @@ Add the keys to `.env.example`, set `Mcp__Enabled=true` in `docker-compose.overr
 **`tests/CRM.Application.Tests/Modules/Agent/`**
 
 - `CrmAgentToolsDefinitionsTests`:
-  - 10 definitions with unique names;
+  - 14 definitions with unique names;
   - every method has a `[Description]`;
   - `AsTools()` names equal the `Definitions` names (guards against drift between the two channels).
 - `RecordMcpToolCallCommandHandlerTests`: sets `EntityType`, `Action`, a non-empty `EntityId` and `NewValues` (no result payload).
@@ -267,7 +268,7 @@ Add the keys to `.env.example`, set `Mcp__Enabled=true` in `docker-compose.overr
 
 - 401 with no token; 403 for Admin, Procurement and Marketing.
 - 403 (or the middleware's existing response) for a SuperAdmin who must change their password.
-- `tools/list` returns exactly the 10 names, all with `readOnlyHint = true`.
+- `tools/list` returns exactly the 14 names (agent-spec §6), all with `readOnlyHint = true`.
 - `tools/call search_donors` returns allow-listed fields only and writes **one** `audit_logs` row with `entity_type = 'McpToolCall'`.
 - A call with an unknown donor id returns `{ error }` content and is still audited with `isError` as returned.
 - 404 on `/mcp` when `Mcp:Enabled = false`.

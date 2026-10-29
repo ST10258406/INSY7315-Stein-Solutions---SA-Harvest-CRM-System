@@ -89,10 +89,10 @@ public class RecordMcpToolCallCommandTests
             Assert.True(_validator.Validate(new RecordMcpToolCallCommand { Tool = d.Name }).IsValid));
 
     [Fact]
-    public void Definitions_HasTenUniqueNamesWithDescriptions()
+    public void Definitions_HasFourteenUniqueNamesWithDescriptions()
     {
-        Assert.Equal(10, CrmAgentTools.Definitions.Count);
-        Assert.Equal(10, CrmAgentTools.Definitions.Select(d => d.Name).Distinct().Count());
+        Assert.Equal(14, CrmAgentTools.Definitions.Count);
+        Assert.Equal(14, CrmAgentTools.Definitions.Select(d => d.Name).Distinct().Count());
         Assert.All(CrmAgentTools.Definitions, d =>
             Assert.NotNull(d.Method.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false).SingleOrDefault()));
     }

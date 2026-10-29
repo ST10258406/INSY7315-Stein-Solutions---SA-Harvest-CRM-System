@@ -175,7 +175,7 @@ public class McpEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task ListTools_SuperAdmin_ReturnsTheTenReadOnlyTools()
+    public async Task ListTools_SuperAdmin_ReturnsTheReadOnlyTools()
     {
         await using var mcp = await ConnectAsync(await LoginAsAsync(_factory, "SuperAdmin"));
 

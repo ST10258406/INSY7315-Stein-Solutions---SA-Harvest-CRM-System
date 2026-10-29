@@ -18,6 +18,10 @@ using CRM.Application.Modules.Reports.Queries.GetDonorsContactedReport;
 using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Application.Modules.Tasks.Queries.GetDonorTasks;
 using CRM.Application.Modules.Tasks.Queries.GetMyTasks;
+using CRM.Application.Modules.Vetting.Officers.Queries.GetOfficers;
+using CRM.Application.Modules.Vetting.SiteVisits.Queries.GetSiteVisits;
+using CRM.Application.Modules.Vetting.Submissions.Queries.GetSubmissionById;
+using CRM.Application.Modules.Vetting.Submissions.Queries.GetSubmissions;
 using MediatR;
 using Microsoft.Extensions.AI;
 
@@ -37,6 +41,7 @@ public sealed partial class CrmAgentTools(ISender sender)
     private const int InteractionLimit = 20;
     private const int MaxSummaryLength = 500;
     private const int MaxTitleLength = 200;
+    private const int MaxFlagLength = 300;
 
     /// <summary>
     /// The one place tool names are defined. The in-app agent (<see cref="AsTools"/>) and the
@@ -55,6 +60,10 @@ public sealed partial class CrmAgentTools(ISender sender)
         ("get_manager_activity", Method(nameof(GetManagerActivityAsync))),
         ("run_report", Method(nameof(RunReportAsync))),
         ("list_relationship_managers", Method(nameof(ListRelationshipManagersAsync))),
+        ("list_vetting_submissions", Method(nameof(ListVettingSubmissionsAsync))),
+        ("get_vetting_submission", Method(nameof(GetVettingSubmissionAsync))),
+        ("list_site_visits", Method(nameof(ListSiteVisitsAsync))),
+        ("list_vetting_officers", Method(nameof(ListVettingOfficersAsync))),
     ];
 
     public IList<AITool> AsTools() =>
@@ -248,6 +257,156 @@ public sealed partial class CrmAgentTools(ISender sender)
     public Task<object> ListRelationshipManagersAsync(CancellationToken cancellationToken = default) =>
         RunAsync(async () => (await sender.Send(new GetRelationshipManagersQuery(), cancellationToken))
             .Select(m => new { m.Id, m.FullName }).ToList());
+
+    [Description("Search beneficiary vetting submissions. Ready means submitted and waiting for admin review. Returns at most 25 per page plus totalCount.")]
+    public Task<object> ListVettingSubmissionsAsync(
+        [Description("One of: New (draft), Ready (waiting for review), Returned, Approved, Declined.")] string? approvalState = null,
+        [Description("Vetting officer id from list_vetting_officers.")] Guid? officerId = null,
+        [Description("Donor id.")] Guid? donorId = null,
+        [Description("Free text matched against the form reference and donor name.")] string? search = null,
+        [Description("1-based page number.")] int page = 1,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(async () =>
+        {
+            var result = await sender.Send(new GetSubmissionsQuery
+            {
+                ApprovalState = approvalState,
+                OfficerId = officerId,
+                DonorId = donorId,
+                Search = search,
+                Page = page,
+                PageSize = PageSize,
+            }, cancellationToken);
+
+            return new
+            {
+                result.Pagination.TotalCount,
+                Items = result.Data.Select(s => new
+                {
+                    s.Id,
+                    s.FormReference,
+                    Donor = s.DonorCompanyName,
+                    Officer = s.OfficerFullName,
+                    s.Province,
+                    s.ApprovalState,
+                    s.SubmittedAt,
+                    s.ActiveFlagCount,
+                }).ToList(),
+            };
+        });
+
+    [Description("Get one vetting submission by id (from list_vetting_submissions): state, decision, officer, reviewer flags and the assessment's programme, staffing, feeding, facilities and document checklist answers. Contact details, addresses, free-text comments, decision reasons and photos are never available.")]
+    public Task<object> GetVettingSubmissionAsync(
+        [Description("Vetting submission id.")] Guid submissionId,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(async () =>
+        {
+            var s = await sender.Send(new GetSubmissionByIdQuery(submissionId), cancellationToken);
+            var d = s.Details;
+
+            // Excluded on purpose: contact name/email/phone, website, physical address, what3words,
+            // police station, decision reason, programme and officer free text, photo file names.
+            return new
+            {
+                s.Id,
+                s.FormReference,
+                s.DonorId,
+                Donor = s.DonorCompanyName,
+                Officer = s.OfficerFullName,
+                s.SiteVisitId,
+                s.ApprovalState,
+                s.SubmittedAt,
+                s.AdminDecision,
+                s.CreatedAt,
+                s.UpdatedAt,
+                Flags = s.Flags.Select(f => new
+                {
+                    Description = Truncate(Scrub(f.Description), MaxFlagLength),
+                    f.Source,
+                    f.CreatedAt,
+                }).ToList(),
+                PhotosCaptured = s.Photos.Count(p => p.IsCaptured),
+                Files = new { s.Files.NpoCertificate, s.Files.PboCertificate, s.Files.KitchenStoragePhotos, s.Files.FacilityPhotos, s.Files.Certificates },
+                Assessment = new
+                {
+                    d.Province,
+                    d.CoreFocusAreas,
+                    d.TargetPopulation,
+                    d.DistributionChannel,
+                    d.FullTimeFemales,
+                    d.FullTimeMales,
+                    d.VolunteersCount,
+                    d.IsRegisteredNpo,
+                    d.IsRegisteredDsd,
+                    d.BeneficiaryRaces,
+                    d.BeneficiaryGenders,
+                    d.BeneficiaryAgeGroups,
+                    d.FeedingFrequency,
+                    d.TotalPeopleServed,
+                    d.FemalesServed,
+                    d.MalesServed,
+                    d.AfricanServed,
+                    d.ColouredServed,
+                    d.IndianAsianServed,
+                    d.WhiteServed,
+                    d.SaHarvestReliance,
+                    d.TransportCapacity,
+                    d.MealsProvided,
+                    d.FeedingDays,
+                    d.LastFedDate,
+                    d.FoodStorageTypes,
+                    d.KitchenClean,
+                    d.WaterAccess,
+                    d.ToiletFacilities,
+                    d.PestFree,
+                    d.InfrastructureChecks,
+                    d.DeliveryAccessEase,
+                    d.ParkingAndSecurity,
+                    d.SlaSigned,
+                    d.ConsentFormSigned,
+                    d.PolicyDocumentPresent,
+                },
+            };
+        });
+
+    [Description("One day's vetting site visit schedule. visitStatus is one of: ToDo, InProgress, Completed. Returns at most 25 plus totalCount.")]
+    public Task<object> ListSiteVisitsAsync(
+        [Description("The day (yyyy-MM-dd). For today, use today's date from your instructions.")] DateOnly date,
+        [Description("Vetting officer id from list_vetting_officers.")] Guid? officerId = null,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(async () =>
+        {
+            var visits = await sender.Send(new GetSiteVisitsQuery { Date = date, OfficerId = officerId }, cancellationToken);
+
+            // Location label and visit notes are left out: free text that may hold an address.
+            return new
+            {
+                TotalCount = visits.Count,
+                Items = visits.Take(PageSize).Select(v => new
+                {
+                    v.Id,
+                    v.DonorId,
+                    Donor = v.DonorCompanyName,
+                    v.OfficerId,
+                    v.OfficerInitials,
+                    v.ScheduledDate,
+                    v.ScheduledTime,
+                    v.VisitStatus,
+                }).ToList(),
+            };
+        });
+
+    [Description("List vetting officers: id, full name, initials, assigned region and workloadCount (their open site visits). Use it to resolve an officer's name or initials to an id.")]
+    public Task<object> ListVettingOfficersAsync(CancellationToken cancellationToken = default) =>
+        RunAsync(async () =>
+        {
+            var officers = await sender.Send(new GetOfficersQuery(), cancellationToken);
+            return new
+            {
+                TotalCount = officers.Count,
+                Items = officers.Take(PageSize).Select(o => new { o.Id, o.FullName, o.Initials, o.AssignedRegion, o.WorkloadCount }).ToList(),
+            };
+        });
 
     private static object Tasks(Common.Models.PaginatedResult<TaskDto> result) => new
     {

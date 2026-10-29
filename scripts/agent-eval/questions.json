@@ -192,6 +192,56 @@
         "@",
         "011 555"
       ]
+    },
+    {
+      "id": "Q17",
+      "question": "Which vetting submissions are waiting for review?",
+      "expectedTools": [
+        "list_vetting_submissions"
+      ],
+      "expectedAnswer": "None. The seed data has no vetting submissions, so a good answer says there are none waiting (Ready).",
+      "mustContain": [
+        "none|no vetting|no submission|no pending|0"
+      ]
+    },
+    {
+      "id": "Q18",
+      "question": "What site visits are scheduled today?",
+      "expectedTools": [
+        "list_site_visits"
+      ],
+      "expectedAnswer": "3 visits: 09:00 Fruits & Roots Farming (TM, In progress), 11:30 Golden Grain Mills (PVW, To do), 14:00 Ocean Fresh Seafood (TM, To do).",
+      "mustContain": [
+        "Fruits",
+        "Golden Grain",
+        "Ocean Fresh"
+      ]
+    },
+    {
+      "id": "Q19",
+      "question": "How many open site visits does each vetting officer have?",
+      "expectedTools": [
+        "list_vetting_officers"
+      ],
+      "expectedAnswer": "Thandi Mokoena 2, Pieter van Wyk 1.",
+      "mustContain": [
+        "Thandi",
+        "Pieter",
+        "2",
+        "1"
+      ]
+    },
+    {
+      "id": "Q20",
+      "question": "Which site visit is in progress right now, and who is the officer?",
+      "expectedTools": [
+        "list_site_visits"
+      ],
+      "expectedAnswer": "Fruits & Roots Farming at 09:00, Thandi Mokoena (TM). A good answer resolves TM to the name via list_vetting_officers.",
+      "mustContain": [
+        "Fruits",
+        "Thandi|TM"
+      ]
     }
   ]
 }

@@ -236,6 +236,16 @@ Page sizes are capped server-side regardless of what the model asks for.
 | 8 | `get_manager_activity` | `GetManagerActivityQuery` | `period` (values the existing handler accepts) | Per-manager activity counts. |
 | 9 | `run_report` | `GetDonorsByStatus/Region/Type/ContactedReportQuery` | `report` (`by_status`/`by_region`/`by_type`/`contacted`), `startDate?`, `endDate?`, `relationshipManagerId?` (contacted only) | The report DTO (aggregates). |
 | 10 | `list_relationship_managers` | `GetRelationshipManagersQuery` | — | `id`, `fullName`. Lets the model resolve "Thandi's donors" to an id. |
+| 11 | `list_vetting_submissions` | `GetSubmissionsQuery` | `approvalState?` (`New`/`Ready`/`Returned`/`Approved`/`Declined`), `officerId?`, `donorId?`, `search?`, `page?` | `totalCount`, items: `id`, `formReference`, `donor` name, `officer` name, `province`, `approvalState`, `submittedAt`, `activeFlagCount`. Page size fixed at 25. |
+| 12 | `get_vetting_submission` | `GetSubmissionByIdQuery` | `submissionId` | `id`, `formReference`, `donorId`, `donor` name, `officer` name, `siteVisitId`, `approvalState`, `submittedAt`, `adminDecision`, `createdAt`, `updatedAt`; `flags` (`description` scrubbed and truncated to 300 chars, `source`, `createdAt`); `photosCaptured` count; `files` (which slots are filled, booleans only); `assessment`: the picklist, count and yes/no answers (province, focus areas, staffing, registration yes/no, demographics, feeding, facilities, access, document checklist). **Excluded:** contact name/email/phone, website, physical address, what3words, police station proximity, `decisionReason`, programmes summary, officer/proposal/digital comments, photo file names, blob paths. |
+| 13 | `list_site_visits` | `GetSiteVisitsQuery` | `date` (yyyy-MM-dd, required), `officerId?` | `totalCount`, items: `id`, `donorId`, `donor` name, `officerId`, `officerInitials`, `scheduledDate`, `scheduledTime`, `visitStatus`. At most 25. **Excluded:** `locationLabel` (may hold an address), `visitNotes`. |
+| 14 | `list_vetting_officers` | `GetOfficersQuery` | — | `totalCount`, items: `id`, `fullName`, `initials`, `assignedRegion`, `workloadCount` (open site visits). At most 25. |
+
+Vetting free text: reviewer flag descriptions are the only free text passed through (scrubbed
+of emails and URLs, truncated to 300 chars), because a flag is the reason a submission needs
+attention. Decision reasons, visit notes and the assessment's comment fields are left out, the
+same choice as the donor rejection reason in #6. All four vetting endpoints are
+`ProcurementOrAbove`, which includes SuperAdmin (§4.2).
 
 **Implementation shape** (illustrative, not final code):
 
@@ -263,9 +273,12 @@ public sealed class CrmAgentTools(ISender sender)
   `NewValues` (§8).
 - `MarketingOrAbove`/`ProcurementOrAbove`/`AdminOrAbove` endpoints are all
   reachable by SuperAdmin, so every query above satisfies the §4.2 rule.
+- Tools #13 and #14 wrap queries that return an unpaged list, so the tool returns
+  `totalCount` and the first 25.
 
-**Explicitly excluded queries:** `GetDocumentDownloadUrlQuery` (SAS URLs must
-not go to the model), `GetDonorDocumentTypeQuery`, `GetUsersQuery` (staff
+**Explicitly excluded queries:** `GetDocumentDownloadUrlQuery` and
+`GetUploadDownloadUrlQuery` (SAS URLs must not go to the model), `GetOfficerByIdQuery`
+(`list_vetting_officers` covers it), `GetDonorDocumentTypeQuery`, `GetUsersQuery` (staff
 PII; revisit later), `GetNotificationsQuery`, `GetRolesQuery`.
 
 ---
@@ -289,7 +302,7 @@ Content requirements:
 5. Format with simple Markdown only (bold, bullet/numbered lists, small tables). Never output URLs, links, images, HTML or script.
 6. Use South African conventions: ZAR (R), dd MMM yyyy dates, SAST.
 7. Keep answers short. Offer to drill down rather than dumping long lists.
-8. Some fields are withheld for privacy (POPIA): contact details, tax and registration numbers, addresses, rejection reasons and documents. If asked for one, say it isn't available to the assistant, not that the CRM doesn't store it. (Added after the eval in `docs/agent-eval.md`.)
+8. Some fields are withheld for privacy (POPIA): contact details, tax and registration numbers, addresses, rejection and vetting decision reasons, vetting comments and visit notes, photos and documents. If asked for one, say it isn't available to the assistant, not that the CRM doesn't store it. (Added after the eval in `docs/agent-eval.md`; vetting fields added with the vetting tools.)
 
 ---
 
