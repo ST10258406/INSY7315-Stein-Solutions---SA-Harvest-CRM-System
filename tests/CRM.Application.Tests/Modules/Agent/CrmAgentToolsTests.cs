@@ -89,7 +89,7 @@ public class CrmAgentToolsTests
         var task = new TaskDto
         {
             Id = Guid.NewGuid(),
-            Title = $"Email {FreeTextEmail} the forms at {FreeTextUrl}",
+            Title = $"Email {FreeTextEmail} the forms at {FreeTextUrl} " + new string('y', 300),
             Description = $"Call {Phone}",
             DueDate = DateTime.UtcNow,
             Donor = new TaskDonorDto { Id = DonorId, CompanyName = "FoodCorp SA" },
@@ -267,6 +267,16 @@ public class CrmAgentToolsTests
         await _sender.Received(1).Send(
             Arg.Is<GetDonorTasksQuery>(q => q.DonorId == DonorId && q.IsCompleted == "false" && q.PageSize == 25),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetDonorTasks_ScrubsAndTruncatesTitle()
+    {
+        var output = await InvokeAsync("get_donor_tasks", new() { ["donorId"] = DonorId });
+
+        var title = JsonDocument.Parse(output).RootElement.GetProperty("items")[0].GetProperty("title").GetString()!;
+        Assert.Contains("[removed]", title);
+        Assert.True(title.Length <= 201);
     }
 
     [Fact]

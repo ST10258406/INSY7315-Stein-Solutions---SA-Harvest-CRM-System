@@ -68,4 +68,45 @@ describe('AgentMarkdown', () => {
     expect(container.textContent).toContain('| not a table |');
     expect(container.textContent).toContain('next line');
   });
+
+  it('renders gpt-oss style tables: no outer pipes, single and Unicode dashes', () => {
+    const container = renderMd('Region | Donors\n‑‑‑ | –\nGP | 12\nKZN | 4');
+
+    expect(container.querySelectorAll('th')).toHaveLength(2);
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(container.textContent).not.toContain('|');
+  });
+
+  it('starts a table straight after a paragraph line', () => {
+    renderMd('Here is the breakdown:\n| RM | Lapsed |\n|-|-|\n| Thandi | 7 |');
+
+    expect(screen.getByText('Here is the breakdown:').tagName).toBe('SPAN');
+    expect(screen.getByText('Thandi').tagName).toBe('TD');
+  });
+
+  it('applies divider alignment and right-aligns numeric columns', () => {
+    renderMd('| Name | Status | Count |\n|:---|:---:|---|\n| A | Active | 1,204 |\n| B | Lapsed | R 3 500 |');
+
+    expect(screen.getByText('A')).toHaveStyle({ textAlign: 'left' });
+    expect(screen.getByText('Active')).toHaveStyle({ textAlign: 'center' });
+    expect(screen.getByText('1,204')).toHaveStyle({ textAlign: 'right' });
+  });
+
+  it('handles <br> and escaped pipes in cells, and pads ragged rows', () => {
+    const container = renderMd('| A | B | C |\n|---|---|---|\n| one<br>two | x \\| y |\n| <script>alert(1)</script> | 2 | 3 | 4 |');
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows[0].querySelectorAll('td')).toHaveLength(3);
+    expect(rows[0].querySelector('td br')).not.toBeNull();
+    expect(rows[0].querySelectorAll('td')[1]).toHaveTextContent('x | y');
+    expect(rows[1].querySelectorAll('td')).toHaveLength(3);
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.textContent).toContain('<script>alert(1)</script>');
+  });
+
+  it('does not treat bullets or a lone rule as a table', () => {
+    const container = renderMd('Total\n---\n- a | b\n- c');
+
+    expect(container.querySelector('table')).toBeNull();
+  });
 });

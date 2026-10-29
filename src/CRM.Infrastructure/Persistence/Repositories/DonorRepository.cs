@@ -35,6 +35,12 @@ public class DonorRepository : IDonorRepository
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
         => _context.Donors.AsNoTracking().AnyAsync(d => d.Id == id, cancellationToken);
 
+    public Task<string?> GetLegalAddressSuburbAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.DonorLegalAddresses.AsNoTracking()
+            .Where(a => a.DonorId == id)
+            .Select(a => (string?)a.Suburb)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<Donor?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
         // Tracked query (no AsNoTracking) — this feeds a write, EF needs to track
         // changes so SaveChangesAsync knows what to update.
@@ -193,16 +199,24 @@ public class DonorRepository : IDonorRepository
         catch (PostgresException ex) when (ex.SqlState == "42P01") // undefined_table: sequence doesn't exist yet
         {
             // Only ever happens on the first submission of a new calendar year.
-            // IF NOT EXISTS makes this safe if two requests race here at once —
-            // Postgres serializes the catalog write, so at most one create wins
-            // and the other just finds it already there. A sequence/table name
-            // can't be a bound parameter in any SQL dialect (identifiers aren't
-            // parameterizable), so this one raw-SQL call is unavoidable — safe
-            // per the comment above, since sequenceName is never user input.
+            // IF NOT EXISTS is not race-safe: two concurrent creates can both pass
+            // the existence check, and the loser fails with 23505 on pg_class's
+            // unique index (or 42P07). Either way the sequence now exists, so the
+            // loser just carries on. A sequence/table name can't be a bound
+            // parameter in any SQL dialect (identifiers aren't parameterizable),
+            // so this one raw-SQL call is unavoidable — safe per the comment
+            // above, since sequenceName is never user input.
+            try
+            {
 #pragma warning disable EF1002
-            await _context.Database.ExecuteSqlRawAsync(
-                $"CREATE SEQUENCE IF NOT EXISTS {sequenceName} START 1", cancellationToken);
+                await _context.Database.ExecuteSqlRawAsync(
+                    $"CREATE SEQUENCE IF NOT EXISTS {sequenceName} START 1", cancellationToken);
 #pragma warning restore EF1002
+            }
+            catch (PostgresException createEx) when (createEx.SqlState is "23505" or "42P07")
+            {
+                // Another request created it first.
+            }
 
             next = await NextValAsync(sequenceName, cancellationToken);
         }

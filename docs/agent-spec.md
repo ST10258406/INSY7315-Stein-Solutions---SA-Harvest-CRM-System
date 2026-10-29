@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft for team review |
+| **Status** | Implemented on `feat/CRM-Agent` (#167–#170). Q1 and Q2 resolved; Q3 awaits SA Harvest |
 | **Date** | 2026-10-19 |
 | **Audience** | SA Harvest CRM dev team |
 | **Users** | `SuperAdmin` only |
@@ -328,15 +328,18 @@ existing `JWT_SECRET` / `BREVO_API_KEY` pattern.
 | `Agent:TimeoutSeconds` | `60` | Whole request, including all tool rounds. |
 | `Agent:MaxToolIterations` | `5` | `FunctionInvokingChatClient.MaximumIterationsPerRequest`. |
 | `Agent:MaxHistoryMessages` | `20` | Validator limit. |
-| `Agent:MaxMessageLength` | `2000` | Validator limit. |
+| `Agent:MaxMessageLength` | `2000` | Validator limit for user messages. |
+| `Agent:MaxAssistantMessageLength` | `8000` | Validator limit for earlier assistant replies sent back as history. The client trims longer replies and keeps only the latest `MaxHistoryMessages`. |
 | `Agent:AllowedProductionProviders` | `[]` | See below. |
 | `RateLimiting:Agent:PermitLimit` | `20` | Per user. |
 | `RateLimiting:Agent:WindowMinutes` | `10` | |
 
-**Production guard:** extend `ProductionConfigurationGuard` so that in the
+**Production guard** (implemented in `ProductionConfigurationGuard`): in the
 `Production` environment, if `Agent:Enabled = true`, the configured
 `Agent:Endpoint` host must appear in `Agent:AllowedProductionProviders`.
-Otherwise startup fails. This stops a free-tier endpoint (whose terms may
+Otherwise startup fails. Separately, in every environment an enabled agent with an unknown
+provider, a non-absolute endpoint or (for `openai-compatible`) no `AGENT_API_KEY` fails at
+startup. This stops a free-tier endpoint (whose terms may
 allow training on prompts) from being pointed at real donor data by accident.
 
 Add all non-secret keys to `.env.example` and `docker-compose.yml`. Optionally
@@ -476,8 +479,8 @@ compare providers.
 
 | # | Question | Proposed answer | Owner |
 |---|---|---|---|
-| Q1 | Is `Microsoft.Extensions.AI.Abstractions` in CRM.Application acceptable under our layer rules? | Yes; it's an abstraction like MediatR. Add a line to `copilot-instructions.md` saying so, so reviews don't flag it. | Team |
-| Q2 | Should the audit row store the user's question text? | Yes, truncated to 500 chars, for accountability. | Team / SA Harvest |
+| Q1 | **Resolved: yes.** Is `Microsoft.Extensions.AI.Abstractions` in CRM.Application acceptable under our layer rules? | Yes; it's an abstraction like MediatR. Add a line to `copilot-instructions.md` saying so, so reviews don't flag it. | Team |
+| Q2 | **Resolved: yes.** Should the audit row store the user's question text? | Yes, truncated to 500 chars, for accountability. | Team / SA Harvest |
 | Q3 | May interaction summaries (free text, may contain personal data) be sent to the model? | Yes in dev/demo with seed data; decide for production during POPIA sign-off. | SA Harvest |
 | Q4 | Which hosted free provider for the shared demo? | Groq (Llama 3.3 70B), with GitHub Models as fallback. Verify current limits and terms first. | Dev team |
 | Q5 | Which production provider, and who pays? | Decide before enabling in production. | SA Harvest |

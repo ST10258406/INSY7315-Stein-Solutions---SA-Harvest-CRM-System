@@ -71,11 +71,17 @@ public class RecordMcpToolCallCommandTests
         Assert.NotEqual(first.EntityId, second.EntityId);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("delete_donor")]
-    public void Validator_RejectsUnknownTool(string tool) =>
-        Assert.False(_validator.Validate(new RecordMcpToolCallCommand { Tool = tool }).IsValid);
+    [Fact]
+    public void Validator_RejectsEmptyOrOversizedToolName()
+    {
+        Assert.False(_validator.Validate(new RecordMcpToolCallCommand { Tool = "" }).IsValid);
+        Assert.False(_validator.Validate(new RecordMcpToolCallCommand { Tool = new string('x', 101) }).IsValid);
+    }
+
+    // A call to a tool that doesn't exist is still an attempt worth an audit row.
+    [Fact]
+    public void Validator_AcceptsUnknownToolName() =>
+        Assert.True(_validator.Validate(new RecordMcpToolCallCommand { Tool = "delete_donor" }).IsValid);
 
     [Fact]
     public void Validator_AcceptsEveryDefinedTool() =>

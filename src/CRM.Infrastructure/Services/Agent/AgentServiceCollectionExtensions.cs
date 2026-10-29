@@ -1,6 +1,7 @@
 namespace CRM.Infrastructure.Services.Agent;
 
 using System.ClientModel;
+using CRM.Application.Common.Exceptions;
 using CRM.Application.Modules.Agent;
 using CRM.Application.Modules.Agent.Tools;
 using Microsoft.Extensions.AI;
@@ -24,22 +25,37 @@ public static class AgentServiceCollectionExtensions
 
         services.AddScoped<CrmAgentTools>();
 
-        services.AddChatClient(_ => CreateProviderClient(options, configuration["AGENT_API_KEY"]))
+        var apiKey = configuration["AGENT_API_KEY"];
+
+        // Fail at startup, not on the first request, when an enabled agent is misconfigured.
+        if (options.Enabled && Validate(options, apiKey) is { } error)
+            throw new InvalidOperationException(error);
+
+        services.AddChatClient(_ => options.Enabled
+                ? CreateProviderClient(options, apiKey!)
+                // Resolved when the handler is built, so a disabled agent maps to 503 like any other outage.
+                : throw new AgentUnavailableException("The agent is disabled (Agent:Enabled = false)."))
             .UseFunctionInvocation(configure: f => f.MaximumIterationsPerRequest = options.MaxToolIterations);
 
         return services;
     }
 
-    private static IChatClient CreateProviderClient(AgentOptions options, string? apiKey) =>
-        options.Provider switch
-        {
-            "ollama" => new OllamaApiClient(new Uri(options.Endpoint), options.Model),
-            "openai-compatible" => new OpenAIClient(
-                    new ApiKeyCredential(apiKey ?? throw new InvalidOperationException(
-                        "AGENT_API_KEY is not set. Add it to .env (local) or Azure Key Vault (production).")),
-                    new OpenAIClientOptions { Endpoint = new Uri(options.Endpoint) })
+    /// <summary>The startup error for an enabled agent's settings, or null when they are usable.</summary>
+    public static string? Validate(AgentOptions options, string? apiKey)
+    {
+        if (options.Provider is not ("ollama" or "openai-compatible"))
+            return $"Unknown Agent:Provider '{options.Provider}'. Use 'ollama' or 'openai-compatible'.";
+        if (!Uri.TryCreate(options.Endpoint, UriKind.Absolute, out _))
+            return $"Agent:Endpoint '{options.Endpoint}' must be an absolute URL.";
+        if (options.Provider == "openai-compatible" && string.IsNullOrWhiteSpace(apiKey))
+            return "AGENT_API_KEY is not set. Add it to .env (local) or Azure Key Vault (production).";
+        return null;
+    }
+
+    private static IChatClient CreateProviderClient(AgentOptions options, string apiKey) =>
+        options.Provider == "ollama"
+            ? new OllamaApiClient(new Uri(options.Endpoint), options.Model)
+            : new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions { Endpoint = new Uri(options.Endpoint) })
                 .GetChatClient(options.Model)
-                .AsIChatClient(),
-            _ => throw new InvalidOperationException($"Unknown Agent:Provider '{options.Provider}'. Use 'ollama' or 'openai-compatible'."),
-        };
+                .AsIChatClient();
 }

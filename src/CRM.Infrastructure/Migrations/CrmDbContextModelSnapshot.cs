@@ -1283,6 +1283,582 @@ namespace CRM.Infrastructure.Migrations
                     b.ToTable("user_roles", (string)null);
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingAssessmentDetails", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AddressDetail")
+                        .HasColumnType("text")
+                        .HasColumnName("address_detail");
+
+                    b.Property<string>("AddressPhysical")
+                        .HasColumnType("text")
+                        .HasColumnName("address_physical");
+
+                    b.Property<int>("AfricanServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("african_served");
+
+                    b.PrimitiveCollection<string>("BeneficiaryAgeGroups")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("beneficiary_age_groups");
+
+                    b.PrimitiveCollection<string>("BeneficiaryGenders")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("beneficiary_genders");
+
+                    b.PrimitiveCollection<string>("BeneficiaryRaces")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("beneficiary_races");
+
+                    b.Property<string>("CertificatesPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("certificates_path");
+
+                    b.Property<int>("ColouredServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("coloured_served");
+
+                    b.Property<bool>("ConsentFormSigned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("consent_form_signed");
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("contact_email");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<string>("ContactPhone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("contact_phone");
+
+                    b.PrimitiveCollection<string>("CoreFocusAreas")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("core_focus_areas");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("DeliveryAccessEase")
+                        .HasColumnType("boolean")
+                        .HasColumnName("delivery_access_ease");
+
+                    b.Property<string>("DigitalCapabilities")
+                        .HasColumnType("text")
+                        .HasColumnName("digital_capabilities");
+
+                    b.Property<string>("DistributionChannel")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("distribution_channel");
+
+                    b.Property<string>("FacilityPhotosPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("facility_photos_path");
+
+                    b.PrimitiveCollection<string>("FeedingDays")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("feeding_days");
+
+                    b.Property<string>("FeedingFrequency")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("feeding_frequency");
+
+                    b.Property<int>("FemalesServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("females_served");
+
+                    b.PrimitiveCollection<string>("FoodStorageTypes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("food_storage_types");
+
+                    b.Property<int>("FullTimeFemales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("full_time_females");
+
+                    b.Property<int>("FullTimeMales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("full_time_males");
+
+                    b.Property<int>("IndianAsianServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("indian_asian_served");
+
+                    b.PrimitiveCollection<string>("InfrastructureChecks")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("infrastructure_checks");
+
+                    b.Property<bool>("IsRegisteredDsd")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_registered_dsd");
+
+                    b.Property<bool>("IsRegisteredNpo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_registered_npo");
+
+                    b.Property<bool>("KitchenClean")
+                        .HasColumnType("boolean")
+                        .HasColumnName("kitchen_clean");
+
+                    b.Property<string>("KitchenStoragePhotosPath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("kitchen_storage_photos_path");
+
+                    b.Property<DateOnly?>("LastFedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("last_fed_date");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("legal_name");
+
+                    b.Property<int>("MalesServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("males_served");
+
+                    b.PrimitiveCollection<string>("MealsProvided")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("meals_provided");
+
+                    b.Property<string>("NpoCertificatePath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("npo_certificate_path");
+
+                    b.Property<string>("OfficerComments")
+                        .HasColumnType("text")
+                        .HasColumnName("officer_comments");
+
+                    b.Property<bool>("ParkingAndSecurity")
+                        .HasColumnType("boolean")
+                        .HasColumnName("parking_and_security");
+
+                    b.Property<string>("PboCertificatePath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("pbo_certificate_path");
+
+                    b.Property<bool>("PestFree")
+                        .HasColumnType("boolean")
+                        .HasColumnName("pest_free");
+
+                    b.Property<string>("PoliceStationProximity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("police_station_proximity");
+
+                    b.Property<bool>("PolicyDocumentPresent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("policy_document_present");
+
+                    b.Property<string>("ProgrammesSummary")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("programmes_summary");
+
+                    b.Property<string>("ProposalCapabilities")
+                        .HasColumnType("text")
+                        .HasColumnName("proposal_capabilities");
+
+                    b.Property<string>("Province")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("province");
+
+                    b.Property<string>("SaHarvestReliance")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("sa_harvest_reliance");
+
+                    b.Property<bool>("SlaSigned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("sla_signed");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.PrimitiveCollection<string>("TargetPopulation")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("target_population");
+
+                    b.Property<bool>("ToiletFacilities")
+                        .HasColumnType("boolean")
+                        .HasColumnName("toilet_facilities");
+
+                    b.Property<int>("TotalPeopleServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_people_served");
+
+                    b.Property<string>("TransportCapacity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("transport_capacity");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("VolunteersCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("volunteers_count");
+
+                    b.Property<bool>("WaterAccess")
+                        .HasColumnType("boolean")
+                        .HasColumnName("water_access");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("website");
+
+                    b.Property<string>("What3Words")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("what3words");
+
+                    b.Property<int>("WhiteServed")
+                        .HasColumnType("integer")
+                        .HasColumnName("white_served");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_vetting_assessment_details_submission");
+
+                    b.ToTable("vetting_assessment_details", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingEvidencePhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BlobStoragePath")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("blob_storage_path");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("file_name");
+
+                    b.Property<bool>("IsCaptured")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_captured");
+
+                    b.Property<int>("ShotIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("shot_index");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId", "ShotIndex")
+                        .IsUnique()
+                        .HasDatabaseName("idx_vetting_evidence_photos_submission_shot");
+
+                    b.ToTable("vetting_evidence_photos", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_vetting_evidence_photos_shot_index", "shot_index BETWEEN 0 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingFlag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.ToTable("vetting_flags", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingOfficer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssignedRegion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("assigned_region");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("full_name");
+
+                    b.Property<string>("Initials")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("character varying(5)")
+                        .HasColumnName("initials");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("WorkloadCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("workload_count");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("vetting_officers", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingSiteVisit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DonorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("donor_id");
+
+                    b.Property<string>("LocationLabel")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("location_label");
+
+                    b.Property<Guid>("OfficerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("officer_id");
+
+                    b.Property<DateOnly>("ScheduledDate")
+                        .HasColumnType("date")
+                        .HasColumnName("scheduled_date");
+
+                    b.Property<TimeOnly>("ScheduledTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("scheduled_time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VisitNotes")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("visit_notes");
+
+                    b.Property<string>("VisitStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("visit_status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonorId");
+
+                    b.HasIndex("OfficerId");
+
+                    b.HasIndex("ScheduledDate", "OfficerId")
+                        .HasDatabaseName("idx_vetting_site_visits_date_officer");
+
+                    b.ToTable("vetting_site_visits", (string)null);
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AdminDecision")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("admin_decision");
+
+                    b.Property<string>("ApprovalState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("approval_state");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DecisionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("decision_reason");
+
+                    b.Property<Guid>("DonorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("donor_id");
+
+                    b.Property<string>("FormReference")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("form_reference");
+
+                    b.Property<Guid>("OfficerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("officer_id");
+
+                    b.Property<Guid?>("SiteVisitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("site_visit_id");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovalState")
+                        .HasDatabaseName("idx_vetting_submissions_approval_state");
+
+                    b.HasIndex("DonorId")
+                        .HasDatabaseName("idx_vetting_submissions_donor");
+
+                    b.HasIndex("FormReference")
+                        .IsUnique()
+                        .HasDatabaseName("idx_vetting_submissions_form_reference");
+
+                    b.HasIndex("OfficerId")
+                        .HasDatabaseName("idx_vetting_submissions_officer");
+
+                    b.HasIndex("SiteVisitId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_vetting_submissions_site_visit");
+
+                    b.ToTable("vetting_submissions", (string)null);
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("CRM.Domain.Entities.User", "User")
@@ -1584,6 +2160,84 @@ namespace CRM.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingAssessmentDetails", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingSubmission", "Submission")
+                        .WithOne("Details")
+                        .HasForeignKey("CRM.Domain.Entities.Vetting.VettingAssessmentDetails", "SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingEvidencePhoto", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingSubmission", "Submission")
+                        .WithMany("Photos")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingFlag", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingSubmission", "Submission")
+                        .WithMany("Flags")
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Submission");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingSiteVisit", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Donor", "Donor")
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingOfficer", "Officer")
+                        .WithMany("SiteVisits")
+                        .HasForeignKey("OfficerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Donor");
+
+                    b.Navigation("Officer");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingSubmission", b =>
+                {
+                    b.HasOne("CRM.Domain.Entities.Donor", "Donor")
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingOfficer", "Officer")
+                        .WithMany("Submissions")
+                        .HasForeignKey("OfficerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CRM.Domain.Entities.Vetting.VettingSiteVisit", "SiteVisit")
+                        .WithMany()
+                        .HasForeignKey("SiteVisitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Donor");
+
+                    b.Navigation("Officer");
+
+                    b.Navigation("SiteVisit");
+                });
+
             modelBuilder.Entity("CRM.Domain.Entities.Donor", b =>
                 {
                     b.Navigation("Approvals");
@@ -1611,6 +2265,22 @@ namespace CRM.Infrastructure.Migrations
             modelBuilder.Entity("CRM.Domain.Entities.User", b =>
                 {
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingOfficer", b =>
+                {
+                    b.Navigation("SiteVisits");
+
+                    b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("CRM.Domain.Entities.Vetting.VettingSubmission", b =>
+                {
+                    b.Navigation("Details");
+
+                    b.Navigation("Flags");
+
+                    b.Navigation("Photos");
                 });
 #pragma warning restore 612, 618
         }

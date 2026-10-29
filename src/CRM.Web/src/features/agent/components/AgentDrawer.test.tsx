@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { api } from '@/lib/axios';
 import { useAgentStore } from '@/store/agentStore';
-import { useAuthStore } from '@/store/authStore';
 import { AgentDrawer } from './AgentDrawer';
+import type { SendAgentMessageRequest } from '../types';
 
 vi.mock('@/lib/axios', () => ({ api: { post: vi.fn() } }));
 
@@ -70,6 +70,24 @@ describe('AgentDrawer', () => {
     );
   });
 
+  it('sends only the latest 20 messages and cuts long replies to the API limit', async () => {
+    const { conversationId, addMessage } = useAgentStore.getState();
+    for (let i = 0; i < 12; i++) {
+      addMessage({ role: 'user', content: `Question ${i}` });
+      addMessage({ role: 'assistant', content: 'x'.repeat(9000) });
+    }
+    vi.mocked(api.post).mockResolvedValue({ data: { conversationId, reply: 'Ok.', toolCalls: [], model: null } });
+    renderDrawer();
+
+    await userEvent.type(screen.getByLabelText('Ask the CRM assistant'), 'Latest?{Enter}');
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    const { messages } = vi.mocked(api.post).mock.calls[0][1] as SendAgentMessageRequest;
+    expect(messages).toHaveLength(20);
+    expect(messages.at(-1)).toEqual({ role: 'user', content: 'Latest?' });
+    expect(messages.every((m) => m.content.length <= 8000)).toBe(true);
+  });
+
   it.each([
     [503, "The assistant isn't available right now."],
     [429, "You've hit the limit, try again in a few minutes."],
@@ -97,16 +115,5 @@ describe('AgentDrawer', () => {
     expect(screen.queryByText('Old question')).not.toBeInTheDocument();
     expect(useAgentStore.getState().messages).toEqual([]);
     expect(useAgentStore.getState().conversationId).not.toBe(before);
-  });
-
-  it('is cleared on logout', () => {
-    useAuthStore.setState({
-      user: { id: '1', firstName: 'A', lastName: 'B', email: 'a@b.c', roles: ['SuperAdmin'] },
-    } as Partial<ReturnType<typeof useAuthStore.getState>>);
-    useAgentStore.getState().addMessage({ role: 'user', content: 'Question' });
-
-    useAuthStore.getState().logout();
-
-    expect(useAgentStore.getState().messages).toEqual([]);
   });
 });

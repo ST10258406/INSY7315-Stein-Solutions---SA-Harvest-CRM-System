@@ -1,15 +1,37 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, Sun, Moon } from 'lucide-react';
+import { ChevronDown, LogOut, Sun, Moon, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { NotificationBell } from '@/features/notifications';
 import { paths } from '@/routes/paths';
+import { useVettingSubmissions } from '@/features/vetting/hooks';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import logoImg from '@/assets/sa-harvest-logo.png';
-import { ADMIN_ROLES, NAV_ITEMS } from './navItems';
+import { ADMIN_ROLES, NAV_ITEMS, PROCUREMENT_OR_ABOVE } from './navItems';
 
 function isRouteActive(pathname: string, itemPath: string) {
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
+}
+
+function pillClass(isActive: boolean) {
+  return `flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
+    isActive
+      ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
+      : 'border-border bg-pill text-pill-ink hover:border-foreground'
+  }`;
+}
+
+function PillIcon({ icon: Icon, isActive }: { icon: LucideIcon; isActive: boolean }) {
+  return (
+    <span
+      className={`flex h-6 w-6 items-center justify-center rounded-full ${
+        isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+    </span>
+  );
 }
 
 export function TopBar() {
@@ -17,12 +39,18 @@ export function TopBar() {
   const user = useAuthStore((s) => s.user);
   const roles = user?.roles ?? [];
   const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
+  const isProcurementOrAbove = roles.some((role) => PROCUREMENT_OR_ABOVE.includes(role));
+  // Reuses the list endpoint's total (pageSize=1) rather than a dedicated count endpoint. Admins only.
+  const { data: readyPage } = useVettingSubmissions({ approvalState: 'Ready', pageSize: 1 }, { enabled: isAdmin });
+  const reviewCount = readyPage?.pagination?.totalCount ?? 0;
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   // Filtered before render — Admin-only items never reach the DOM for other roles.
-  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.procurementOrAbove || isProcurementOrAbove),
+  );
 
   const initials = user ? `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase() : '';
 
@@ -45,25 +73,48 @@ export function TopBar() {
       <nav className="flex min-w-0 items-center gap-2 overflow-x-auto">
         {visibleNavItems.map((item) => {
           const isActive = isRouteActive(location.pathname, item.path);
-          const Icon = item.icon;
+
+          if (item.children) {
+            return (
+              <DropdownMenu key={item.path}>
+                <DropdownMenuTrigger className={pillClass(isActive)}>
+                  <PillIcon icon={item.icon} isActive={isActive} />
+                  <span>{item.label}</span>
+                  {reviewCount > 0 && item.children.some((c) => c.showReviewCount) && isAdmin && (
+                    <span className="rounded-full bg-destructive px-1.5 text-[10.5px] font-bold text-white" aria-label={`${reviewCount} waiting for review`}>
+                      {reviewCount}
+                    </span>
+                  )}
+                  <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-auto min-w-44 p-1.5">
+                  {item.children
+                    .filter((child) => !child.adminOnly || isAdmin)
+                    .map((child) => (
+                      <DropdownMenuItem
+                        key={child.path}
+                        render={<Link to={child.path} />}
+                        className="text-[13px] font-semibold"
+                      >
+                        {child.label}
+                        {child.showReviewCount && reviewCount > 0 && (
+                          <span className="ml-auto rounded-full bg-destructive/10 px-1.5 text-[11px] font-bold text-destructive">{reviewCount}</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
           return (
             <Link
               key={item.path}
               to={item.path}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex h-10 items-center gap-2 rounded-full border pl-2 pr-4 text-[13.5px] font-semibold whitespace-nowrap transition-colors ${
-                isActive
-                  ? 'border-pill-active-bg bg-pill-active-bg text-pill-active-fg font-bold'
-                  : 'border-border bg-pill text-pill-ink hover:border-foreground'
-              }`}
+              className={pillClass(isActive)}
             >
-              <span
-                className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                  isActive ? 'bg-brand/20 text-brand' : 'bg-pill-icon-bg text-icon'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-              </span>
+              <PillIcon icon={item.icon} isActive={isActive} />
               <span>{item.label}</span>
             </Link>
           );

@@ -3,6 +3,7 @@ import { useAgentStore } from '@/store/agentStore';
 import { useSendAgentMessage } from '../hooks/useSendAgentMessage';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentComposer } from './AgentComposer';
+import { AGENT_ASSISTANT_MAX_LENGTH, AGENT_MAX_HISTORY_MESSAGES } from '../schemas/agentMessageSchema';
 import type { ApiError } from '../types';
 
 const SUGGESTED_PROMPTS = [
@@ -33,10 +34,16 @@ export function AgentDrawer({ open, onOpenChange }: AgentDrawerProps) {
   const sendMessage = useSendAgentMessage();
 
   const send = (content: string) => {
-    const history = [...messages, { role: 'user' as const, content }];
+    // Only the latest turns, and long replies cut down, so the request stays within the API's limits.
+    const history = [...messages, { role: 'user' as const, content }]
+      .slice(-AGENT_MAX_HISTORY_MESSAGES)
+      .map(({ role, content }) => ({
+        role,
+        content: role === 'assistant' ? content.slice(0, AGENT_ASSISTANT_MAX_LENGTH) : content,
+      }));
     addMessage({ role: 'user', content });
     sendMessage.mutate(
-      { conversationId, messages: history.map(({ role, content }) => ({ role, content })) },
+      { conversationId, messages: history },
       {
         onSuccess: (reply) => {
           // Ignore a reply that lands after "New chat" started a different conversation.

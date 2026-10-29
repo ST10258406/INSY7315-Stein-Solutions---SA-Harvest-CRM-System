@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 /**
  * Renders the small Markdown subset the agent is told to use — paragraphs, headings,
@@ -14,8 +14,14 @@ export function AgentMarkdown({ content }: { content: string }) {
 const BULLET = /^\s*[-*•]\s+(.*)$/;
 const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
 const HEADING = /^\s*#{1,6}\s+(.*)$/;
-const TABLE_ROW = /^\s*\|.*\|\s*$/;
-const TABLE_DIVIDER = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+// Divider cells: dashes with optional alignment colons. gpt-oss often writes Unicode dashes
+// (‐ ‑ ‒ – — ― −) instead of '-', so accept those too.
+const DIVIDER_CELL = /^:?[-\u2010-\u2015\u2212]+:?$/;
+const PIPE = /(?<!\\)\|/;
+const BR = /<br\s*\/?>/i;
+const NUMERIC = /^[-+]?(R\s?)?[\d\s.,]+%?$/;
+
+type Align = 'left' | 'center' | 'right';
 
 function parseBlocks(lines: string[]): ReactNode[] {
   const blocks: ReactNode[] = [];
@@ -26,6 +32,7 @@ function parseBlocks(lines: string[]): ReactNode[] {
     while (i < lines.length && test(lines[i])) taken.push(lines[i++]);
     return taken;
   };
+  const tableStartsAt = (n: number) => PIPE.test(lines[n] ?? '') && isDivider(lines[n + 1] ?? '');
 
   while (i < lines.length) {
     const line = lines[i];
@@ -56,26 +63,35 @@ function parseBlocks(lines: string[]): ReactNode[] {
           ))}
         </ol>,
       );
-    } else if (TABLE_ROW.test(line) && TABLE_DIVIDER.test(lines[i + 1] ?? '')) {
-      const [header, , ...rows] = takeWhile((l) => TABLE_ROW.test(l) || TABLE_DIVIDER.test(l)).map(cells);
+    } else if (tableStartsAt(i)) {
+      const header = cells(lines[i]);
+      const aligns = alignments(lines[i + 1], header.length);
+      i += 2;
+      const rows = takeWhile((l) => PIPE.test(l) && !!l.trim())
+        .filter((l) => !isDivider(l))
+        .map((l) => fit(cells(l), header.length));
+      header.forEach((_, c) => {
+        const column = rows.map((row) => row[c]).filter(Boolean);
+        if (!aligns[c] && column.length > 0 && column.every((cell) => NUMERIC.test(cell))) aligns[c] = 'right';
+      });
       blocks.push(
-        <div key={key} className="overflow-x-auto">
+        <div key={key} className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full border-collapse text-left text-[12.5px]">
-            <thead>
+            <thead className="bg-hover">
               <tr>
                 {header.map((cell, n) => (
-                  <th key={n} className="border-b border-border px-2 py-1 font-bold">
-                    {inline(cell)}
+                  <th key={n} style={{ textAlign: aligns[n] }} className="whitespace-nowrap px-2.5 py-1.5 font-bold">
+                    {cellContent(cell)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((row, r) => (
-                <tr key={r}>
+                <tr key={r} className="border-t border-border/70 even:bg-hover/40">
                   {row.map((cell, n) => (
-                    <td key={n} className="border-b border-border/60 px-2 py-1">
-                      {inline(cell)}
+                    <td key={n} style={{ textAlign: aligns[n] }} className="px-2.5 py-1.5 align-top">
+                      {cellContent(cell)}
                     </td>
                   ))}
                 </tr>
@@ -88,7 +104,7 @@ function parseBlocks(lines: string[]): ReactNode[] {
       // Always consumes the current line, so e.g. a lone "| a |" row can't stall the loop.
       const paragraph = [
         lines[i++],
-        ...takeWhile((l) => !!l.trim() && !HEADING.test(l) && !BULLET.test(l) && !NUMBERED.test(l) && !TABLE_ROW.test(l)),
+        ...takeWhile((l) => !!l.trim() && !HEADING.test(l) && !BULLET.test(l) && !NUMBERED.test(l) && !tableStartsAt(i)),
       ];
       blocks.push(
         <p key={key} className="m-0">
@@ -106,8 +122,43 @@ function parseBlocks(lines: string[]): ReactNode[] {
   return blocks;
 }
 
+// Outer pipes are optional, as in GFM; `\|` is a literal pipe inside a cell.
 function cells(row: string): string[] {
-  return row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  return row
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+    .split(PIPE)
+    .map((c) => c.replace(/\\\|/g, '|').trim());
+}
+
+function isDivider(line: string): boolean {
+  if (!/[-\u2010-\u2015\u2212]/.test(line)) return false;
+  const parts = cells(line);
+  return (PIPE.test(line) || parts.length > 1) && parts.every((c) => DIVIDER_CELL.test(c.replace(/\s+/g, '')));
+}
+
+function alignments(divider: string, width: number): (Align | undefined)[] {
+  return fit(cells(divider), width).map((c) => {
+    const left = c.startsWith(':');
+    const right = c.endsWith(':') && c.length > 1;
+    return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined;
+  });
+}
+
+// Ragged rows are padded or trimmed to the header width.
+function fit(row: string[], width: number): string[] {
+  return Array.from({ length: width }, (_, n) => row[n] ?? '');
+}
+
+// `<br>` in a cell becomes a React line break; the rest stays escaped text.
+function cellContent(cell: string): ReactNode[] {
+  return cell.split(BR).map((part, n) => (
+    <Fragment key={n}>
+      {n > 0 && <br />}
+      {inline(part.trim())}
+    </Fragment>
+  ));
 }
 
 // **bold**, `code`, *italic* / _italic_, and [text](url) → text only.

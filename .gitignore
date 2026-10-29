@@ -6,3 +6,6 @@ obj/
 
 # MCP client configs can hold a bearer token (docs/mcp-spec.md §8)
 .mcp.json
+
+# Showreel video renders and source (large binaries, not part of the app)
+showreel/

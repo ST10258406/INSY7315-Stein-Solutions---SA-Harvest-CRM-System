@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { paths } from '@/routes/paths';
 import { donorKeys, fetchDonors } from '@/features/donors/hooks';
 import { DonorStatusBadge } from '@/features/donors/components/DonorStatusBadge';
-import { ADMIN_ROLES, NAV_ITEMS } from '@/features/shell/navItems';
+import { ADMIN_ROLES, NAV_ITEMS, PROCUREMENT_OR_ABOVE } from '@/features/shell/navItems';
 
 // Matches the ProcurementOrAbove policy on GET /api/v1/donors (cosmetic; the API enforces it).
 const DONOR_SEARCH_ROLES = ['Procurement', 'Admin', 'SuperAdmin'];
@@ -34,6 +34,7 @@ export function QuickSearchDialog({ open, onOpenChange }: QuickSearchDialogProps
   const roles = useAuthStore((state) => state.user?.roles ?? []);
   const canSearchDonors = roles.some((role) => DONOR_SEARCH_ROLES.includes(role));
   const isAdmin = roles.some((role) => ADMIN_ROLES.includes(role));
+  const isProcurementOrAbove = roles.some((role) => PROCUREMENT_OR_ABOVE.includes(role));
 
   const [input, setInput] = useState('');
   const [term, setTerm] = useState('');
@@ -52,7 +53,9 @@ export function QuickSearchDialog({ open, onOpenChange }: QuickSearchDialogProps
   });
 
   const typed = input.trim().toLowerCase();
-  const pageResults: Result[] = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+  const pageResults: Result[] = NAV_ITEMS.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.procurementOrAbove || isProcurementOrAbove),
+  )
     .filter((item) => item.label.toLowerCase().includes(typed))
     .map((item) => ({ id: `page-${item.path}`, label: item.label, hint: 'Page', to: item.path }));
 

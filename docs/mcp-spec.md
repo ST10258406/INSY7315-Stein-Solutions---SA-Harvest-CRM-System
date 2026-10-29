@@ -244,7 +244,7 @@ services.AddMcpServer(o => { /* server info + instructions */ })
 | Key | Default | Notes |
 |---|---|---|
 | `Mcp:Enabled` | `false` | `true` only in Development, Test or Demo. The production guard throws if it is `true` in Production. |
-| `RateLimiting:Mcp:PermitLimit` | `60` | Per user. Higher than the agent's limit because one question can trigger several tool calls. |
+| `RateLimiting:Mcp:PermitLimit` | `60` | Per user, counting every `/mcp` HTTP request (`initialize` and `tools/list` as well as `tools/call`). Higher than the agent's limit because one question can trigger several tool calls. |
 | `RateLimiting:Mcp:WindowMinutes` | `10` | |
 
 Add the keys to `.env.example`, set `Mcp__Enabled=true` in `docker-compose.override.yml` (local dev only), and leave it unset in Azure.
