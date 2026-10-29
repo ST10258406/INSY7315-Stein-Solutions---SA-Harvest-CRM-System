@@ -22,6 +22,13 @@ using CRM.Application.Modules.Reports.Queries.GetDonorsContactedReport;
 using CRM.Application.Modules.Tasks.Dtos;
 using CRM.Application.Modules.Tasks.Queries.GetDonorTasks;
 using CRM.Application.Modules.Tasks.Queries.GetMyTasks;
+using CRM.Application.Modules.Vetting.Officers.Dtos;
+using CRM.Application.Modules.Vetting.Officers.Queries.GetOfficers;
+using CRM.Application.Modules.Vetting.SiteVisits.Dtos;
+using CRM.Application.Modules.Vetting.SiteVisits.Queries.GetSiteVisits;
+using CRM.Application.Modules.Vetting.Submissions.Dtos;
+using CRM.Application.Modules.Vetting.Submissions.Queries.GetSubmissionById;
+using CRM.Application.Modules.Vetting.Submissions.Queries.GetSubmissions;
 using FluentValidation.Results;
 using MediatR;
 using Microsoft.Extensions.AI;
@@ -48,11 +55,15 @@ public class CrmAgentToolsTests
     private const string StreetAddress = "12 Secret Street";
     private const string FreeTextEmail = "ceo.private@gmail.com";
     private const string FreeTextUrl = "http://phish.example/login";
+    private const string IdNumber = "8001015009087";
+    private const string What3Words = "///index.home.raft";
+    private const string ContactName = "Private Contact Person";
 
     private static readonly string[] ForbiddenValues =
-        [Phone, Email, TaxNumber, RegistrationNumber, FileName, Website, AttachmentUrl, StreetAddress, FreeTextEmail, FreeTextUrl, "http", "www."];
+        [Phone, Email, TaxNumber, RegistrationNumber, FileName, Website, AttachmentUrl, StreetAddress, FreeTextEmail, FreeTextUrl, IdNumber, What3Words, ContactName, "http", "www."];
 
     private static readonly Guid DonorId = Guid.NewGuid();
+    private static readonly Guid SubmissionId = Guid.NewGuid();
 
     private readonly ISender _sender = Substitute.For<ISender>();
     private readonly Dictionary<string, AIFunction> _tools;
@@ -127,7 +138,77 @@ public class CrmAgentToolsTests
         });
         _sender.Send(Arg.Any<GetRelationshipManagersQuery>(), Arg.Any<CancellationToken>())
             .Returns([new RelationshipManagerDto { Id = Guid.NewGuid(), FullName = "Thandi Mokoena" }]);
+
+        _sender.Send(Arg.Any<GetSubmissionsQuery>(), Arg.Any<CancellationToken>()).Returns(Page(new VettingSubmissionListItemDto
+        {
+            Id = SubmissionId,
+            FormReference = "VET-2026-0001",
+            DonorCompanyName = "FoodCorp SA",
+            OfficerFullName = "Thandi Mokoena",
+            Province = "Gauteng",
+            ApprovalState = "Ready",
+            SubmittedAt = DateTime.UtcNow,
+            ActiveFlagCount = 1,
+        }));
+        _sender.Send(Arg.Any<GetSubmissionByIdQuery>(), Arg.Any<CancellationToken>()).Returns(VettingSubmission());
+        _sender.Send(Arg.Any<GetSiteVisitsQuery>(), Arg.Any<CancellationToken>()).Returns([new VettingSiteVisitDto
+        {
+            Id = Guid.NewGuid(),
+            DonorId = DonorId,
+            DonorCompanyName = "FoodCorp SA",
+            OfficerId = Guid.NewGuid(),
+            OfficerInitials = "TM",
+            ScheduledDate = new DateOnly(2026, 10, 29),
+            ScheduledTime = new TimeOnly(9, 0),
+            LocationLabel = StreetAddress,
+            VisitNotes = $"Gate code from {Phone}, ID {IdNumber}",
+            VisitStatus = "InProgress",
+        }]);
+        _sender.Send(Arg.Any<GetOfficersQuery>(), Arg.Any<CancellationToken>())
+            .Returns([new VettingOfficerDto { Id = Guid.NewGuid(), FullName = "Thandi Mokoena", Initials = "TM", AssignedRegion = "Gauteng North", WorkloadCount = 2 }]);
     }
+
+    private static VettingSubmissionDto VettingSubmission() => new()
+    {
+        Id = SubmissionId,
+        FormReference = "VET-2026-0001",
+        DonorId = DonorId,
+        DonorCompanyName = "FoodCorp SA",
+        OfficerId = Guid.NewGuid(),
+        OfficerFullName = "Thandi Mokoena",
+        ApprovalState = "Declined",
+        AdminDecision = "Declined",
+        DecisionReason = $"Director ID {IdNumber} does not match, call {Phone}",
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+        Details = new VettingAssessmentDetailsDto
+        {
+            LegalName = "FoodCorp NPC",
+            ContactName = ContactName,
+            ContactEmail = Email,
+            ContactPhone = Phone,
+            Website = Website,
+            AddressPhysical = StreetAddress,
+            AddressDetail = StreetAddress,
+            Province = "Gauteng",
+            What3Words = What3Words,
+            ProgrammesSummary = $"Soup kitchen, see {FreeTextUrl}",
+            TotalPeopleServed = 120,
+            PoliceStationProximity = StreetAddress,
+            OfficerComments = $"Registration {RegistrationNumber}, tax {TaxNumber}",
+            ProposalCapabilities = $"Email {FreeTextEmail}",
+            DigitalCapabilities = Website,
+        },
+        Flags = [new VettingFlagDto
+        {
+            Id = Guid.NewGuid(),
+            Description = $"Contact {FreeTextEmail} about {FreeTextUrl} " + new string('z', 400),
+            Source = "Reviewer",
+            CreatedAt = DateTime.UtcNow,
+        }],
+        Photos = [new VettingPhotoDto { ShotIndex = 0, Category = "Kitchen", IsCaptured = true, FileName = FileName, CapturedAt = DateTime.UtcNow }],
+        Files = new VettingFilesDto { NpoCertificate = true },
+    };
 
     private static PaginatedResult<T> Page<T>(T item) => PaginatedResult<T>.Create([item], 1, 25, 1);
 
@@ -203,13 +284,18 @@ public class CrmAgentToolsTests
         { "run_report", new() { ["report"] = "by_type" } },
         { "run_report", new() { ["report"] = "contacted" } },
         { "list_relationship_managers", new() },
+        { "list_vetting_submissions", new() },
+        { "get_vetting_submission", new() { ["submissionId"] = SubmissionId } },
+        { "list_site_visits", new() { ["date"] = "2026-10-29" } },
+        { "list_vetting_officers", new() },
     };
 
     [Fact]
-    public void AsTools_ExposesAllTenSpecTools() =>
+    public void AsTools_ExposesAllSpecTools() =>
         Assert.Equal(
             ["get_dashboard_stats", "get_donor", "get_donor_interactions", "get_donor_tasks", "get_manager_activity",
-             "get_my_tasks", "list_approvals", "list_relationship_managers", "run_report", "search_donors"],
+             "get_my_tasks", "get_vetting_submission", "list_approvals", "list_relationship_managers", "list_site_visits",
+             "list_vetting_officers", "list_vetting_submissions", "run_report", "search_donors"],
             _tools.Keys.Order());
 
     [Theory]
@@ -318,6 +404,70 @@ public class CrmAgentToolsTests
         var output = await InvokeAsync("run_report", new() { ["report"] = "everything" });
 
         Assert.Contains("\"error\"", output);
+    }
+
+    [Fact]
+    public async Task ListVettingSubmissions_CapsPageSizeAndPassesFilters()
+    {
+        var officerId = Guid.NewGuid();
+
+        await InvokeAsync("list_vetting_submissions", new() { ["approvalState"] = "Ready", ["officerId"] = officerId, ["page"] = 2 });
+
+        await _sender.Received(1).Send(
+            Arg.Is<GetSubmissionsQuery>(q => q.PageSize == 25 && q.Page == 2 && q.ApprovalState == "Ready" && q.OfficerId == officerId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetVettingSubmission_ScrubsAndTruncatesFlags()
+    {
+        var output = JsonDocument.Parse(await InvokeAsync("get_vetting_submission", new() { ["submissionId"] = SubmissionId })).RootElement;
+
+        await _sender.Received(1).Send(Arg.Is<GetSubmissionByIdQuery>(q => q.Id == SubmissionId), Arg.Any<CancellationToken>());
+        var flag = output.GetProperty("flags")[0].GetProperty("description").GetString()!;
+        Assert.Contains("[removed]", flag);
+        Assert.True(flag.Length <= 301);
+        Assert.Equal(1, output.GetProperty("photosCaptured").GetInt32());
+        Assert.Equal(120, output.GetProperty("assessment").GetProperty("totalPeopleServed").GetInt32());
+        Assert.False(output.TryGetProperty("decisionReason", out _));
+    }
+
+    [Fact]
+    public async Task ListSiteVisits_PassesDateAndOfficer()
+    {
+        var officerId = Guid.NewGuid();
+
+        await InvokeAsync("list_site_visits", new() { ["date"] = "2026-10-29", ["officerId"] = officerId });
+
+        await _sender.Received(1).Send(
+            Arg.Is<GetSiteVisitsQuery>(q => q.Date == new DateOnly(2026, 10, 29) && q.OfficerId == officerId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("list_site_visits")]
+    [InlineData("list_vetting_officers")]
+    public async Task UnpagedVettingLists_AreCappedAt25(string tool)
+    {
+        _sender.Send(Arg.Any<GetSiteVisitsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Range(0, 30).Select(_ => new VettingSiteVisitDto { Id = Guid.NewGuid() }).ToList());
+        _sender.Send(Arg.Any<GetOfficersQuery>(), Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Range(0, 30).Select(_ => new VettingOfficerDto { Id = Guid.NewGuid() }).ToList());
+
+        var output = JsonDocument.Parse(await InvokeAsync(tool, new() { ["date"] = "2026-10-29" })).RootElement;
+
+        Assert.Equal(30, output.GetProperty("totalCount").GetInt32());
+        Assert.Equal(25, output.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetVettingSubmission_NotFound_IsReturnedToTheModelAsError()
+    {
+        _sender.Send(Arg.Any<GetSubmissionByIdQuery>(), Arg.Any<CancellationToken>()).Throws(new NotFoundException("Vetting submission not found."));
+
+        var output = JsonDocument.Parse(await InvokeAsync("get_vetting_submission", new() { ["submissionId"] = Guid.NewGuid() })).RootElement;
+
+        Assert.Equal("Vetting submission not found.", output.GetProperty("error").GetString());
     }
 
     [Fact]

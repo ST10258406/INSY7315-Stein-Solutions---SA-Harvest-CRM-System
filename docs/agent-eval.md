@@ -60,23 +60,25 @@ EVAL_EMAIL=<superadmin email> EVAL_PASSWORD=<password> EVAL_LABEL=groq-gpt-oss-1
 - `EVAL_ONLY=Q01,Q07` runs a subset.
 - `node scripts/agent-eval/run-eval.mjs --self-test` checks the scoring logic without an API.
 
-The agent endpoint allows 20 requests per 10 minutes per user. A full run is 16 requests, so wait
-10 minutes between full runs, or the script waits out a `429` once and then records errors. A
-provider's own rate limit shows up as `AGENT_UNAVAILABLE` errors.
+The agent endpoint allows 20 requests per 10 minutes per user. A full run is 20 requests (16
+before the vetting questions Q17–Q20), the whole window, so wait 10 minutes between full runs,
+or the script waits out a `429` once and then records errors. A provider's own rate limit shows
+up as `AGENT_UNAVAILABLE` errors.
 
 The script prints one row for the table below and writes every reply to
 `scripts/agent-eval/results/` (git-ignored).
 
 ## Results
 
-Answers: correct after review, out of 16. Tools: expected tools called. Errors: requests that
-failed (503, 429). Latency: median per question, including tool calls.
+Answers: correct after review, out of 16 (20 once the vetting questions were added). Tools:
+expected tools called. Errors: requests that failed (503, 429). Latency: median per question, including tool calls.
 
 | Date | Label | Model | Answers | Tools | Errors | Median latency |
 |---|---|---|---|---|---|---|
 | 2026-10-29 | groq | openai/gpt-oss-120b | not valid (see notes) | 16/16 | 0 | 11.1 s |
 | 2026-10-29 | groq (re-run) | openai/gpt-oss-120b | not valid (same database) | 16/16 | 0 | 12.6 s |
 | 2026-10-29 | groq (fresh seed) | openai/gpt-oss-120b | **16/16** | 16/16 | 0 | 5.4 s |
+| 2026-10-29 | groq-vetting (fresh seed) | openai/gpt-oss-120b | **20/20** | 20/20 | 0 | 18.6 s |
 
 Notes on wrong answers (question id, what went wrong):
 
@@ -111,6 +113,20 @@ Notes on wrong answers (question id, what went wrong):
   - Q03 says the CRM "does not store or expose" the reason, which is better but still hedges.
     Its pointer to the Approvals screen is right, since the approval row shows the reason, but
     the exact menu path it gives is its own guess.
+- **Vetting tools (19:57 SAST), fresh seed:** the first run with Q17–Q20 and the four vetting
+  tools. All 20 answers were checked by hand against the expected answers and are correct, and
+  no contact details leaked (Q16).
+  - Q17 says no submissions are waiting (the seed has none). Q18 lists the 3 visits with
+    officer initials; Q20 called `list_vetting_officers` on its own to resolve TM to Thandi
+    Mokoena.
+  - Q18 shows raw status values (`InProgress`, `ToDo`) and Q20 shows the visit id. Both are
+    correct but untidy.
+  - Q14 again points to a "Relationship Managers screen", which doesn't exist, and says it is
+    "unable to retrieve" managers rather than that there are none. Rule 7 doesn't cover this.
+  - Q03 says the reason is "withheld", which is the wording rule 7 asks for.
+  - Median latency was 18.6 s against 5.4 s on the earlier fresh-seed run, including on
+    one-tool questions (Q17 took 27 s). That points at Groq load on the day rather than the
+    new tools; re-check on the next run.
 - Latency: list and count questions take about 1–7 s. Questions that chain two tools
   (Q10–Q12) take 16–34 s.
 
