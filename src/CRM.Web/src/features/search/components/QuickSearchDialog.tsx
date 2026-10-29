@@ -103,7 +103,7 @@ export function QuickSearchDialog({ open, onOpenChange }: QuickSearchDialogProps
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="w-[560px] max-w-[calc(100vw-2rem)]">
+      <DialogContent className="w-[560px] max-w-[calc(100vw-2rem)]" backdropClassName="backdrop-blur-[6px]">
         <DialogTitle>Quick search</DialogTitle>
         <DialogDescription>
           {canSearchDonors ? 'Find a donor by company name, or jump to a page.' : 'Jump to a page.'}

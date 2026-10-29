@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { api } from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
-import { CalendarDrawer } from './CalendarDrawer';
+import { CalendarDialog } from './CalendarDialog';
 
 vi.mock('@/lib/axios', () => ({ api: { get: vi.fn() } }));
 
@@ -44,7 +44,7 @@ function renderAs(roles: string[]) {
   render(
     <MemoryRouter initialEntries={['/dashboard']}>
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <CalendarDrawer open onOpenChange={() => {}} />
+        <CalendarDialog open onOpenChange={() => {}} />
         <LocationProbe />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -53,7 +53,7 @@ function renderAs(roles: string[]) {
 
 const calls = (url: string) => vi.mocked(api.get).mock.calls.filter(([u]) => u === url);
 
-describe('CalendarDrawer', () => {
+describe('CalendarDialog', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T08:00:00Z')); // 10:00 SAST, 20 October
@@ -92,7 +92,7 @@ describe('CalendarDrawer', () => {
     renderAs(['Admin']);
 
     fireEvent.click(await screen.findByRole('button', { name: /October 12th.*1 item, 1 overdue/ }));
-    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Send quote.*Overdue/ })).toBeInTheDocument();
   });
 
   it('shows donor follow-ups and opens the donor when clicked', async () => {
@@ -101,6 +101,23 @@ describe('CalendarDrawer', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Pick n Pay/ }));
     expect(screen.getByTestId('location')).toHaveTextContent(`/donors/${DONOR_ID}`);
+  });
+  it('opens a new task due on the double-clicked day, but not for past days', async () => {
+    mockApi([]);
+    renderAs(['Procurement']);
+    await screen.findByText('Nothing due this month.');
+
+    // Browsers send a click before the dblclick; the click is what selects the day.
+    const doubleClick = (el: HTMLElement) => {
+      fireEvent.click(el);
+      fireEvent.doubleClick(el);
+    };
+    doubleClick(screen.getByRole('button', { name: /October 19th/ }));
+    expect(screen.queryByRole('heading', { name: 'New task' })).not.toBeInTheDocument();
+
+    doubleClick(screen.getByRole('button', { name: /October 22nd/ }));
+    expect(await screen.findByRole('heading', { name: 'New task' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Due date/)).toHaveTextContent(/22/);
   });
 
   it('never requests donors for Marketing', async () => {
@@ -121,6 +138,19 @@ describe('CalendarDrawer', () => {
         params: { isCompleted: false, dueAfter: '2026-10-31', dueBefore: '2026-12-01', pageSize: 100 },
       }),
     );
+  });
+
+  it('jumps back to today from another month', async () => {
+    mockApi([]);
+    renderAs(['Marketing']);
+    await screen.findByText('Nothing due this month.');
+    const todayButton = screen.getByRole('button', { name: 'Today' });
+    expect(todayButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /next month/i }));
+    fireEvent.click(todayButton);
+    await waitFor(() => expect(calls('/api/v1/tasks').at(-1)![1]).toMatchObject({ params: { dueAfter: '2026-09-30' } }));
+    expect(screen.getByRole('heading', { name: /Today · .*20 October/ })).toBeInTheDocument();
   });
 
   it('says when the month has more items than were loaded', async () => {

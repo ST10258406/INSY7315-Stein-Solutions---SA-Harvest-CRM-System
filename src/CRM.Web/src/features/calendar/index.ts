@@ -1,1 +1,1 @@
-export { CalendarDrawer } from './components/CalendarDrawer';
+export { CalendarDialog } from './components/CalendarDialog';

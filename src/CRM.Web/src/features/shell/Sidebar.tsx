@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { AgentDrawer } from '@/features/agent';
 import { HelpDrawer } from '@/features/help';
 import { QuickSearchDialog } from '@/features/search';
-import { CalendarDrawer } from '@/features/calendar';
+import { CalendarDialog } from '@/features/calendar';
 import { SavedFiltersMenu } from '@/features/savedFilters';
 
 // Saved filters apply to the donor list, which is ProcurementOrAbove (cosmetic; the API enforces it).
@@ -46,7 +46,7 @@ export function Sidebar() {
   const overlays = (
     <>
       <QuickSearchDialog open={isSearchOpen} onOpenChange={setIsSearchOpen} />
-      <CalendarDrawer open={isCalendarOpen} onOpenChange={setIsCalendarOpen} />
+      <CalendarDialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen} />
       {isSuperAdmin && <AgentDrawer open={isAgentOpen} onOpenChange={setIsAgentOpen} />}
       <HelpDrawer open={isHelpOpen} onOpenChange={setIsHelpOpen} />
     </>
