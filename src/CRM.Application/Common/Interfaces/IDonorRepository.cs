@@ -14,6 +14,9 @@ public interface IDonorRepository
 
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Suburb of the donor's legal address, or null when the donor has none. Default site-visit location.</summary>
+    Task<string?> GetLegalAddressSuburbAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Tracked donor aggregate with contacts, legal address, operational regions and
     /// donation types eagerly loaded, ready for mutation by UpdateDonor.

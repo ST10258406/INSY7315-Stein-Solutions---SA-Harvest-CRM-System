@@ -16,6 +16,9 @@ public record TaskSearchCriteria
     /// <summary>true / false filter on completion; null = both.</summary>
     public bool? IsCompleted { get; init; }
 
+    /// <summary>Only tasks due on or after this instant.</summary>
+    public DateTime? DueAfter { get; init; }
+
     /// <summary>Only tasks due on or before this instant.</summary>
     public DateTime? DueBefore { get; init; }
 

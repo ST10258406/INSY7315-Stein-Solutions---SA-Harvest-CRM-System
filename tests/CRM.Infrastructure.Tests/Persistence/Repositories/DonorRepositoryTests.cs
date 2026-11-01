@@ -564,4 +564,32 @@ public class DonorRepositoryTests
         Assert.True(await context.Donors.AnyAsync(d => d.Id == donor.Id));
         Assert.True(await context.DonorApprovals.AnyAsync(a => a.DonorId == donor.Id));
     }
+
+    [Fact]
+    public async Task SearchAsync_FollowUpAfterAndBefore_AreBothInclusiveAndSkipDonorsWithoutAFollowUp()
+    {
+        using var context = await CreateSeededContextAsync();
+        var day = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+        var before = MakeDonor("Before Co", _creatorId);
+        var onStart = MakeDonor("Start Co", _creatorId);
+        var onEnd = MakeDonor("End Co", _creatorId);
+        var after = MakeDonor("After Co", _creatorId);
+        var none = MakeDonor("None Co", _creatorId);
+        before.FollowUpDate = day.AddDays(-1);
+        onStart.FollowUpDate = day;
+        onEnd.FollowUpDate = day.AddDays(5);
+        after.FollowUpDate = day.AddDays(6);
+        context.Donors.AddRange(before, onStart, onEnd, after, none);
+        await context.SaveChangesAsync();
+
+        var repository = new DonorRepository(context, _mapper);
+        var (items, totalCount) = await repository.SearchAsync(new DonorSearchCriteria
+        {
+            FollowUpAfter = day,
+            FollowUpBefore = day.AddDays(5),
+        });
+
+        Assert.Equal(2, totalCount);
+        Assert.Equal(new[] { "End Co", "Start Co" }, items.Select(d => d.CompanyName).Order());
+    }
 }

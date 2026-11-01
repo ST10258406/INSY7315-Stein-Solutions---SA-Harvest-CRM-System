@@ -267,4 +267,26 @@ public class TaskRepositoryTests
 
         Assert.Null(await repo.GetForUpdateAsync(Guid.NewGuid()));
     }
+
+    [Fact]
+    public async Task GetTasksAsync_DueAfterAndDueBefore_AreBothInclusive()
+    {
+        using var context = await CreateSeededContextAsync();
+        var today = DateTime.UtcNow.Date;
+        for (var i = 1; i <= 5; i++)
+            context.DonorTasks.Add(MakeTask(_donorId, _assigneeId, today.AddDays(i)));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var repo = new TaskRepository(context, _mapper);
+        var (items, total) = await repo.GetTasksAsync(new TaskSearchCriteria
+        {
+            DonorId = _donorId,
+            DueAfter = today.AddDays(2),
+            DueBefore = today.AddDays(4),
+        });
+
+        Assert.Equal(3, total);      // days 2..4
+        Assert.Equal(today.AddDays(2), items[0].DueDate);
+    }
 }

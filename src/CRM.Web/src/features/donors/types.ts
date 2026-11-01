@@ -22,6 +22,7 @@ export interface DonorFilters {
   donationTypeId?: number;
   donationFrequencyId?: number;
   relationshipManagerId?: string;
+  followUpAfter?: string;
   followUpBefore?: string;
 }
 

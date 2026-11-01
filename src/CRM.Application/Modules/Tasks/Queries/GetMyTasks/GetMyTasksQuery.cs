@@ -11,6 +11,7 @@ using MediatR;
 public record GetMyTasksQuery : PaginationParams, IRequest<PaginatedResult<TaskDto>>
 {
     public bool IsCompleted { get; init; } = false;
+    public DateOnly? DueAfter { get; init; }
     public DateOnly? DueBefore { get; init; }
     public Guid? DonorId { get; init; }
 }

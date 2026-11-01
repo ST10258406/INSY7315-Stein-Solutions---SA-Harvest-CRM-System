@@ -24,8 +24,10 @@ public class GetMyTasksQueryHandler : IRequestHandler<GetMyTasksQuery, Paginated
             AssignedToUserId = _currentUserService.GetCurrentUserId(),
             DonorId = request.DonorId,
             IsCompleted = request.IsCompleted,
-            // Inclusive of the whole requested day.
-            DueBefore = request.DueBefore?.ToDateTime(TimeOnly.MaxValue),
+            // Both bounds inclusive of the whole requested day. Kind must be UTC: due_date is
+            // timestamptz and Npgsql rejects an Unspecified-kind DateTime.
+            DueAfter = request.DueAfter?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            DueBefore = request.DueBefore?.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc),
             Page = request.Page,
             PageSize = request.PageSize
         };

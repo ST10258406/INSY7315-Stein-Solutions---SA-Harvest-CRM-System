@@ -70,6 +70,13 @@ public static class UploadedFileInspector
         if (!DocumentUploadLimits.AllowedMimeTypes.TryGetValue(documentType, out var allowed))
             return "Unsupported document type.";
 
+        return Validate(stream, declaredSizeBytes, declaredContentType, fileName, allowed);
+    }
+
+    /// <summary>The same checks against an explicit allowed-MIME list (vetting uploads, which must not extend DocumentType).</summary>
+    public static string? Validate(
+        Stream stream, long declaredSizeBytes, string declaredContentType, string fileName, IReadOnlyCollection<string> allowed)
+    {
         var length = RealLength(stream, declaredSizeBytes);
         if (length <= 0)
             return "File is empty.";
@@ -105,7 +112,7 @@ public static class UploadedFileInspector
     /// caps the length (keeping the extension) and falls back to a default when empty.
     /// Never used to build a storage path.
     /// </summary>
-    public static string SanitizeDisplayName(string? fileName)
+    public static string SanitizeDisplayName(string? fileName, int maxLength = MaxDisplayNameLength)
     {
         if (string.IsNullOrWhiteSpace(fileName)) return DefaultDisplayName;
 
@@ -119,11 +126,11 @@ public static class UploadedFileInspector
         var name = sb.ToString().Trim().TrimStart('.');
         if (name.Length == 0) return DefaultDisplayName;
 
-        if (name.Length > MaxDisplayNameLength)
+        if (name.Length > maxLength)
         {
             var ext = Path.GetExtension(name);
             if (ext.Length > 10) ext = string.Empty;
-            name = name[..(MaxDisplayNameLength - ext.Length)] + ext;
+            name = name[..(maxLength - ext.Length)] + ext;
         }
 
         return name;

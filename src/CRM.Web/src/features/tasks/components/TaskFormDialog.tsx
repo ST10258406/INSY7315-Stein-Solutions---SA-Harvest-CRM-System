@@ -31,8 +31,8 @@ type TaskFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 } & (
-  | { mode: 'create'; task?: undefined; fixedDonorId?: string; fixedDonorName?: string }
-  | { mode: 'edit'; task: TaskDto; fixedDonorId?: undefined; fixedDonorName?: undefined }
+  | { mode: 'create'; task?: undefined; fixedDonorId?: string; fixedDonorName?: string; initialDueDate?: string }
+  | { mode: 'edit'; task: TaskDto; fixedDonorId?: undefined; fixedDonorName?: undefined; initialDueDate?: undefined }
 );
 
 export function TaskFormDialog(props: TaskFormDialogProps) {
@@ -57,7 +57,7 @@ export function TaskFormDialog(props: TaskFormDialogProps) {
           assignedToUserId: props.task.assignedTo.id,
           dueDate: props.task.dueDate.slice(0, 10),
         }
-      : emptyTaskFormValues(props.fixedDonorId ?? '', assignee.id);
+      : { ...emptyTaskFormValues(props.fixedDonorId ?? '', assignee.id), dueDate: props.initialDueDate ?? '' };
 
   const createTask = useCreateTask();
   const updateTask = useUpdateTask(mode === 'edit' ? props.task.id : '');

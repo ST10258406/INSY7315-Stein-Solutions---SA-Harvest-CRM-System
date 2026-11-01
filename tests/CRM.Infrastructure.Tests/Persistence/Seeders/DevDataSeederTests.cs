@@ -25,6 +25,8 @@ public class DevDataSeederTests
 
         // Wipe in FK-safe order so re-running the test suite against the same
         // database is always a clean slate.
+        context.VettingSiteVisits.RemoveRange(context.VettingSiteVisits);
+        context.VettingOfficers.RemoveRange(context.VettingOfficers);
         context.InteractionLogs.RemoveRange(context.InteractionLogs);
         context.DonorApprovals.RemoveRange(context.DonorApprovals);
         context.DonorTasks.RemoveRange(context.DonorTasks);
@@ -67,7 +69,7 @@ public class DevDataSeederTests
     }
 
     [Fact]
-    public async Task SeedAsync_OnEmptyDatabase_CreatesDonorsTasksApprovalsAndInteractions()
+    public async Task SeedAsync_OnEmptyDatabase_CreatesDonorsTasksApprovalsInteractionsAndVettingData()
     {
         var context = await CreateResetContextAsync();
 
@@ -79,6 +81,9 @@ public class DevDataSeederTests
         Assert.Equal(2, await context.InteractionLogs.CountAsync());
         Assert.True(await context.DonorLegalAddresses.CountAsync() >= 5);
         Assert.True(await context.DonorContacts.CountAsync() >= 5);
+        Assert.Equal(2, await context.VettingOfficers.CountAsync());
+        Assert.Equal(3, await context.VettingSiteVisits.CountAsync(v => v.ScheduledDate == DateOnly.FromDateTime(DateTime.UtcNow)));
+        Assert.Equal(3, await context.VettingOfficers.SumAsync(o => o.WorkloadCount));
     }
 
     [Fact]
@@ -92,5 +97,6 @@ public class DevDataSeederTests
         await DevDataSeeder.SeedAsync(context);
 
         Assert.Equal(countAfterFirstRun, await context.Donors.CountAsync());
+        Assert.Equal(2, await context.VettingOfficers.CountAsync());
     }
 }

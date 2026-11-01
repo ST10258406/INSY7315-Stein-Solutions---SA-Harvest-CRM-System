@@ -54,6 +54,8 @@ public class GetMyTasksQueryHandlerTests
         Assert.True(_captured!.IsCompleted);
         Assert.Equal(donorId, _captured.DonorId);
         Assert.Equal(new DateOnly(2026, 9, 30).ToDateTime(TimeOnly.MaxValue), _captured.DueBefore);
+        // due_date is timestamptz: Npgsql rejects an Unspecified-kind DateTime parameter.
+        Assert.Equal(DateTimeKind.Utc, _captured.DueBefore!.Value.Kind);
         Assert.Equal(3, _captured.Page);
         Assert.Equal(15, _captured.PageSize);
     }
@@ -86,5 +88,14 @@ public class GetMyTasksQueryHandlerTests
         Assert.Equal(2, result.Pagination.Page);
         Assert.Equal(12, result.Pagination.TotalCount);
         Assert.Equal(3, result.Pagination.TotalPages);
+    }
+
+    [Fact]
+    public async Task Handle_MapsDueAfter_ToStartOfDayUtc()
+    {
+        await _handler.Handle(new GetMyTasksQuery { DueAfter = new DateOnly(2026, 10, 1) }, CancellationToken.None);
+
+        Assert.Equal(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc), _captured!.DueAfter);
+        Assert.Equal(DateTimeKind.Utc, _captured.DueAfter!.Value.Kind);
     }
 }

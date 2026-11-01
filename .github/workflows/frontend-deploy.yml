@@ -49,6 +49,9 @@ jobs:
         run: npm run build
         env:
           VITE_API_BASE_URL: https://app-crm-api-cfhsdefdhdegenc3.southafricanorth-01.azurewebsites.net
+          # Help & support drawer (Issue 105). Support email is a repo variable; empty hides the links.
+          VITE_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+          VITE_APP_VERSION: ${{ github.sha }}
           SWA_STRICT: '1'
           SWA_CSP_MODE: report-only
           SWA_BLOB_ORIGIN: https://stcrmk7x2.blob.core.windows.net

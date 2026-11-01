@@ -21,4 +21,25 @@ public class GetMyTasksQueryValidatorTests
     [InlineData(101)]
     public void Validate_PageSizeOutOfRange_Fails(int pageSize)
         => Assert.False(_validator.Validate(new GetMyTasksQuery { PageSize = pageSize }).IsValid);
+
+    [Fact]
+    public void Validate_DueAfterLaterThanDueBefore_Fails()
+        => Assert.False(_validator.Validate(new GetMyTasksQuery
+        {
+            DueAfter = new DateOnly(2026, 10, 31),
+            DueBefore = new DateOnly(2026, 10, 1)
+        }).IsValid);
+
+    [Theory]
+    [InlineData(62, true)]
+    [InlineData(63, false)]
+    public void Validate_RangeIsCappedAt62Days(int days, bool valid)
+    {
+        var from = new DateOnly(2026, 1, 1);
+        Assert.Equal(valid, _validator.Validate(new GetMyTasksQuery { DueAfter = from, DueBefore = from.AddDays(days) }).IsValid);
+    }
+
+    [Fact]
+    public void Validate_OnlyOneBound_Passes()
+        => Assert.True(_validator.Validate(new GetMyTasksQuery { DueAfter = new DateOnly(2020, 1, 1) }).IsValid);
 }
