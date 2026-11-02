@@ -1,5 +1,14 @@
 # SA Harvest CRM
 
+> [!IMPORTANT]
+> **Note for markers:** none of the credentials in this README (including the seeded
+> `admin@crm.local` account and the `.env.example` values) will log into the **hosted**
+> system. They only work on a local copy you run yourself. For the hosted system's URL and
+> login details, please refer to our **submission on ARC**.
+
+**Current release:** v1.1.0, deployed 1 November 2026. It adds donor vetting, saved filters,
+a calendar, quick search, an in-app help panel and a read-only AI assistant.
+
 A purpose-built donor-management CRM for **SA Harvest**, a South African non-profit that
 recovers and redistributes food to beneficiaries. It replaces the organisation's
 Monday.com donor board with a self-hosted system that removes the recurring SaaS cost
@@ -9,7 +18,8 @@ Built as an INSY7315 final-year Work Integrated Learning project by **Stein Solu
 
 > Scope is the **donor-management board only**. Beneficiary/CBO vetting, the Foodspace
 > ERP integration, a donor portal, and a mobile app are explicitly out of scope for the
-> initial build (see the System Design Document, §1.5).
+> initial build (see the System Design Document, §1.5). The donor vetting module added in
+> v1.1.0 covers site visits to **donors**, not beneficiaries.
 
 ---
 
@@ -42,10 +52,13 @@ Built as an INSY7315 final-year Work Integrated Learning project by **Stein Solu
 | **Interaction logging** | Append-only interaction timeline per donor — the evidence base for the "Donors Contacted" monthly KPI. Logs can never be edited or deleted. |
 | **Follow-ups & tasks** | Per-donor follow-up date, daily reminder jobs, assignable tasks with due-date notifications. Overdue items surface on the dashboard. |
 | **Documents** | BBBEE certificates and signatures in Azure Blob Storage. Access is Admin-only for certificates and always via short-lived (15-minute) SAS URLs — raw blob URLs are never exposed. |
-| **Email** | Outbound email via SendGrid, auto-logged as an `Email` interaction; forwarded emails attach to the donor card. |
+| **Email** | Outbound email via Brevo, auto-logged as an `Email` interaction; forwarded emails attach to the donor card. |
 | **Reports & dashboards** | Donors contacted, by region, by donation type, by status. Exports rendered server-side to PDF/Excel and returned as SAS URLs. |
 | **Users & roles** | Admin-only user management for 10–20 internal staff. Four roles: `Marketing` < `Procurement` < `Admin` < `SuperAdmin`. |
 | **Auditability** | Append-only `audit_logs` for every mutating action, written automatically by a MediatR pipeline behaviour. |
+| **Donor vetting** *(v1.1.0)* | Admins manage vetting officers and schedule site visits (*To Do* → *In Progress* → *Completed*). Procurement captures a 12-section assessment (`VET-2026-0001`) with four required photos and an optional NPO/PBO certificate. Compliance flags are raised on submit, and Admins *Approve*, *Return* or *Decline* (reason required; concurrent decisions are rejected). |
+| **Productivity** *(v1.1.0)* | Server-side saved filters for donors and tasks (50 per user), a month calendar of tasks and follow-ups, **Ctrl/Cmd+K** quick search, a quick-action rail, and a role-filtered help panel with keyboard shortcuts. |
+| **AI assistant** *(v1.1.0)* | SuperAdmin-only chat that answers questions about donors, tasks, approvals, dashboards, reports and vetting. **Read-only**: it can't change data, never returns contact details, tax/registration numbers, file names or links, is rate-limited (20 messages / 10 min per user) and every question is audited. Off by default; see [AI assistant settings](#ai-assistant-settings). |
 
 Donors never log in. The primary users are the NPO's procurement and marketing teams.
 
@@ -111,9 +124,11 @@ The full rationale, layer rules, and non-negotiables are in the
 ├── .env.example                    # copy to .env
 ├── .github/
 │   ├── copilot-instructions.md     # PR review checklist / coding standards (authoritative)
-│   └── workflows/                  # backend.yml, frontend.yml
+│   └── workflows/                  # backend.yml, frontend.yml, backend-deploy.yml, frontend-deploy.yml
 ├── docs/
-│   └── DEVELOPER_GUIDE.md          # standards new contributors must follow
+│   ├── DEVELOPER_GUIDE.md          # standards new contributors must follow
+│   ├── agent-spec.md               # AI assistant design, tools and configuration
+│   └── azure-deployment.md         # deploy, rollback and App Service settings
 ├── src/
 │   ├── CRM.Domain/                 # Entities/, Enums/, Common/ (BaseEntity, LookupBaseEntity)
 │   ├── CRM.Application/
@@ -262,7 +277,9 @@ in App Service settings (the app itself never calls Key Vault). See
 | `DB_USER`, `DB_PASSWORD` | Postgres container | Local only |
 | `DATABASE_URL` | API | Npgsql connection string (`ConnectionStrings__Default`) |
 | `JWT_SECRET` | API | Signing key, **≥ 256 bits**. Never hardcoded/committed |
-| `SENDGRID_API_KEY` | API | Outbound email |
+| `BREVO_API_KEY` | API | Outbound email |
+| `AGENT_API_KEY` | API | AI assistant provider key. Only needed when `Agent__Provider=openai-compatible`; Key Vault in production |
+| `VITE_SUPPORT_EMAIL` | Frontend | Address for the help panel's "Report a problem" link. Empty hides the link. In CI it comes from the repo variable `SUPPORT_EMAIL` |
 | `AZURE_STORAGE_CONNECTION_STRING` | API | Points at Azurite locally; real storage in prod |
 | `AZURE_KEY_VAULT_URI` | API | Secret source in production |
 | `ADMIN_DEFAULT_PASSWORD` | API seeder | Initial SuperAdmin password. The first login forces a change. Outside Development the API refuses to start if it is a known example value (e.g. `ChangeMe123!`) or shorter than 12 characters |
@@ -345,6 +362,25 @@ early with `POST /api/v1/users/{id}/unlock` (same target rules as other user edi
 SuperAdmin can unlock a SuperAdmin). Failed logins are logged at Warning with a hashed
 email, never the password or address; the lockout itself is logged with the user id.
 
+### AI assistant settings
+
+The assistant is **off by default** and nothing else depends on it. Full design and tool
+list: [docs/agent-spec.md](docs/agent-spec.md).
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Agent__Enabled` | `false` | Turns the assistant on |
+| `Agent__Provider` | `ollama` | `ollama` (local) or `openai-compatible` (Groq, OpenAI, etc.) |
+| `Agent__Endpoint` | `http://localhost:11434` | Production uses `https://api.groq.com/openai/v1/` |
+| `Agent__Model` | `qwen2.5:7b` | Must support tool calling. Production uses `openai/gpt-oss-120b` |
+| `Agent__AllowedProductionProviders__0` | – | Production only: the `Agent__Endpoint` host (e.g. `api.groq.com`) must be listed |
+| `RateLimiting__Agent__PermitLimit` / `__WindowMinutes` | 20 / 10 | Per-user message limit |
+
+With the assistant enabled, the API **refuses to start** if the provider is unknown, the
+endpoint isn't an absolute URL, `AGENT_API_KEY` is missing for `openai-compatible`, or (in
+production) the endpoint host isn't allow-listed. To recover, set `Agent__Enabled=false`.
+The MCP server (`Mcp__Enabled`) is for local development only and is rejected in production.
+
 ---
 
 ## Common commands
@@ -397,9 +433,9 @@ CI runs on push and PR to `main` and `Development`:
 - **`backend.yml`** — spins up a Postgres 18 service, then `dotnet restore` / `build --configuration Release` / `test` against `CRM.slnx` on .NET 10.
 - **`frontend.yml`** — `npm ci`, `npx tsc --noEmit`, `npm run build` in `src/CRM.Web` on Node 26.
 
-CD runs only from `main`, behind the GitHub `production` environment's required reviewer:
+CD runs only from `main`, through the GitHub `production` environment (restricted to the `main` branch):
 
-- **`backend-deploy.yml`** builds the API image, pushes it to ACR and updates the App Service container.
+- **`backend-deploy.yml`** runs on pushes to `main` that change anything other than `src/CRM.Web/**`, `docs/**` or Markdown files (or manual dispatch, which can also roll back to an earlier image tag). It builds the API image, pushes it to ACR and updates the App Service container.
 - **`frontend-deploy.yml`** runs on pushes to `main` touching `src/CRM.Web/**` (or manual dispatch). It builds the SPA with the production API origin and uploads `dist/` to Static Web Apps.
 
 Deploy flow, rollback and first-deploy troubleshooting: [docs/azure-deployment.md](docs/azure-deployment.md).
@@ -428,6 +464,9 @@ No secret ever appears in `appsettings.json`, a Docker image, or a committed `.e
 ## Documentation
 
 - **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** — the standards every contributor must follow.
+- **[docs/agent-spec.md](docs/agent-spec.md)** — the AI assistant's design, privacy rules and configuration.
+- **[docs/azure-deployment.md](docs/azure-deployment.md)** — deployment, rollback and App Service settings.
+- **[Releases](https://github.com/ST10258406/INSY7315-Stein-Solutions---SA-Harvest-CRM-System/releases)** — release notes, starting with v1.1.0.
 - **`.github/copilot-instructions.md`** — the PR review checklist. On any conflict about
   **auth architecture**, this file is authoritative over the System Design Document §5.7.
 - **`Documentation/SA Harvest CRM — System Design Document.md`** — requirements, data model
